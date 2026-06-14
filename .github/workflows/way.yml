@@ -20,6 +20,7 @@ jobs:
       - name: Init submodules
         run: git submodule update --init --recursive
 
+
       # 2. Install host build tools (NO system wayland-scanner)
       - name: Install Host Build Tools
         run: |
