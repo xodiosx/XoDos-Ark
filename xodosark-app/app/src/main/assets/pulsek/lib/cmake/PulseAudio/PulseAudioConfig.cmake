@@ -1,9 +1,0 @@
-set(PULSEAUDIO_FOUND TRUE)
-
-set(PULSEAUDIO_VERSION_MAJOR 17)
-set(PULSEAUDIO_VERSION_MINOR 0)
-set(PULSEAUDIO_VERSION 17.0)
-set(PULSEAUDIO_VERSION_STRING "17.0")
-
-find_path(PULSEAUDIO_INCLUDE_DIR pulse/pulseaudio.h HINTS "/root/xodos/xodosark-audio/out/pulse-android-prefix/include")
-find_library(PULSEAUDIO_LIBRARY NAMES pulse libpulse HINTS "/root/xodos/xodosark-audio/out/pulse-android-prefix/lib")
