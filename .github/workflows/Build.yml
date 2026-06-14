@@ -1,0 +1,98 @@
+name: Build xodosark APK (Fixed)
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_API: 34
+      NDK_VERSION: 25.2.9519653
+
+    steps:
+      # 📥 Clone repo
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 🔄 Important for native deps (just in case)
+      - name: Init submodules
+        run: git submodule update --init --recursive
+
+      # ☕ Java (from CI script)
+      - name: Setup JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # 🤖 Android SDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager "platform-tools" \
+                     "platforms;android-${ANDROID_API}" \
+                     "build-tools;34.0.0" \
+                     "ndk;${NDK_VERSION}" \
+                     "cmake;3.22.1"
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses
+
+      # 🦀 Rust
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      # ⚙️ Build Rust native lib
+      - name: Build libxodosark.so
+        working-directory: xodosark-native
+        run: |
+          set -e
+
+          export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}
+
+          UNAME_S=$(uname -s | tr '[:upper:]' '[:lower:]')
+          UNAME_M=$(uname -m)
+
+          if [ "$UNAME_M" = "x86_64" ]; then
+            TOOLCHAIN_ARCH="x86_64"
+          else
+            TOOLCHAIN_ARCH="aarch64"
+          fi
+
+          NDK_HOST="${UNAME_S}-${TOOLCHAIN_ARCH}"
+          NDK_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST/bin"
+
+          export AR="$NDK_BIN/llvm-ar"
+          export CC="$NDK_BIN/aarch64-linux-android24-clang"
+          export CXX="$NDK_BIN/aarch64-linux-android24-clang++"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android24-clang"
+          export CARGO_TARGET_DIR="$PWD/target"
+
+          cargo build --release --target aarch64-linux-android
+
+          JNI_LIBS_DIR="../xodosark-app/app/src/main/jniLibs/arm64-v8a"
+          mkdir -p "$JNI_LIBS_DIR"
+
+          cp -f target/aarch64-linux-android/release/libxodosark.so "$JNI_LIBS_DIR/"
+
+      # 🏗️ Build APK (FIXED PATH HERE 🔥)
+      - name: Build APK
+        working-directory: xodosark-app
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      # 📤 Upload APK
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: xodosark-apk
+          path: xodosark-app/app/build/outputs/apk/debug/*.apk

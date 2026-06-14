@@ -449,9 +449,37 @@ pub fn start_if_possible() {
         .map(std::process::Stdio::from)
         .unwrap_or(std::process::Stdio::null());
 
+    // --- STEP 1: RESOLVE FULL ABSOLUTE PATHS FIRST ---
+    let angle_dir = ctx.data_dir.join(VIRGL).join("angle/vulkan");
+    let angle_resolved = angle_dir
+        .is_dir()
+        .then(|| std::fs::canonicalize(&angle_dir).unwrap_or_else(|_| angle_dir.clone()));
+
+    // Build LD_LIBRARY_PATH using absolute paths dynamically
+    let lib = ctx.data_dir.join(VIRGL).join("lib");
+    let bin = exe.parent().unwrap_or(Path::new("."));
+    let mut ld: Vec<String> = vec![
+        lib.to_string_lossy().into_owned(),
+        bin.to_string_lossy().into_owned(),
+    ];
+    if let Some(ref p) = angle_resolved {
+        ld.push(p.to_string_lossy().into_owned());
+    }
+    ld.push(ctx.native_library_dir.to_string_lossy().into_owned());
+    ld.push(ctx.data_dir.join("usr/lib").to_string_lossy().into_owned());
+    if let Ok(x) = std::env::var("LD_LIBRARY_PATH") {
+        if !x.is_empty() {
+            ld.push(x);
+        }
+    }
+    let ld_library_path_string = ld.join(":");
+
+    // --- STEP 2: INITIALIZE COMMAND ---
     use std::process::Command;
     let mut cmd = if exec_from_app_data_virgl(&exe) {
         let mut c = Command::new(linker());
+        // linker64 only accepts the executable as the first argument.
+        // It will read the library paths from the LD_LIBRARY_PATH env we set below.
         c.arg(&exe);
         c
     } else {
@@ -469,56 +497,56 @@ pub fn start_if_possible() {
         }
     }
 
+    // --- STEP 3: APPLY ARGUMENTS AND ENVIRONMENT ---
     cmd.arg("--use-egl-surfaceless")
         .arg("--use-gles")
         .arg("--venus")
         .arg("--socket-path")
         .arg(sock.as_os_str());
+        
     cmd.current_dir(&rt);
     let rts = rt.to_string_lossy().to_string();
     cmd.env("XDG_RUNTIME_DIR", &rts);
     cmd.env("TMPDIR", &rts);
+    cmd.env("ANDROID_VENUS", "1");
+    cmd.env("EGL_PLATFORM", "surfaceless");
+    cmd.env("MESA_GLES_VERSION_OVERRIDE", "3.2");
+    cmd.env("MESA_GL_VERSION_OVERRIDE", "3.3");
+    
+    // Explicitly inject the fully constructed absolute paths into the environment
+    cmd.env("LD_LIBRARY_PATH", &ld_library_path_string); 
 
     let render = ctx.data_dir.join(VIRGL).join("bin/virgl_render_server");
     if render.is_file() {
         cmd.env("RENDER_SERVER_EXEC_PATH", render.to_string_lossy().as_ref());
     }
 
-    let angle_dir = ctx.data_dir.join(VIRGL).join("angle/vulkan");
-    let angle_resolved = angle_dir
-        .is_dir()
-        .then(|| std::fs::canonicalize(&angle_dir).unwrap_or(angle_dir));
+    // Build LD_PRELOAD list
+    let mut preload_libs: Vec<String> = Vec::new();
+    let system_vulkan = "/system/lib64/libvulkan.so";
+    if std::path::Path::new(system_vulkan).exists() {
+        preload_libs.push(system_vulkan.to_string());
+    }
     if let Some(ref p) = angle_resolved {
         cmd.env("ANGLE_LIBS_DIR", p.to_string_lossy().as_ref());
-    }
 
-    let lib = ctx.data_dir.join(VIRGL).join("lib");
-    let bin = exe.parent().unwrap_or(Path::new("."));
-    let mut ld: Vec<String> = vec![
-        lib.to_string_lossy().into_owned(),
-        bin.to_string_lossy().into_owned(),
-    ];
-    if let Some(ref p) = angle_resolved {
-        ld.push(p.to_string_lossy().into_owned());
-    }
-    ld.push(ctx.native_library_dir.to_string_lossy().into_owned());
-    ld.push(
-        if cfg!(target_pointer_width = "64") {
-            "/system/lib64"
+        let crcfix_path = p.join("libcrcfix.so");
+        if crcfix_path.exists() {
+            preload_libs.push(crcfix_path.to_string_lossy().into_owned());
+            log::debug!("virgl: adding LD_PRELOAD={}", crcfix_path.display());
         } else {
-            "/system/lib"
-        }
-        .into(),
-    );
-    if let Ok(x) = std::env::var("LD_LIBRARY_PATH") {
-        if !x.is_empty() {
-            ld.push(x);
+            log::warn!("virgl: libcrcfix.so not found at {}", crcfix_path.display());
         }
     }
-    cmd.env("LD_LIBRARY_PATH", ld.join(":"));
+    if !preload_libs.is_empty() {
+        let ld_preload = preload_libs.join(":");
+        log::debug!("virgl: LD_PRELOAD={}", ld_preload);
+        cmd.env("LD_PRELOAD", &ld_preload);
+    }
 
     cmd.stdin(std::process::Stdio::null()).stdout(stdout).stderr(stderr);
 
+    // --- STEP 4: EXECUTE ---
     match cmd.spawn() {
         Ok(mut child) => {
             std::thread::sleep(std::time::Duration::from_millis(200));

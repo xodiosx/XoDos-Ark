@@ -1,0 +1,80 @@
+name: Build Wayland Android Libraries
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build-wayland:
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_API: 34
+      NDK_VERSION: 25.2.9519653
+
+    steps:
+      # 1. Checkout your custom repo (contains xodosark-wayland)
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Init submodules
+        run: git submodule update --init --recursive
+
+      # 2. Install host build tools (NO system wayland-scanner)
+      - name: Install Host Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y meson ninja-build pkg-config expat libexpat1-dev libffi-dev
+
+      # 3. Build native wayland-scanner from official 1.24.0
+      - name: Build official wayland-scanner
+        run: |
+          set -e
+          git clone --depth 1 --branch 1.24.0 \
+            https://gitlab.freedesktop.org/wayland/wayland.git \
+            wayland-native-scanner
+          cd wayland-native-scanner
+          meson setup build --prefix=/usr/local -Ddocumentation=false
+          meson compile -C build
+          sudo meson install -C build
+          # Verify
+          wayland-scanner --version
+          pkg-config --modversion wayland-scanner
+
+      # 4. Android SDK & NDK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager "platform-tools" \
+                     "platforms;android-${ANDROID_API}" \
+                     "build-tools;34.0.0" \
+                     "ndk;${NDK_VERSION}" \
+                     "cmake;3.22.1"
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses
+
+      # 5. Cross-compile your custom Wayland
+      - name: Build Wayland
+        run: |
+          export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}
+          cd xodosark-wayland
+          bash scripts/build-wayland-android.sh
+
+      # 6. Stage the .so files
+      - name: Stage Shared Libraries
+        run: |
+          mkdir -p staging_libs
+          cp -f xodosark-wayland/out/arm64-v8a/*.so* staging_libs/ 2>/dev/null || true
+          echo "Libraries staged for upload:"
+          ls -la staging_libs/
+
+      # 7. Upload artifact
+      - name: Upload Wayland Libraries
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayland-android-libs
+          path: staging_libs/
+          if-no-files-found: error

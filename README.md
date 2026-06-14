@@ -79,3 +79,11 @@ Minimum Android version: **10 (API 29)**. The ark sails on even older devices.
    git clone https://github.com/xodiosx/XoDos-Ark.git
    cd XoDos-Ark
 ```
+## 🙏 Acknowledgments
+
+XoDos‑Ark stands on the shoulders of giants:
+
+- **[Termux](https://github.com/termux/termux-app)** – the terminal emulator and Linux environment for Android  
+- **[Termux:X11](https://github.com/termux/termux-x11)** – a Termux add-on that runs X11 applications natively  
+- **[Wayland](https://wayland.freedesktop.org/)** – the modern display protocol enabling seamless graphical integration  
+- **[Trierarch](https://github.com/Beauty114514/trierarch/)** – an inspiring open-source vessel

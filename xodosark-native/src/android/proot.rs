@@ -227,7 +227,7 @@ pub(super) fn build_exec_args(
         argv.push(CString::new("-i").unwrap());
     } else {
         // ---------- fallback: Android system shell with container prefix ----------
-        argv.push(CString::new("-0").unwrap());
+       // argv.push(CString::new("-0").unwrap());
         argv.push(CString::new("/system/bin/sh").unwrap());
         argv.push(CString::new("-c").unwrap());
 
@@ -249,8 +249,9 @@ pub(super) fn build_exec_args(
              export HOME='{home}'; \
              mkdir -p \"{tmp}\" \"{home}\" 2>/dev/null; \
              if [ -d \"$PREFIX\" ]; then cd \"$PREFIX\" || true; else cd \"{home}\" || true; fi; \
+             if [ -f \"$PREFIX/bin/bash\" ]; then exec bash -l || true; else exec sh -i || true; fi; \
              export PS1='[XoDos-Ark\\W]# '; \
-             exec sh -i",
+             ",
             prefix = prefix_str,
             tmp = tmp_dir,
             home = safe_home,
@@ -271,14 +272,16 @@ pub(super) fn build_exec_args(
         CString::new("WAYLAND_DISPLAY=wayland-xodos2").unwrap(),
         CString::new("XDG_SESSION_TYPE=wayland").unwrap(),
         CString::new("QT_QPA_PLATFORM=wayland").unwrap(),
-        CString::new("USER=root").unwrap(),
-        CString::new("LOGNAME=root").unwrap(),
+       // CString::new("USER=root").unwrap(),
+     //   CString::new("LOGNAME=root").unwrap(),
     ];
     env.push(CString::new("QT_QUICK_BACKEND=software").unwrap());
     env.push(CString::new("VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock").unwrap());
     env.push(CString::new("VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/vtest.sock").unwrap());
     if is_proot_compatible(rootfs) {
         env.insert(3, CString::new("PS1=[\\u@\\h \\W]\\$ ").unwrap());
+        env.push(CString::new("USER=root").unwrap());         
+    env.push(CString::new("LOGNAME=root").unwrap());      
         env.push(
             CString::new(format!("PULSE_SERVER={}", guest_pulse_server_env()))
                 .context("PULSE_SERVER")?,

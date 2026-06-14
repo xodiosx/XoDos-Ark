@@ -7,12 +7,12 @@ mod android;
 #[cfg(target_os = "android")]
 mod combined {
     use super::android::{
-        self,
+      //  self,
         rootfs_fetch,
         proot,
         ApplicationContext,
         container_rootfs_dir, has_container_rootfs, installed_containers, first_installed_container,
-        has_rootfs,
+     //   has_rootfs,
         spawn_host_pulseaudio_if_present,
         stop_if_running, start_if_possible,
     };
