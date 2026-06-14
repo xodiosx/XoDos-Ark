@@ -61,8 +61,6 @@ XoDos‑Ark isn’t just an emulator—it’s a **vessel of imagination**. It st
 |-------------|-------------------|---------------|
 | ![Home](screenshots/home.png) | ![Windows](screenshots/winxp.png) | ![Linux](screenshots/linux.png) |
 
-*coming soon,,,,*
-
 ---
 
 ## 🚀 Getting Started
@@ -79,6 +77,7 @@ Minimum Android version: **10 (API 29)**. The ark sails on even older devices.
    git clone https://github.com/xodiosx/XoDos-Ark.git
    cd XoDos-Ark
 ```
+
 ## 🙏 Acknowledgments
 
 XoDos‑Ark stands on the shoulders of giants:
