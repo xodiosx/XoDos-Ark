@@ -26,11 +26,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y meson ninja-build pkg-config expat libexpat1-dev libffi-dev
 
-      # 3. Build native wayland-scanner from official 1.24.0
+      # 3. Build native wayland-scanner from official 1.23.0
       - name: Build official wayland-scanner
         run: |
           set -e
-          git clone --depth 1 --branch 1.24.0 \
+          git clone --depth 1 --branch 1.23.0 \
             https://gitlab.freedesktop.org/wayland/wayland.git \
             wayland-native-scanner
           cd wayland-native-scanner
