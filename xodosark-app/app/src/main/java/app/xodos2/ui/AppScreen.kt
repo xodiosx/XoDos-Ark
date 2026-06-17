@@ -277,16 +277,8 @@ val backupFilePicker = rememberLauncherForActivityResult(
 var wineScriptEditorOpen by remember { mutableStateOf(false) }   // ADD THIS LINE
     var terminalSessionState by remember { mutableStateOf(TerminalSessionController.initialState()) }
     var mouseMode by remember { mutableStateOf(MOUSE_MODE_TOUCHPAD) }
-var resolutionPercent by remember {
-    mutableIntStateOf(
-        prefs.getInt("resolution_percent", 100).coerceIn(10, 100)
-    )
-}
-var scalePercent by remember {
-    mutableIntStateOf(
-        prefs.getInt("scale_percent", 100).coerceIn(100, 1000).let { v -> ((v + 50) / 100) * 100 }
-    )
-}
+    var resolutionPercent by remember { mutableStateOf(100) }
+    var scalePercent by remember { mutableStateOf(100) }
     var showKeyboardTrigger by remember { mutableStateOf(0) }
     var keyboardWanted by remember { mutableStateOf(false) }
     var pendingAutoShowWayland by remember { mutableStateOf(false) }
