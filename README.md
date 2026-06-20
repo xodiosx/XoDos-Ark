@@ -65,6 +65,57 @@ XoDos‑Ark isn’t just an emulator—it’s a **vessel of imagination**. It st
 
 ## 🚀 Getting Started
 
+---
+
+## ⁉️ How to Install and Basic Start Usage
+
+1. Download the latest APK version from the [Releases](https://github.com/xodiosx/XoDos-Ark/releases) page.
+2. Install the APK and grant all necessary permissions when prompted.
+3. **(Requires an internet connection)** Wait a moment for the list of available Linux distributions to appear. Select your preferred distro and wait for the download and installation process to complete. Once finished, you will be prompted to restart—go ahead and restart to log in directly to the distro shell.
+
+---
+
+Once logged into the shell, follow these steps to set up your environment:
+
+**1. System Update**  
+Always start by updating and upgrading all system packages to the latest versions:
+```bash
+apt update && apt upgrade -y
+```
+
+2. (Optional) Create a Non-Root User
+Some applications require a dedicated user instead of the default root user. To create one, install the necessary tools and set up a new user with sudo privileges:
+
+```bash
+apt install sudo adduser -y
+adduser xodos
+# Follow the prompts to set a password and user details
+usermod -aG sudo xodos
+```
+
+Now you can switch to the new user with su - xodos for better security. For simplicity, this guide continues using the root user.
+
+3. Install a Desktop Environment
+Tap the floating ball icon to open the drawer, scroll down to the "Install Desktop Environment" option, and choose your preferred GUI—for example, XFCE4. This will install all the essential packages automatically.
+
+4. Configure the Display Backend
+After installation, you need to set up the display backend. You have two options: Wayland and X11. Since most desktop environments (including XFCE4) support X11, we will select it first.
+
+· Once you choose X11, a black screen may appear briefly. Press the back button, then from the X11 drawer select "Exit". At this point, X11 will be running in the background and ready to use.
+
+5. Start the Desktop Environment
+You have two ways to launch the DE:
+
+· Via terminal – by typing the commands directly.
+· Via script button – using the X11 or Wayland script inside the floating ball drawer.
+
+For simplicity, we will use the terminal directly. Example for starting XFCE4:
+
+```bash
+export DISPLAY=:0
+dbus-launch --exit-with-session xfce4-session &
+```
+
 ### 📦 Download (Pre‑built APK)
 
 Go to [Releases](https://github.com/xodiosx/XoDos-Ark/releases) and grab the latest stable APK.  
