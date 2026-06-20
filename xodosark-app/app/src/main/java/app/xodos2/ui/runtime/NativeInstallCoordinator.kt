@@ -346,13 +346,21 @@ if (File(rootfs, "etc/arch-release").exists())  return "archlinux"
 }
 
 private fun parseOsRelease(content: String): String? {
-    return content.lines()
+    val id = content.lines()
         .firstOrNull { it.startsWith("ID=") }
         ?.substringAfter("ID=")
         ?.replace("\"", "")
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
+
+    // Normalize known variant IDs to standard names
+    return when (id) {
+        "archarm" -> "archlinux"
+        
+        else -> id
+    }
 }
+
     /**
      * Backs up a container directly to the user-chosen SAF URI using proot + busybox tar.
      * Streams output via stdout to eliminate temporary file overhead.

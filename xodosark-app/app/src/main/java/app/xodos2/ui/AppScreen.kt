@@ -749,6 +749,20 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
         initialized = true
         refreshContainerState()
         refreshLegacyFlags()
+        // Automatically detect and save the distro type for every installed container
+val mask = NativeBridge.getInstalledContainersMask()
+for (id in 1..3) {
+    if ((mask and (1 shl (id - 1))) != 0) {
+        withContext(Dispatchers.IO) {
+            val distro = DisplayOrchestrator.getContainerDistroType(context, id)
+                ?: NativeInstallCoordinator.detectDistroFromRootfs(context, id)
+            if (distro != null) {
+                NativeInstallCoordinator.saveContainerDistro(context, id, distro)
+                NativeInstallCoordinator.writeContainerEnvironment(context, id, distro)
+            }
+        }
+    }
+}
         // Remove leftover Turnip .tmp files
 File(context.filesDir, "drivers").listFiles { f ->
     f.name.startsWith("turnip_") && f.name.endsWith(".tmp")
@@ -763,7 +777,9 @@ File(context.filesDir, "drivers").listFiles { f ->
         )
 
         // If no container installed and the setup hasn't been acknowledged, show distro picker
-      if (!anyRootfsInstalled && !setupAlreadyCompleted) {
+     // if (!anyRootfsInstalled && !setupAlreadyCompleted) {
+     if (!anyRootfsInstalled) {
+    
     distroFetchState = DistroFetchState.LOADING
     availableDistros = withContext(Dispatchers.IO) {
         NativeInstallCoordinator.fetchAvailableDistros()
@@ -827,7 +843,11 @@ File(context.filesDir, "drivers").listFiles { f ->
         if (uiMode == UiMode.ARCH_WAYLAND_DESKTOP) return@LaunchedEffect
         uiMode = UiMode.TERMINAL
     }
-
+    
+// Keep the X11 task manager in sync with the active terminal session
+LaunchedEffect(terminalSessionState.activeSessionId) {
+    prefs.edit().putInt("active_terminal_session_id", terminalSessionState.activeSessionId).apply()
+}
     // ----- graphics helpers -----
 fun checkAndPromptTurnipDrivers() {
     val missing = mutableListOf<Int>()
@@ -1636,7 +1656,10 @@ if (showDistroSelection) {
         onContainerManagerClick = {
             scope.launch { drawerState.close() }
             showContainerManager = true
-        }
+        },
+        onExecuteCommand = { cmd ->
+    NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
+},
     )
 },
 
@@ -1660,7 +1683,10 @@ androidContent = {
         onContainerManagerClick = {
             scope.launch { drawerState.close() }
             showContainerManager = true
-        }
+        },
+        onExecuteCommand = { cmd ->
+    NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
+},
     )
 },
                 

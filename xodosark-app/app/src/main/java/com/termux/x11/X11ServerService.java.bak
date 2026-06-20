@@ -49,8 +49,8 @@ public final class X11ServerService extends Service {
             }
         }
         Notification n = new NotificationCompat.Builder(this, NOTIF_CH)
-            .setContentTitle(getString(R.string.app_name) + " DISPLAY — X11 :0")
-            .setContentText("xServer (Termux-x11 is running)")
+            .setContentTitle(getString(R.string.app_name) + " — X11 :0")
+            .setContentText("Server (Termux-style isolated process)")
             .setSmallIcon(R.drawable.ic_x11_icon)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

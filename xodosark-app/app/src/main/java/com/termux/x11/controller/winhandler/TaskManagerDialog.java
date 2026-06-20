@@ -20,16 +20,13 @@ import com.termux.x11.controller.core.CPUStatus;
 import com.termux.x11.controller.core.ProcessHelper;
 import com.termux.x11.controller.core.StringUtils;
 import com.termux.x11.controller.widget.CPUListView;
+import app.xodos2.NativeBridge;
+import app.xodos2.TerminalSessionIds;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfoListener {
     private final MainActivity activity;
@@ -37,20 +34,12 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
     private Timer timer;
     private final Object lock = new Object();
 
-    // Dynamic environment – set after async detection
-    private volatile String[] env;
-    private volatile String shellPath;
-    private final CountDownLatch envLatch = new CountDownLatch(1);
-
     public TaskManagerDialog(MainActivity activity) {
         super(activity, R.layout.task_manager_dialog);
         this.activity = activity;
         setCancelable(false);
         setTitle(R.string.task_manager);
         setIcon(R.drawable.icon_task_manager);
-
-        // Start environment detection in background
-        initEnvironment();
 
         Button cancelButton = findViewById(R.id.BTCancel);
         cancelButton.setText(R.string.new_task);
@@ -81,104 +70,27 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
         inflater = LayoutInflater.from(activity);
     }
 
-    /**
-     * Detects base directory, shell, and display number asynchronously.
-     */
-    private void initEnvironment() {
-        new Thread(() -> {
-            try {
-                String baseDir;
-                if (new File("/data/data/com.termux/files").exists()) {
-                    baseDir = "/data/data/com.termux/files";
-                } else {
-                    baseDir = "/data/data/com.xodos/files";
-                }
-
-                // Default displays per environment
-                String defaultDisplay = baseDir.contains("com.termux") ? ":0" : ":4";
-                String display = defaultDisplay;
-
-                // Try to extract display from termux-x11 process
-                try {
-                    Process ps = Runtime.getRuntime().exec(new String[] { "/system/bin/sh", "-c", "ps -A" });
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(ps.getInputStream()));
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        if (line.contains("termux-x11")) {
-                            // Split on any whitespace
-                            String[] parts = line.split("\\s+");
-                            for (String part : parts) {
-                                if (part.startsWith(":")) {
-                                    // e.g., ":4"
-                                    display = part;
-                                    break;
-                                }
-                            }
-                            if (!display.equals(defaultDisplay)) break;
-                        }
-                    }
-                    reader.close();
-                    ps.destroy();
-                } catch (Exception e) {
-                    // ignore, keep default
-                }
-
-                // Build environment array
-                env = new String[] {
-                    "PREFIX=" + baseDir + "/usr",
-                    "HOME=" + baseDir + "/home",
-                    "TMPDIR=" + baseDir + "/usr/tmp",
-                    "PATH=/usr/bin:" + baseDir + "/usr/bin",
-                    "DISPLAY=" + display,
-                    "XDG_RUNTIME_DIR=" + baseDir + "/usr/tmp"
-                };
-
-                // Shell path
-                shellPath = baseDir + "/usr/bin/bash";
-            } finally {
-                envLatch.countDown();
-            }
-        }).start();
-    }
-
-    /**
-     * Waits for environment detection to complete, then runs the command.
-     */
     private void runNativeCommand(String command) {
-        new Thread(() -> {
-            try {
-                // Wait up to 2 seconds for environment to be ready
-                if (!envLatch.await(2, TimeUnit.SECONDS) || env == null || shellPath == null) {
-                    activity.runOnUiThread(() ->
-                        Toast.makeText(activity, "Environment not ready, please try again", Toast.LENGTH_SHORT).show()
-                    );
-                    return;
-                }
+        if (command == null || command.trim().isEmpty()) return;
 
-                Process proc = Runtime.getRuntime().exec(
-                    new String[] { shellPath, "-c", command },
-                    env
-                );
-                proc.getOutputStream().close();
-                new Thread(() -> consumeStream(proc.getInputStream())).start();
-                new Thread(() -> consumeStream(proc.getErrorStream())).start();
-                proc.waitFor();
-            } catch (IOException e) {
-                activity.runOnUiThread(() ->
-                    Toast.makeText(activity, "Failed to run: " + command, Toast.LENGTH_SHORT).show()
-                );
-            } catch (InterruptedException ignored) {}
-        }).start();
+        // Read active session ID from preferences
+        int sessionId = activity.getSharedPreferences("xodos2_prefs", Context.MODE_PRIVATE)
+                .getInt("active_terminal_session_id", TerminalSessionIds.ARCH_TERMINAL);
+
+        if (!NativeBridge.INSTANCE.isSessionAlive(sessionId)) {
+            activity.runOnUiThread(() ->
+                    Toast.makeText(activity, "Terminal not running", Toast.LENGTH_SHORT).show()
+            );
+            return;
+        }
+
+        byte[] bytes = (command + "\n").getBytes(StandardCharsets.UTF_8);
+        NativeBridge.INSTANCE.writeInput(sessionId, bytes);
     }
 
-    private void consumeStream(java.io.InputStream in) {
-        try {
-            byte[] buf = new byte[1024];
-            while (in.read(buf) != -1) {}
-        } catch (IOException ignored) {}
-    }
-
-    // ---------- Rest of the original methods (unchanged) ----------
+    // ────────────────────────────────────────────
+    //  Rest of the class – completely unchanged
+    // ────────────────────────────────────────────
     private void update() {
         synchronized (lock) {
             activity.getWinHandler().listProcesses();
@@ -223,10 +135,10 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
             } else if (itemId == R.id.process_end) {
                 if (processInfo.wow64Process) {
                     ContentDialog.confirm(activity, R.string.do_you_want_to_end_this_process, () ->
-                        winHandler.killProcess(processInfo.name));
+                            winHandler.killProcess(processInfo.name));
                 } else {
                     ContentDialog.confirm(activity, R.string.do_you_want_to_end_this_process, () ->
-                        android.os.Process.killProcess(processInfo.pid));
+                            android.os.Process.killProcess(processInfo.pid));
                 }
             }
             return true;

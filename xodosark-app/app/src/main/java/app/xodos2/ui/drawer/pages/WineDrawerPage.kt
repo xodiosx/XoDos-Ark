@@ -3,32 +3,28 @@ package app.xodos2.ui.drawer.pages
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.DrawerState
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.xodos2.TerminalSessionIds
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.drawer.menu.DrawerScriptEditor
 import app.xodos2.ui.prefs.AppPrefs
 import app.xodos2.ui.runtime.TerminalSessionController
+import app.xodos2.ui.runtime.NativeInstallCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import androidx.compose.ui.platform.LocalContext
-import app.xodos2.ui.runtime.NativeInstallCoordinator
 
 @Composable
 fun WineDrawerPage(
-
     prefs: SharedPreferences,
     drawerState: DrawerState,
     scope: CoroutineScope,
@@ -40,9 +36,24 @@ fun WineDrawerPage(
     onEnterTerminal: () -> Unit,
     onExitDisplayModes: () -> Unit,
     hasWineRootfs: Boolean = true,
-    onContainerManagerClick: () -> Unit
+    onContainerManagerClick: () -> Unit,
+    onExecuteCommand: (String) -> Unit = {}    // NEW: execute install script
 ) {
-val context = LocalContext.current
+    val context = LocalContext.current
+
+    // --- Container / distro info (container 3) ---
+    val distroId = remember {
+        NativeInstallCoordinator.getContainerDistro(context, 3)
+            ?: prefs.getString("container_distro_type_3", "linux") ?: "linux"
+    }
+
+    // --- DE install state ---
+    val desktopEnvNames = remember {
+        listOf("XFCE Desktop", "LXQt Desktop", "KDE Plasma", "GNOME", "MATE", "Cinnamon")
+    }
+    var editingDeName by remember { mutableStateOf<String?>(null) }
+    var deScriptText by remember { mutableStateOf("") }
+
     if (!hasWineRootfs) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
@@ -69,13 +80,13 @@ val context = LocalContext.current
 
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Text(
-           text = NativeInstallCoordinator.getContainerDisplayName(context, 3),
+            text = NativeInstallCoordinator.getContainerDisplayName(context, 3),
             color = Color.White.copy(alpha = 0.9f),
             style = MaterialTheme.typography.titleLarge
         )
         Spacer(Modifier.height(12.dp))
 
-        // X11 Desktop button (tap to launch Wine desktop, long‑press to edit startup script)
+        // X11 Desktop button
         Text(
             text = "X11",
             color = MaterialTheme.colorScheme.primary,
@@ -96,12 +107,12 @@ val context = LocalContext.current
                 .padding(vertical = 12.dp)
         )
 
-        // Scripts section for Wine startup script
+        // Scripts (existing startup script editor)
         DrawerExpandableSection(title = "Scripts", defaultExpanded = false) {
             if (wineScriptEditorOpen) {
                 DrawerScriptEditor(
                     title = "X11 startup script",
-                    initialText = AppPrefs.readWineDesktopStartupScript(prefs), // create this helper if needed
+                    initialText = AppPrefs.readWineDesktopStartupScript(prefs),
                     onSave = {
                         AppPrefs.writeWineDesktopStartupScript(prefs, it)
                         onWineScriptEditorOpenChange(false)
@@ -119,6 +130,51 @@ val context = LocalContext.current
                 )
             }
         }
+
+        // ------------------ NEW: Install Desktop ------------------
+        DrawerExpandableSection(title = "Install Desktop", defaultExpanded = false) {
+            desktopEnvNames.forEach { name ->
+                val prefKey = "custom_install_script_${distroId}_${name.replace(" ", "_")}"
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable {
+                                scope.launch { drawerState.close() }
+                                val script = prefs.getString(prefKey, null)
+                                    ?: DesktopInstallScripts.buildDesktopInstallScript(distroId, name)
+                                onExecuteCommand(script)
+                            }
+                            .padding(vertical = 12.dp, horizontal = 8.dp)
+                    )
+                    IconButton(
+                        onClick = {
+                            editingDeName = name
+                            deScriptText = prefs.getString(prefKey, null)
+                                ?: DesktopInstallScripts.buildDesktopInstallScript(distroId, name)
+                        },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Install Script",
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+        // -----------------------------------------------------------
 
         // Terminal button
         Text(
@@ -151,6 +207,49 @@ val context = LocalContext.current
                     onContainerManagerClick()
                 }
                 .padding(vertical = 12.dp)
+        )
+    }
+
+    // --- Script editing dialog ---
+    if (editingDeName != null) {
+        val targetDe = editingDeName!!
+        val prefKey = "custom_install_script_${distroId}_${targetDe.replace(" ", "_")}"
+
+        AlertDialog(
+            onDismissRequest = { editingDeName = null },
+            title = { Text("Edit Setup Script: $targetDe") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = deScriptText,
+                        onValueChange = { deScriptText = it },
+                        label = { Text("Installation Sequence (.sh)") },
+                        singleLine = false,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 160.dp, max = 320.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        prefs.edit().putString(prefKey, deScriptText.trim()).apply()
+                        editingDeName = null
+                    }
+                ) { Text("Save") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        onClick = {
+                            deScriptText = DesktopInstallScripts.buildDesktopInstallScript(distroId, targetDe)
+                        }
+                    ) { Text("Reset", color = MaterialTheme.colorScheme.error) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(onClick = { editingDeName = null }) { Text("Cancel") }
+                }
+            }
         )
     }
 }

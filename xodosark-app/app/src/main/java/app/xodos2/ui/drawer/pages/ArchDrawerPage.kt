@@ -34,96 +34,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 // ----------------------------------------------------------------
-// Helper: build the correct installation script for any distro
-// ----------------------------------------------------------------
-private fun buildDesktopInstallScript(distro: String, envName: String): String {
-    val cleanDistro = distro.lowercase().trim()
-    
-    val (managerCmd, baseDeps) = when {
-        cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") || cleanDistro.contains("kali") || cleanDistro.contains("trisquel") -> {
-            Pair("apt update && apt install -y", "mesa-utils xwayland libvulkan-dev mesa-vulkan-drivers libgl1-mesa-dri libglx-mesa0 libegl-mesa0 vulkan-tools dbus-x11")
-        }
-        cleanDistro.contains("arch") || cleanDistro.contains("manjaro") || cleanDistro.contains("artix") -> {
-            Pair("pacman -Syu --noconfirm --needed", "mesa-utils xorg-xwayland vulkan-devel mesa vulkan-tools dbus")
-        }
-        cleanDistro.contains("fedora") || cleanDistro.contains("almalinux") || cleanDistro.contains("rocky") -> {
-            Pair("dnf clean all && dnf install -y", "mesa-utils xorg-x11-server-Xwayland vulkan-loader-devel mesa-dri-drivers vulkan-tools dbus-x11")
-        }
-        cleanDistro.contains("alpine") -> {
-            Pair("apk update && apk add", "mesa-utils xwayland vulkan-loader mesa-dri-gallium vulkan-tools dbus")
-        }
-        cleanDistro.contains("void") -> {
-            Pair("xbps-install -Su && xbps-install -y", "mesa-utils xwayland vulkan-loader mesa-dri vulkan-tools dbus")
-        }
-        cleanDistro.contains("opensuse") -> {
-            Pair("zypper refresh && zypper install -y", "mesa-utils xorg-x11-server-Xwayland vulkan-devel mesa-dri-drivers vulkan-tools dbus-1-x11")
-        }
-        else -> {
-            Pair("apt update && apt install -y", "mesa-utils xwayland libvulkan-dev mesa-vulkan-drivers libgl1-mesa-dri libglx-mesa0 libegl-mesa0 vulkan-tools dbus-x11")
-        }
-    }
-
-    val isModernDE = envName == "GNOME" || envName == "KDE Plasma"
-    val audioDeps = if (isModernDE) {
-        when {
-            cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") || cleanDistro.contains("kali") -> 
-                "pipewire pipewire-pulse wireplumber pavucontrol"
-            cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> 
-                "pipewire-pulse wireplumber pavucontrol"
-            cleanDistro.contains("fedora") || cleanDistro.contains("almalinux") -> 
-                "pipewire-pulseaudio wireplumber pavucontrol"
-            cleanDistro.contains("alpine") -> 
-                "pipewire pipewire-pulse wireplumber pavucontrol"
-            cleanDistro.contains("void") -> 
-                "pipewire wireplumber pavucontrol"
-            cleanDistro.contains("opensuse") -> 
-                "pipewire-pulseaudio wireplumber pavucontrol"
-            else -> "pipewire pipewire-pulse pavucontrol"
-        }
-    } else {
-        "pulseaudio pavucontrol"
-    }
-
-    val desktopPackages = when (envName) {
-        "XFCE Desktop" -> when {
-            cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> "xfce4 xfce4-goodies"
-            cleanDistro.contains("alpine") -> "xfce4 xfce4-terminal"
-            else -> "xfce4 xfce4-goodies"
-        }
-        "LXQt Desktop" -> when {
-            cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> "lxqt lxqt-themes featherpad"
-            cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") -> "lxqt openbox"
-            else -> "lxqt"
-        }
-        "KDE Plasma" -> when {
-            cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> "plasma-desktop kde-applications"
-            cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") -> "kde-plasma-desktop"
-            cleanDistro.contains("fedora") -> "@kde-desktop-environment"
-            else -> "plasma-desktop"
-        }
-        "GNOME" -> when {
-            cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> "gnome gnome-tweaks"
-            cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") -> "gnome-core"
-            cleanDistro.contains("fedora") -> "@gnome-desktop"
-            else -> "gnome"
-        }
-        "MATE" -> when {
-            cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> "mate mate-extra"
-            else -> "mate-desktop-environment"
-        }
-        "Cinnamon" -> when {
-            cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> "cinnamon nemo"
-            else -> "cinnamon-desktop-environment"
-        }
-        else -> ""
-    }
-
-    return "$managerCmd $desktopPackages $baseDeps $audioDeps\n" +
-           "export PULSE_SERVER=127.0.0.1\n" +
-           "echo 'Installation completed!'\n"
-}
-
-// ----------------------------------------------------------------
 // Data class for saved commands with title
 // ----------------------------------------------------------------
 private data class SavedCommand(
@@ -171,9 +81,19 @@ fun ArchDrawerPage(
     onExecuteCommand: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val containerDisplayName = NativeInstallCoordinator.getContainerDisplayName(context, 1)
 
-    val distroId = NativeInstallCoordinator.getContainerDistro(context, 1) ?: "linux"
+    // Dynamically derive the active container ID based on the current terminal session.
+    // This updates the UI and scripts immediately when the user switches terminal tabs.
+    val activeContainerId = 1   // this drawer is always Container 1
+    val containerDisplayName = remember(activeContainerId) {
+        NativeInstallCoordinator.getContainerDisplayName(context, activeContainerId)
+    }
+
+    val distroId = remember(activeContainerId) {
+        NativeInstallCoordinator.getContainerDistro(context, activeContainerId)
+            ?: prefs.getString("container_distro_type_$activeContainerId", "linux")
+            ?: "linux"
+    }
 
     // ===================== Commands state =====================
     var showCommandsDialog by remember { mutableStateOf(false) }
@@ -191,7 +111,7 @@ fun ArchDrawerPage(
     LaunchedEffect(showCommandsDialog) {
         if (showCommandsDialog) {
             savedCommands.clear()
-            val rawStrings = AppPrefs.loadCommands(prefs) // assumed to return List<String> of JSON strings
+            val rawStrings = AppPrefs.loadCommands(prefs)
             rawStrings.forEach { json ->
                 try {
                     val obj = JSONObject(json)
@@ -202,7 +122,6 @@ fun ArchDrawerPage(
                         )
                     )
                 } catch (_: Exception) {
-                    // fallback for old plain-text commands
                     savedCommands.add(SavedCommand(title = "", command = json))
                 }
             }
@@ -380,7 +299,7 @@ fun ArchDrawerPage(
             DrawerExpandableSection(title = "Install Desktop", defaultExpanded = false) {
                 desktopEnvNames.forEach { name ->
                     val prefKey = "custom_install_script_${distroId}_${name.replace(" ", "_")}"
-                    
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -395,7 +314,8 @@ fun ArchDrawerPage(
                                 .weight(1f)
                                 .clickable {
                                     scope.launch { drawerState.close() }
-                                    val script = prefs.getString(prefKey, null) ?: buildDesktopInstallScript(distroId, name)
+                                    val script = prefs.getString(prefKey, null)
+                                        ?: DesktopInstallScripts.buildDesktopInstallScript(distroId, name)
                                     onExecuteCommand(script)
                                 }
                                 .padding(vertical = 12.dp, horizontal = 8.dp)
@@ -403,7 +323,8 @@ fun ArchDrawerPage(
                         IconButton(
                             onClick = {
                                 editingDeName = name
-                                deScriptText = prefs.getString(prefKey, null) ?: buildDesktopInstallScript(distroId, name)
+                                deScriptText = prefs.getString(prefKey, null)
+                                    ?: DesktopInstallScripts.buildDesktopInstallScript(distroId, name)
                             },
                             modifier = Modifier.size(36.dp)
                         ) {
@@ -480,7 +401,7 @@ fun ArchDrawerPage(
                 Row {
                     TextButton(
                         onClick = {
-                            deScriptText = buildDesktopInstallScript(distroId, targetDe)
+                            deScriptText = DesktopInstallScripts.buildDesktopInstallScript(distroId, targetDe)
                         }
                     ) {
                         Text("Reset", color = MaterialTheme.colorScheme.error)
