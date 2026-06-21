@@ -224,29 +224,44 @@ pub(super) fn build_exec_args(
             CString::new(format!("--bind={}/sys/.empty:/sys/fs/selinux", rootfs.display())).unwrap(),
         );
         // Choose a shell that actually exists
-let shell = if rootfs.join("bin/bash").exists() || rootfs.join("usr/bin/bash").exists() {
-    "/bin/bash"
-} else if rootfs.join("bin/sh").exists() || rootfs.join("usr/bin/sh").exists() {
-    "/bin/sh"
-} else if rootfs.join("bin/dash").exists() || rootfs.join("usr/bin/dash").exists() {
-    "/bin/dash"
-} else if rootfs.join("usr/bin/login").exists() {
-    // Last resort: use login to start a session
-    "/usr/bin/login"
-} else {
-    anyhow::bail!("no usable shell or login program found in rootfs");
-};
 
-argv.push(CString::new(shell).unwrap());
+// ── Shell detection (inside `if is_proot_compatible(rootfs)` block) ──
+let standard_shells: &[&str] = &[
+    "bin/bash", "usr/bin/bash",
+    "bin/sh", "usr/bin/sh",
+    "bin/dash", "usr/bin/dash",
+    "bin/ash", "usr/bin/ash",
+];
 
-// `-i` works for bash/sh/dash; `login` uses `-f` for autologin as root
-if shell == "/usr/bin/login" {
-    argv.push(CString::new("-f").unwrap());   // skip password prompt
-    argv.push(CString::new("root").unwrap());
+let shell_info = standard_shells
+    .iter()
+    .find(|c| rootfs.join(c).exists())
+    .map(|&path| {
+        // strip leading "usr/" if present, to use as absolute path
+        let binary = path.strip_prefix("usr/").unwrap_or(path);
+        (binary, binary) // (binary, applet) – same for standard shells
+    })
+    .or_else(|| {
+        // Fallback to BusyBox if no standard shell found
+        if rootfs.join("bin/busybox").exists() || rootfs.join("usr/bin/busybox").exists() {
+            Some(("busybox", "sh"))
+        } else {
+            None
+        }
+    });
+
+let (binary, applet) = shell_info
+    .ok_or_else(|| anyhow::anyhow!("no usable shell found in rootfs"))?;
+
+if binary == "busybox" {
+    // BusyBox needs the applet name as first argument
+    argv.push(CString::new("/bin/busybox").unwrap());
+    argv.push(CString::new(applet).unwrap());   // "sh"
+    argv.push(CString::new("-i").unwrap());
 } else {
-    // Use login shell so that /etc/profile.d/99-xodos2-runtime.sh is sourced
-argv.push(CString::new("-l").unwrap());
-argv.push(CString::new("-i").unwrap());
+    argv.push(CString::new(format!("/{}", binary)).unwrap());
+    argv.push(CString::new("-l").unwrap());
+    argv.push(CString::new("-i").unwrap());
 }
     } else {
         // ---------- fallback: Android system shell with container prefix ----------

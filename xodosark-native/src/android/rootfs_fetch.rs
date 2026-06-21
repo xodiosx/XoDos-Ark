@@ -111,18 +111,39 @@ where
 // ---------------------------------------------------------------------------
 
 fn validate_rootfs_structure(rootfs_path: &Path) -> Result<()> {
-    // Accept any of these common shells:
-    let has_sh = rootfs_path.join("bin/sh").exists()
-        || rootfs_path.join("usr/bin/sh").exists()
-        || rootfs_path.join("bin/bash").exists()
-        || rootfs_path.join("usr/bin/bash").exists()
-                || rootfs_path.join("bin/dash").exists()
-                || rootfs_path.join("usr/bin/dash").exists();
+    // Check for common shells (including symlinks that may have been copied as files)
+    let shell_candidates = [
+        "bin/sh", "usr/bin/sh",
+        "bin/bash", "usr/bin/bash",
+        "bin/dash", "usr/bin/dash",
+        "bin/ash", "usr/bin/ash",
+        "bin/busybox", "usr/bin/busybox",
+    ];
+    let has_shell = shell_candidates.iter().any(|p| rootfs_path.join(p).exists());
 
-    anyhow::ensure!(has_sh, "no usable shell found (bin/sh, usr/bin/sh, bin/bash, usr/bin/dash)");
+    // If still missing, check if there is at least one executable anywhere in /bin or /usr/bin
+    let has_any_exec = if !has_shell {
+        let check_dir = |dir: &str| -> bool {
+            let d = rootfs_path.join(dir);
+            if d.is_dir() {
+                std::fs::read_dir(&d).map_or(false, |rd| {
+                    rd.filter_map(|e| e.ok())
+                        .any(|e| e.file_type().map_or(false, |t| t.is_file()) && !e.file_name().to_string_lossy().starts_with('.'))
+                })
+            } else { false }
+        };
+        check_dir("bin") || check_dir("usr/bin")
+    } else { true };
+
+    anyhow::ensure!(
+        has_shell || has_any_exec,
+        "no usable shell found (tried sh, bash, dash, ash, busybox in /bin and /usr/bin)"
+    );
+
     anyhow::ensure!(rootfs_path.join("proc").is_dir(), "missing proc/");
     Ok(())
 }
+
 
 /// Safely unpacks an archive while bypassing Android's strict hard-link restrictions
 fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Path) -> Result<()> {
