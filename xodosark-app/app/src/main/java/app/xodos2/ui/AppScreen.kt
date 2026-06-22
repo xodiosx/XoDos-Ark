@@ -824,8 +824,9 @@ File(context.filesDir, "drivers").listFiles { f ->
     
     distroFetchState = DistroFetchState.LOADING
     availableDistros = withContext(Dispatchers.IO) {
-        NativeInstallCoordinator.fetchAvailableDistros()
-    }
+    NativeInstallCoordinator.fetchAvailableDistros(NativeInstallCoordinator.DistroSource.CUSTOM) 
+}
+ 
     distroFetchState = if (availableDistros.isEmpty()) {
         DistroFetchState.ERROR
     } else {
@@ -1104,29 +1105,32 @@ if (backupInProgress) {
 
 // ── Restart dialog after installation ───────────────────────────
 if (installDone) {
-    AlertDialog(
-        onDismissRequest = { /* block dismiss */ },
-        title = { Text("Setup complete") },
-        text = { Text("Restart the app to apply the new container.") },
-        confirmButton = {
-            TextButton(onClick = {
-                val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+    // Full‑screen surface to avoid the default window background
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        // The dialog itself – no way to close it except the Restart button
+        AlertDialog(
+            onDismissRequest = { /* blocked – cannot be dismissed */ },
+            title = { Text("Setup complete") },
+            text = { Text("Restart the app to apply the new container.\n\nPlease press Restart.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    }
+                    if (intent != null) {
+                        context.startActivity(intent)
+                        (context as? Activity)?.finish()
+                    }
+                }) {
+                    Text("Restart")
                 }
-                if (intent != null) {
-                    context.startActivity(intent)
-                    (context as? Activity)?.finish()
-                }
-            }) {
-                Text("Restart")
             }
-        },
-        dismissButton = {
-            TextButton(onClick = { installDone = false }) {
-                Text("Cancel")
-            }
-        }
-    )
+            // No dismissButton → the dialog cannot be closed at all
+        )
+    }
     return
 }
 
@@ -1324,11 +1328,15 @@ if (showContainerManager) {
                                 NativeInstallCoordinator.invalidateDistroCache() 
         distroFetchState = DistroFetchState.LOADING
         scope.launch {
-            availableDistros = NativeInstallCoordinator.fetchAvailableDistros()
+            availableDistros = withContext(Dispatchers.IO) {
+    NativeInstallCoordinator.fetchAvailableDistros(NativeInstallCoordinator.DistroSource.CUSTOM) 
+}
+ 
             distroFetchState = if (availableDistros.isEmpty()) DistroFetchState.ERROR else DistroFetchState.LOADED
         }
     }
-                        }) {
+                    
+                            }) {
                             Icon(
                                 imageVector = Icons.Default.AddCircle,
                                 contentDescription = "Install to container $id",
@@ -1441,37 +1449,73 @@ if (showExitDialog) {
     )
 }
     // ── Distro selection screen ──────────────────────────────────
+// ── Distro selection screen ──────────────────────────────────
 if (showDistroSelection) {
+    // Track which source is currently active. Default to EASYCLI (Normal)
+    var selectedSource by remember { mutableStateOf(NativeInstallCoordinator.DistroSource.CUSTOM) }
+
+    // Reusable function to trigger the fetch based on the selected source
+    val loadDistros = { source: NativeInstallCoordinator.DistroSource ->
+        scope.launch {
+            distroFetchState = DistroFetchState.LOADING
+            availableDistros = withContext(Dispatchers.IO) {
+                NativeInstallCoordinator.fetchAvailableDistros(source)
+            }
+            distroFetchState = if (availableDistros.isEmpty()) DistroFetchState.ERROR else DistroFetchState.LOADED
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
             verticalArrangement = Arrangement.Center
         ) {
-            // ---- Header with inline Refresh Button ----
+            
+            Text("Select a Linux distribution", style = MaterialTheme.typography.headlineSmall)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // ---- The 3 Buttons Row ----
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text("Select a Linux distribution", style = MaterialTheme.typography.headlineSmall)
-                
-                IconButton(onClick = {
-                    NativeInstallCoordinator.invalidateDistroCache() 
-                    scope.launch {
-                        distroFetchState = DistroFetchState.LOADING
-                        availableDistros = withContext(Dispatchers.IO) {
-                            NativeInstallCoordinator.fetchAvailableDistros()
-                        }
-                        distroFetchState = if (availableDistros.isEmpty()) DistroFetchState.ERROR else DistroFetchState.LOADED
-                    }
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Refresh list",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                // Button 1: Normal (EasyCLI)
+                val isNormal = selectedSource == NativeInstallCoordinator.DistroSource.EASYCLI
+                val normalModifier = Modifier.weight(1f)
+                if (isNormal) {
+                    Button(onClick = { /* Already selected */ }, modifier = normalModifier) { Text("Latest", maxLines = 1) }
+                } else {
+                    OutlinedButton(onClick = {
+                        selectedSource = NativeInstallCoordinator.DistroSource.EASYCLI
+                        loadDistros(NativeInstallCoordinator.DistroSource.EASYCLI)
+                    }, modifier = normalModifier) { Text("Latest", maxLines = 1) }
+                }
+
+                // Button 2: Kali
+                val isKali = selectedSource == NativeInstallCoordinator.DistroSource.KALI
+                val kaliModifier = Modifier.weight(1f)
+                if (isKali) {
+                    Button(onClick = { /* Already selected */ }, modifier = kaliModifier) { Text("Kali", maxLines = 1) }
+                } else {
+                    OutlinedButton(onClick = {
+                        selectedSource = NativeInstallCoordinator.DistroSource.KALI
+                        loadDistros(NativeInstallCoordinator.DistroSource.KALI)
+                    }, modifier = kaliModifier) { Text("Kali", maxLines = 1) }
+                }
+
+                // Button 3: Custom
+                val isCustom = selectedSource == NativeInstallCoordinator.DistroSource.CUSTOM
+                val customModifier = Modifier.weight(1f)
+                if (isCustom) {
+                    Button(onClick = { /* Already selected */ }, modifier = customModifier) { Text("Custom", maxLines = 1) }
+                } else {
+                    OutlinedButton(onClick = {
+                        selectedSource = NativeInstallCoordinator.DistroSource.CUSTOM
+                        loadDistros(NativeInstallCoordinator.DistroSource.CUSTOM)
+                    }, modifier = customModifier) { Text("Custom", maxLines = 1) }
                 }
             }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             // ---- Local file picker – ALWAYS visible ----
@@ -1535,13 +1579,8 @@ if (showDistroSelection) {
                         )
                         TextButton(onClick = {
                             NativeInstallCoordinator.invalidateDistroCache() 
-                            scope.launch {
-                                distroFetchState = DistroFetchState.LOADING
-                                availableDistros = withContext(Dispatchers.IO) {
-                                    NativeInstallCoordinator.fetchAvailableDistros()
-                                }
-                                distroFetchState = if (availableDistros.isEmpty()) DistroFetchState.ERROR else DistroFetchState.LOADED
-                            }
+                            // Pass the currently selected source to retry properly
+                            loadDistros(selectedSource)
                         }) {
                             Text("Retry")
                         }
@@ -1616,7 +1655,6 @@ if (showDistroSelection) {
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(distro.archiveName, style = MaterialTheme.typography.bodySmall)
-                                    // The size string will be rendered right here
                                     Text(distro.size, style = MaterialTheme.typography.bodySmall)
                                 }
                             }

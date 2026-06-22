@@ -111,7 +111,7 @@ where
 // ---------------------------------------------------------------------------
 
 fn validate_rootfs_structure(rootfs_path: &Path) -> Result<()> {
-    // Check for common shells (including symlinks that may have been copied as files)
+    // 1. Check for a usable shell (standard paths)
     let shell_candidates = [
         "bin/sh", "usr/bin/sh",
         "bin/bash", "usr/bin/bash",
@@ -121,8 +121,8 @@ fn validate_rootfs_structure(rootfs_path: &Path) -> Result<()> {
     ];
     let has_shell = shell_candidates.iter().any(|p| rootfs_path.join(p).exists());
 
-    // If still missing, check if there is at least one executable anywhere in /bin or /usr/bin
-    let has_any_exec = if !has_shell {
+    // 2. If no shell, check for at least one executable in /bin or /usr/bin
+    let has_exec = if !has_shell {
         let check_dir = |dir: &str| -> bool {
             let d = rootfs_path.join(dir);
             if d.is_dir() {
@@ -135,12 +135,20 @@ fn validate_rootfs_structure(rootfs_path: &Path) -> Result<()> {
         check_dir("bin") || check_dir("usr/bin")
     } else { true };
 
+    // 3. Fallback: if still no executable, accept the rootfs if it has the core directories /usr, /var, /etc
+    let has_directory_structure = if !has_shell && !has_exec {
+        let essential_dirs = ["usr", "var", "etc"];
+        essential_dirs.iter().all(|d| rootfs_path.join(d).is_dir())
+    } else { false };
+
     anyhow::ensure!(
-        has_shell || has_any_exec,
-        "no usable shell found (tried sh, bash, dash, ash, busybox in /bin and /usr/bin)"
+        has_shell || has_exec || has_directory_structure,
+        "no usable shell or executable found, and missing core directories (/usr, /var, /etc)"
     );
 
+    // Ensure /proc directory exists (already created by setup_fake_sysdata before validation)
     anyhow::ensure!(rootfs_path.join("proc").is_dir(), "missing proc/");
+
     Ok(())
 }
 

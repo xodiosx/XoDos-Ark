@@ -40,7 +40,7 @@ fun DrawerMenu(
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
             )
 
-            DrawerExpandableSection(title = "Common", defaultExpanded = true) {
+            DrawerExpandableSection(title = "Display", defaultExpanded = true) {
                 DrawerPrimaryItem(
                     title = "Wayland",
                     onTap = actions.onDesktopClick,
@@ -61,7 +61,7 @@ fun DrawerMenu(
                 )
 
                 DrawerDropdownField(
-                    label = "Launcher default",
+                    label = "default Display",
                     value = labels.launcherDefaultLabel,
                     options = options.launcherDefaultOptions,
                     onSelect = {
@@ -123,14 +123,14 @@ fun DrawerMenu(
                         },
                     )
                 }
-                DrawerTextItem(title = "Keyboard", onClick = actions.onKeyboardClick)
+                DrawerTextItem(title = "Open Keyboard", onClick = actions.onKeyboardClick)
             }
 
             Spacer(Modifier.height(6.dp))
 
             DrawerExpandableSection(title = "Terminal", defaultExpanded = true) {
                 DrawerDropdownField(
-                    label = "Appearance",
+                    label = "Terminal font",
                     value = labels.terminalFontLabel,
                     options = options.terminalFontOptions,
                     onSelect = {

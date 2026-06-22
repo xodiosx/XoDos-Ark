@@ -558,7 +558,7 @@ private fun ArchExtraContent(
     onWaylandScriptEditorOpenChange: (Boolean) -> Unit,
     hasArchRootfs: Boolean
 ) {
-    DrawerExpandableSection(title = "Scripts", defaultExpanded = false) {
+    DrawerExpandableSection(title = "Wayland scripts", defaultExpanded = false) {
         if (waylandScriptEditorOpen) {
             DrawerScriptEditor(
                 title = "Wayland desktop startup script",

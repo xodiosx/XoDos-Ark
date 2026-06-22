@@ -109,7 +109,7 @@ fun DebianDrawerPage(
         )
 
         // Scripts (existing)
-        DrawerExpandableSection(title = "Scripts", defaultExpanded = false) {
+        DrawerExpandableSection(title = "X11 Scripts", defaultExpanded = false) {
             if (x11ScriptEditorOpen) {
                 DrawerScriptEditor(
                     title = "X11 startup script",

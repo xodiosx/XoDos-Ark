@@ -108,7 +108,7 @@ fun WineDrawerPage(
         )
 
         // Scripts (existing startup script editor)
-        DrawerExpandableSection(title = "Scripts", defaultExpanded = false) {
+        DrawerExpandableSection(title = "X11 Scripts", defaultExpanded = false) {
             if (wineScriptEditorOpen) {
                 DrawerScriptEditor(
                     title = "X11 startup script",

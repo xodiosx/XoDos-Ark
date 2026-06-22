@@ -71,9 +71,9 @@ class RustPtySession(
                 // Fallback to generic name if file missing/empty
                 if (distroName.isEmpty()) {
                     distroName = when (TerminalSessionIds.namespaceOf(sessionId)) {
-                        TerminalSessionIds.NS_ARCH   -> "Archlinux"
-                        TerminalSessionIds.NS_DEBIAN -> "Debian"
-                        TerminalSessionIds.NS_WINE   -> "Wine"
+                        TerminalSessionIds.NS_ARCH   -> "Container 1"
+                        TerminalSessionIds.NS_DEBIAN -> "Container 2"
+                        TerminalSessionIds.NS_WINE   -> "Container 3"
                         else -> "Unknown"
                     }
                 }
@@ -156,7 +156,8 @@ class RustPtySession(
             // Choose colour based on distro name (or namespace fallback)
             val rgb = when (distroName.lowercase()) {
                 "archlinux", "arch" -> intArrayOf(0x17, 0x93, 0xD1)    // blue
-                "debian"            -> intArrayOf(0x8A, 0x2B, 0xE2)    // purple (replacing red)
+                "debian"            -> intArrayOf(0x8A, 0x2B, 0xE2)    // purple 
+                "nixos"            -> intArrayOf(0x8A, 0x2B, 0xE2)    // purple 
                 "ubuntu"            -> intArrayOf(0xE9, 0x54, 0x20)    // orange
                 "fedora"            -> intArrayOf(0x29, 0x47, 0xAB)    // dark blue
                 "alpine"            -> intArrayOf(0x0D, 0x59, 0x7F)    // teal

@@ -84,10 +84,12 @@ fn proot_and_loader_paths() -> Result<(std::path::PathBuf, std::path::PathBuf)> 
 
 fn is_proot_compatible(rootfs: &Path) -> bool {
     has_rootfs(rootfs)
-        && rootfs.join("etc/os-release").exists()
         && rootfs.join("sys/.empty").is_dir()
+        && (
+            rootfs.join("etc/os-release").exists()
+            || (rootfs.join("usr/bin").is_dir() && rootfs.join("root").is_dir())
+        )
 }
-
 // --------------------------------------------------------------------------
 // Argument builder
 // --------------------------------------------------------------------------
@@ -226,6 +228,7 @@ pub(super) fn build_exec_args(
         // Choose a shell that actually exists
 
 // ── Shell detection (inside `if is_proot_compatible(rootfs)` block) ──
+// ── Shell detection (inside `if is_proot_compatible(rootfs)` block) ──
 let standard_shells: &[&str] = &[
     "bin/bash", "usr/bin/bash",
     "bin/sh", "usr/bin/sh",
@@ -235,15 +238,14 @@ let standard_shells: &[&str] = &[
 
 let shell_info = standard_shells
     .iter()
-    .find(|c| rootfs.join(c).exists())
+    .find(|c| path_exists_in_rootfs(rootfs, c))
     .map(|&path| {
-        // strip leading "usr/" if present, to use as absolute path
         let binary = path.strip_prefix("usr/").unwrap_or(path);
         (binary, binary) // (binary, applet) – same for standard shells
     })
     .or_else(|| {
         // Fallback to BusyBox if no standard shell found
-        if rootfs.join("bin/busybox").exists() || rootfs.join("usr/bin/busybox").exists() {
+        if path_exists_in_rootfs(rootfs, "bin/busybox") || path_exists_in_rootfs(rootfs, "usr/bin/busybox") {
             Some(("busybox", "sh"))
         } else {
             None
@@ -254,7 +256,6 @@ let (binary, applet) = shell_info
     .ok_or_else(|| anyhow::anyhow!("no usable shell found in rootfs"))?;
 
 if binary == "busybox" {
-    // BusyBox needs the applet name as first argument
     argv.push(CString::new("/bin/busybox").unwrap());
     argv.push(CString::new(applet).unwrap());   // "sh"
     argv.push(CString::new("-i").unwrap());
@@ -326,6 +327,25 @@ if binary == "busybox" {
         );
         env.push(CString::new("XWAYLAND_NO_GLAMOR=1").unwrap());
         env.push(CString::new("MOZ_FAKE_NO_SANDBOX=1").unwrap());
+        // Nix support – use literal paths (no $HOME) because execve doesn't expand variables
+if rootfs.join("nix/store").is_dir() {
+    // Prepend Nix paths to PATH (already set to a standard Linux PATH)
+    if let Some(pos) = env.iter().position(|s| {
+        s.to_str().map_or(false, |v| v.starts_with("PATH="))
+    }) {
+        let current_path = env[pos].to_str().unwrap_or("PATH=").to_string();
+        // Use literal /root (HOME) and /run/current-system
+        let new_path = format!("PATH=/root/.nix-profile/bin:/run/current-system/sw/bin:{}", &current_path[5..]);
+        env[pos] = CString::new(new_path).unwrap();
+    }
+
+    // Set ENV so that sh/bash/dash source .bashrc (Nix user environment)
+    env.push(CString::new("ENV=/root/.bashrc").unwrap());
+
+    // NIX_PATH and MANPATH for completeness
+    env.push(CString::new("NIX_PATH=/root/.nix-defexpr/channels:/nix/var/nix/profiles/per-user/root/channels").unwrap());
+    env.push(CString::new("MANPATH=/root/.nix-profile/share/man:/run/current-system/sw/share/man:$MANPATH").unwrap());
+}
     }
 
     Ok((argv, env))
@@ -387,3 +407,36 @@ pub fn fork_pty_shell_in_rootfs(
     }
 }
 
+
+
+/// Returns true if `relative_path` exists inside the rootfs, correctly following
+/// symlinks that point to absolute paths relative to the rootfs itself.
+pub(super) fn path_exists_in_rootfs(rootfs: &Path, relative_path: &str) -> bool {
+    let full_path = rootfs.join(relative_path);
+    // Quick check: if it exists natively (e.g., a regular file or working symlink), done.
+    if full_path.exists() {
+        return true;
+    }
+    // It might be a broken symlink on the host because the target is an absolute path
+    // that only makes sense inside the container. Read the link and resolve manually.
+    if full_path.is_symlink() {
+        if let Ok(target) = std::fs::read_link(&full_path) {
+            // If the target is relative, resolve it relative to the symlink's directory.
+            let resolved = if target.is_relative() {
+                full_path.parent().unwrap_or(Path::new("/")).join(target)
+            } else {
+                // Absolute target: treat it as relative to the rootfs root.
+                // Strip the leading '/' and join with rootfs.
+                let target_str = target.to_string_lossy();
+                if target_str.starts_with('/') {
+                    rootfs.join(&target_str[1..])
+                } else {
+                    rootfs.join(target_str.as_ref())
+                }
+            };
+            // Now check if the resolved path exists (could be another symlink, but we stop here).
+            return resolved.exists();
+        }
+    }
+    false
+}

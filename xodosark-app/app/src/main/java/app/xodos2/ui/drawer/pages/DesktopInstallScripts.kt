@@ -5,6 +5,16 @@ object DesktopInstallScripts {
     fun buildDesktopInstallScript(distro: String, envName: String): String {
         val cleanDistro = distro.lowercase().trim()
 
+        // Nix environment handling override
+        // Since Nix profiles can't manage system-level desktop environments or global drivers imperatively,
+        // we just update the channels and upgrade any existing user-profile packages.
+        if (cleanDistro.contains("nix")) {
+            return "source /nix/var/nix/profiles/default/etc/profile.d/nix.sh 2>/dev/null || true\n" +
+                   "nix-channel --update && nix-env -u\n" +
+                   "export PULSE_SERVER=127.0.0.1\n" +
+                   "echo 'Nix profile packages updated successfully!'\n"
+        }
+
         val (managerCmd, baseDeps) = when {
             cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") ||
             cleanDistro.contains("kali") || cleanDistro.contains("trisquel") ->
@@ -65,7 +75,7 @@ object DesktopInstallScripts {
             "KDE Plasma" -> when {
                 cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> "plasma-desktop kde-applications"
                 cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") -> "kde-plasma-desktop"
-                cleanDistro.contains("fedora") -> "@kde-desktop-environment"
+                cleanDistro.contains("fedora") -> "@kde-desktop"
                 else -> "plasma-desktop"
             }
             "GNOME" -> when {
