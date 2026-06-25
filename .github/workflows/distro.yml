@@ -1,0 +1,115 @@
+name: Mirror upstream release
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_owner:
+        description: 'Upstream owner'
+        required: true
+        default: 'termux'
+      source_repo:
+        description: 'Upstream repo'
+        required: true
+        default: 'proot-distro'
+      source_tag:
+        description: 'Upstream release tag'
+        required: true
+        default: 'v4.7.0'
+      target_tag:
+        description: 'Release tag in this repo'
+        required: true
+        default: 'mirror-v4.7.0'
+      target_title:
+        description: 'Release title in this repo'
+        required: true
+        default: 'Mirrored proot-distro v4.7.0'
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download upstream release assets
+        env:
+          SOURCE_OWNER: ${{ inputs.source_owner }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          SOURCE_TAG: ${{ inputs.source_tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import shutil
+          import urllib.request
+
+          owner = os.environ["SOURCE_OWNER"]
+          repo = os.environ["SOURCE_REPO"]
+          tag = os.environ["SOURCE_TAG"]
+
+          out = pathlib.Path("release-assets")
+          out.mkdir(parents=True, exist_ok=True)
+
+          api = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{tag}"
+          req = urllib.request.Request(
+              api,
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "github-actions-release-mirror",
+              },
+          )
+
+          with urllib.request.urlopen(req) as r:
+              release = json.load(r)
+
+          assets = release.get("assets", [])
+          if not assets:
+              raise SystemExit("No assets found in the upstream release")
+
+          print(f"Found {len(assets)} assets")
+          for asset in assets:
+              name = asset["name"]
+              url = asset["browser_download_url"]
+              dest = out / name
+
+              print(f"Downloading {name}")
+              req = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "github-actions-release-mirror"},
+              )
+              with urllib.request.urlopen(req) as r, open(dest, "wb") as f:
+                  shutil.copyfileobj(r, f)
+          PY
+
+      - name: Publish release in this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_OWNER: ${{ inputs.source_owner }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          SOURCE_TAG: ${{ inputs.source_tag }}
+          TARGET_TAG: ${{ inputs.target_tag }}
+          TARGET_TITLE: ${{ inputs.target_title }}
+        run: |
+          set -euo pipefail
+
+          files=(release-assets/*)
+          notes="Mirrored from ${SOURCE_OWNER}/${SOURCE_REPO} release ${SOURCE_TAG}"
+
+          if gh release view "$TARGET_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release delete "$TARGET_TAG" --repo "$GITHUB_REPOSITORY" --yes
+          fi
+
+          gh release create "$TARGET_TAG" "${files[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TARGET_TITLE" \
+            --notes "$notes"
