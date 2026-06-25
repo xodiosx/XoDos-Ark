@@ -14,15 +14,15 @@ on:
       source_tag:
         description: 'Upstream release tag'
         required: true
-        default: 'v4.7.0'
+        default: 'v4.11.0'
       target_tag:
         description: 'Release tag in this repo'
         required: true
-        default: 'mirror-v4.7.0'
+        default: 'mirror-v4.11.0'
       target_title:
         description: 'Release title in this repo'
         required: true
-        default: 'Mirrored proot-distro v4.7.0'
+        default: 'Mirrored proot-distro v4.11.0'
 
 permissions:
   contents: write
