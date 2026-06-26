@@ -18,7 +18,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "app.xodos2"
-    compileSdk = 30
+    compileSdk = 34
 //buildToolsVersion = "34.0.0"  
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -30,7 +30,7 @@ kotlinOptions {
         defaultConfig {
         applicationId = "app.xodos2"
         minSdk = 26
-        targetSdk = 30
+        targetSdk = 34
       
         ndkVersion = "27.1.12297006"   
         buildConfigField("String", "COMMIT", "\"xodos2-embedded-x11\"")

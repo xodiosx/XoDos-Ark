@@ -261,6 +261,7 @@ fn extract_tarball(tarball_path: &Path, dest: &Path, temp_extract: &Path) -> Res
 
     setup_fake_sysdata(dest)?;
     patch_user_group_files(dest);
+    write_fixdbus_script(dest); 
     Ok(())
 }
 
@@ -298,7 +299,7 @@ fn setup_fake_sysdata(rootfs: &Path) -> Result<()> {
         &rootfs.join("proc/.vmstat"),
         "nr_free_pages 1743136\nnr_zone_inactive_anon 179281\nnr_zone_active_anon 7183\n",
     )?;
-    write_if_missing(&rootfs.join("proc/.sysctl_entry_cap_last_cap"), "40\n")?;
+    write_if_missing(&rootfs.join("proc/.sysctl_entry_cap_last_cap"), "0\n")?;
     write_if_missing(
         &rootfs.join("proc/.sysctl_inotify_max_user_watches"),
         "4096\n",
@@ -532,5 +533,58 @@ fn patch_user_group_files(rootfs: &Path) {
             "etc/gshadow",
             &format!("aid_{}:*::root,aid_{}", name, username),
         );
+    }
+}
+
+
+fn write_fixdbus_script(rootfs: &Path) {
+    let script_path = rootfs.join("bin/fixdbus");
+    let content = r##"#!/bin/sh
+# Start D-Bus system bus properly for Xfce / desktop.
+# Run this once before starting your desktop session.
+
+BUS_SOCKET="/run/dbus/system_bus_socket"
+
+# Helper: check if the daemon is actually listening on the socket
+dbus_is_alive() {
+    [ -S "$BUS_SOCKET" ] && dbus-send --system --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames >/dev/null 2>&1
+}
+
+if dbus_is_alive; then
+    echo "D-Bus system bus is already running."
+    export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$BUS_SOCKET"
+    return 0
+fi
+
+# Clean up stale socket if any
+if [ -S "$BUS_SOCKET" ]; then
+    echo "Removing stale socket…"
+    rm -f "$BUS_SOCKET"
+fi
+
+# Create directory if needed (already done by host, but just in case)
+mkdir -p /run/dbus /var/run
+ln -sf /run/dbus /var/run/dbus   # legacy path compatibility
+
+# Start the daemon
+echo "Starting D-Bus system daemon…"
+dbus-daemon --system --fork --print-pid > /run/dbus/pid 2>/dev/null
+sleep 0.5
+
+if dbus_is_alive; then
+    echo "D-Bus system bus started successfully."
+    export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$BUS_SOCKET"
+    echo "DBUS_SYSTEM_BUS_ADDRESS=$DBUS_SYSTEM_BUS_ADDRESS"
+else
+    echo "ERROR: Failed to start D-Bus system daemon."
+    echo "Check if dbus-daemon is installed and /proc/sys/kernel/cap_last_cap is 0."
+    exit 1
+fi
+"##;
+
+    if let Err(e) = std::fs::write(&script_path, content) {
+        log::warn!("Failed to write fixdbus script: {:?}", e);
+    } else {
+        let _ = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755));
     }
 }

@@ -540,7 +540,8 @@ object NativeInstallCoordinator {
             }
         )
         if (ok) {
-            configureDns(context, containerId)            
+            configureDns(context, containerId)      
+            copyAssetToContainer(context, containerId, "xfce4-fix.zip")       
             val detected = detectDistroFromRootfs(context, containerId) ?: distro.distroType
             writeContainerEnvironment(context, containerId, detected)
             saveContainerDistro(context, containerId, detected)
@@ -589,6 +590,7 @@ object NativeInstallCoordinator {
 
         if (ok) {
             configureDns(context, containerId)
+            copyAssetToContainer(context, containerId, "xfce4-fix.zip") 
             val detected = detectDistroFromRootfs(context, containerId) ?: "linux"
             writeContainerEnvironment(context, containerId, detected)
             saveContainerDistro(context, containerId, detected)
@@ -737,6 +739,27 @@ object NativeInstallCoordinator {
         }
         return 0
     }
+
+/**
+ * Copies an asset file from the APK into the container's root directory.
+ */
+private fun copyAssetToContainer(context: Context, containerId: Int, assetName: String) {
+    val rootfs = containerPath(context, containerId)
+    if (!rootfs.isDirectory) return
+
+    val destFile = File(rootfs, assetName)
+    try {
+        context.assets.open(assetName).use { input ->
+            FileOutputStream(destFile).use { output ->
+                input.copyTo(output)
+            }
+        }
+        Log.i("NativeInstall", "$assetName copied to container $containerId")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to copy $assetName to container $containerId", e)
+    }
+}
+
 
     private fun migrateRendererPrefsIfNeeded(prefs: SharedPreferences) {
         val rawLegacy = prefs.getString("desktop_renderer_mode", "") ?: ""
