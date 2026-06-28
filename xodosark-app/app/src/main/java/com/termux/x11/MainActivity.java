@@ -1021,7 +1021,7 @@ lorieView.setOnHoverListener((v, e) -> {
             lorieView.screenInfo.handleHostSizeChanged(surfaceWidth, surfaceHeight);
             lorieView.screenInfo.handleClientSizeChanged(screenWidth, screenHeight);
             if (lorieView.getDisplay() == null || lorieView.getDisplay().getDisplayId() == Display.DEFAULT_DISPLAY)
-                name = "Builtin Display";
+                name = "0";
             else if (SamsungDexUtils.checkDeXEnabled(this))
                 name = "Dex Display";
             else

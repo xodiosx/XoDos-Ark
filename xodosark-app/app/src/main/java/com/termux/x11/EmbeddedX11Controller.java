@@ -116,10 +116,10 @@ public final class EmbeddedX11Controller {
             }
             String name;
             try {
-                if (view.getDisplay() == null || view.getDisplay().getDisplayId() == Display.DEFAULT_DISPLAY) name = "builtin";
+                if (view.getDisplay() == null || view.getDisplay().getDisplayId() == Display.DEFAULT_DISPLAY) name = "0";
                 else name = "external";
             } catch (Throwable t) {
-                name = "builtin";
+                name = "0";
             }
             // Package-private: only callable inside com.termux.x11.
             LorieView.sendWindowChange(screenWidth, screenHeight, framerate, name);

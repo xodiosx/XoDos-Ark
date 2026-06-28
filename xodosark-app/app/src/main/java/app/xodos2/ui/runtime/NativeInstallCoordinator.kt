@@ -544,6 +544,7 @@ object NativeInstallCoordinator {
             copyAssetToContainer(context, containerId, "xfce4-fix.zip")       
             val detected = detectDistroFromRootfs(context, containerId) ?: distro.distroType
             writeContainerEnvironment(context, containerId, detected)
+            applyProotBypasses(context, containerId, detected)
             saveContainerDistro(context, containerId, detected)
         }
         ok
@@ -593,6 +594,7 @@ object NativeInstallCoordinator {
             copyAssetToContainer(context, containerId, "xfce4-fix.zip") 
             val detected = detectDistroFromRootfs(context, containerId) ?: "linux"
             writeContainerEnvironment(context, containerId, detected)
+            applyProotBypasses(context, containerId, detected)
             saveContainerDistro(context, containerId, detected)
         }
         ok
@@ -774,4 +776,39 @@ private fun copyAssetToContainer(context: Context, containerId: Int, assetName: 
             prefs.edit().remove("desktop_renderer_mode").apply()
         }
     }
+        private fun applyProotBypasses(context: Context, containerId: Int, distroType: String) {
+        // These bypasses are specific to Debian-based package managers (apt/dpkg)
+        val debianBased = listOf("kali", "debian", "ubuntu", "deepin")
+        if (distroType !in debianBased) return
+
+        val rootfs = containerPath(context, containerId)
+
+        try {
+            // 1. Fake ischroot to always return 0 (true)
+            val usrBin = File(rootfs, "usr/bin")
+            usrBin.mkdirs()
+            val ischroot = File(usrBin, "ischroot")
+            if (ischroot.exists()) ischroot.delete() // Remove the real one if it exists
+            
+            // Writing a tiny bash script is safer than Os.symlink for PRoot translation
+            ischroot.writeText("#!/bin/sh\nexit 0\n")
+            ischroot.setExecutable(true, false) // Make it executable for everyone
+
+            // 2. Policy-rc.d shield to block systemd services from starting during apt installs
+            val usrSbin = File(rootfs, "usr/sbin")
+            usrSbin.mkdirs()
+            val policyRc = File(usrSbin, "policy-rc.d")
+            
+            policyRc.writeText("#!/bin/sh\nexit 101\n")
+            policyRc.setExecutable(true, false)
+
+            Log.i("NativeInstall", "Applied PRoot dpkg bypasses for $distroType in container $containerId")
+        } catch (e: Exception) {
+            Log.e("NativeInstall", "Failed to apply PRoot bypasses", e)
+        }
+    }
+    
+    
+    
+    
 }

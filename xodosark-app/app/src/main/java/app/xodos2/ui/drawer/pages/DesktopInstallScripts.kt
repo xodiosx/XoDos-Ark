@@ -5,7 +5,7 @@ object DesktopInstallScripts {
     fun buildDesktopInstallScript(distro: String, envName: String): String {
         val cleanDistro = distro.lowercase().trim()
 
-        // Nix environment handling (unchanged)
+        // Nix environment
         if (cleanDistro.contains("nix")) {
             return "source /nix/var/nix/profiles/default/etc/profile.d/nix.sh 2>/dev/null || true\n" +
                    "nix-channel --update && nix-env -u\n" +
@@ -13,7 +13,7 @@ object DesktopInstallScripts {
                    "echo 'Nix profile packages updated successfully!'\n"
         }
 
-        // Determine package manager and base dependencies
+        // Package manager & base deps
         val (managerCmd, baseDeps) = when {
             cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") ||
             cleanDistro.contains("kali") || cleanDistro.contains("trisquel") ->
@@ -39,18 +39,71 @@ object DesktopInstallScripts {
                     "mesa-utils xwayland libvulkan-dev mesa-vulkan-drivers libgl1-mesa-dri libglx-mesa0 libegl-mesa0 vulkan-tools dbus-x11 zip unzip")
         }
 
-        // GPG key setup for Kali (only if distro contains "kali")
+       // ─── Kali‑specific setup (improved) ───
+        // ─── Kali‑specific setup (improved) ───
         val gpgSetup = if (cleanDistro.contains("kali")) {
             """
-                # Install gpg and curl, then import Kali's archive key
-                apt update
-                apt install -y gpg curl
-                curl -fsSL https://archive.kali.org/archive-key.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/kali-archive-keyring.gpg
-                echo "Kali GPG key installed."
+
+# ==========================================
+# ADVANCED PROOT SYSTEMD BYPASSES
+# ==========================================
+
+echo "Creating container compatibility stubs..."
+
+# 1. Provide an empty machine-id file if missing
+mkdir -p /etc
+touch /etc/machine-id
+
+# 2. HARD-STUB the failing configuration engines 
+# This handles systemd 260+ sysusers and tmpfiles verification errors
+for engine in /usr/bin/systemd-sysusers /usr/bin/systemd-tmpfiles /usr/sbin/dpkg-preconfigure /usr/sbin/pam-auth-update /usr/bin/linux-version /usr/sbin/update-initramfs /usr/share/debconf/frontend; do
+    rm -f "${'$'}engine"
+    echo '#!/bin/sh' > "${'$'}engine"
+    echo 'exit 0' >> "${'$'}engine"
+    chmod 777 "${'$'}engine"
+done
+
+# 3. Purge existing post-install files causing dependency log jams
+echo "Neutralizing hardware package maintainer scripts..."
+rm -f /var/lib/dpkg/info/systemd*.postinst
+rm -f /var/lib/dpkg/info/udev*.postinst
+rm -f /var/lib/dpkg/info/initramfs-tools*.postinst
+rm -f /var/lib/dpkg/info/libpam*.postinst
+rm -f /var/lib/dpkg/info/sudo*.postinst
+rm -f /var/lib/dpkg/info/dbus*.postinst
+rm -f /var/lib/dpkg/info/cron*.postinst
+rm -f /var/lib/dpkg/info/dhcpcd*.postinst
+rm -f /var/lib/dpkg/info/openssh*.postinst
+
+# Force dpkg to mark the previously failing packages as configured
+export DEBIAN_FRONTEND=noninteractive
+export DEBCONF_NONINTERACTIVE_SEEN=true
+dpkg --configure -a --force-all
+
+# 4. Set clean software repository targets
+echo "deb http://kali.download/kali kali-rolling main non-free contrib non-free-firmware" > /etc/apt/sources.list
+rm -rf /etc/apt/sources.list.d/
+mkdir -p /etc/apt/sources.list.d/
+
+apt-get update -y
+apt-get install -y --no-install-recommends gnupg curl || true
+curl -fsSL --connect-timeout 30 https://archive.kali.org/archive-key.asc | gpg --yes --dearmor -o /etc/apt/trusted.gpg.d/kali-archive-keyring.gpg || true
+
+# Force dependency fixes clear before pulling down target desktop environments
+apt-get install -f -y --allow-downgrades
+echo "Kali base environment aligned."
             """.trimIndent() + "\n"
-        } else {
-            ""
-        }
+        } else ""
+
+        val libc6Setup = if (cleanDistro.contains("kali")) {
+            """
+                
+                
+                dpkg --configure -a --force-all
+                apt-get install -f -y --allow-downgrades
+                echo "Kali libc6 fixed."
+            """.trimIndent() + "\n"
+        } else ""
 
         // Audio dependencies
         val isModernDE = envName == "GNOME" || envName == "KDE Plasma"
@@ -109,28 +162,25 @@ object DesktopInstallScripts {
             else -> ""
         }
 
-        // Base script: package manager + desktop + base deps + audio
-        val baseScript = gpgSetup +
+        // Build script body
+        var scriptBody = gpgSetup +
                 "$managerCmd $desktopPackages $baseDeps $audioDeps\n" +
                 "export PULSE_SERVER=127.0.0.1\n" +
+                libc6Setup +
                 "echo 'Installation completed!'\n"
 
-        // --- Automatic XFCE fix for Debian-based distros ---
+        // XFCE fix for Debian‑based
         if (envName == "XFCE Desktop" &&
             (cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") ||
              cleanDistro.contains("kali") || cleanDistro.contains("trisquel"))) {
-            return baseScript + "\n" +
-                    "# Apply xfce4-fix.zip (already placed in / by the installer)\n" +
-                    "if [ -f /xfce4-fix.zip ]; then\n" +
-                    "    chmod +x /usr/bin/unzip 2>/dev/null || true\n" +
-                    "    unzip -o /xfce4-fix.zip -d / 2>/dev/null || true\n" +
-                    "   python3 -m zipfile -e /xfce4-fix.zip /\n" +
-                    "    echo 'XFCE fix applied.'\n" +
-                    "else\n" +
-                    "    echo 'xfce4-fix.zip not found, skipping.'\n" +
-                    "fi\n"
+            scriptBody += """
+                # Apply xfce4-fix
+                echo 'no need x11 fixed '
+                
+            """.trimIndent() + "\n"
         }
 
-        return baseScript
+        // Always wrap in a heredoc
+        return "sh <<'EOF'\n${scriptBody}\nEOF"
     }
 }
