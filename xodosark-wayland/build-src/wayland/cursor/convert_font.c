@@ -271,7 +271,7 @@ static struct {
 static void
 init_data_buffer()
 {
-	data_buffer.data = malloc(sizeof(uint32_t) * 10);
+	data_buffer.data = calloc(10, sizeof(uint32_t));
 	data_buffer.capacity = 10;
 	data_buffer.size = 0;
 }
@@ -282,8 +282,8 @@ add_pixel(uint32_t pixel)
 	if (data_buffer.size == data_buffer.capacity) {
 		data_buffer.capacity *= 2;
 		data_buffer.data =
-			realloc(data_buffer.data,
-				sizeof(uint32_t) * data_buffer.capacity);
+			reallocarray(data_buffer.data,
+				data_buffer.capacity, sizeof(uint32_t));
 	}
 	data_buffer.data[data_buffer.size++] = pixel;
 }
@@ -435,8 +435,7 @@ output_all_cursors()
 {
 	int i, j;
 	struct reconstructed_glyph *glyphs =
-		malloc(sizeof(struct reconstructed_glyph) *
-		       extracted_font.count/2);
+		calloc(extracted_font.count/2, sizeof(struct reconstructed_glyph));
 	j = 0;
 
 	for (i = 0; i < extracted_font.count; ++i) {
@@ -460,7 +459,7 @@ find_cursor_and_mask(const char *name,
 {
 	int i;
 	char mask_name[100];
-	sprintf(mask_name, "%s_mask", name);
+	snprintf(mask_name, sizeof(mask_name), "%s_mask", name);
 
 	*cursor = *mask = NULL;
 
@@ -497,7 +496,7 @@ output_interesting_cursors()
 	int i;
 	int n = sizeof(interesting_cursors) / sizeof(interesting_cursors[0]);
 	struct reconstructed_glyph *glyphs =
-		malloc(n * sizeof(*glyphs));
+		calloc(n, sizeof(*glyphs));
 
 	if (!glyphs) {
 		printf("reconstructed_glyph malloc failed\n");
