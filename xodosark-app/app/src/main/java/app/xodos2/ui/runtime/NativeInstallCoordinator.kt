@@ -89,7 +89,7 @@ object NativeInstallCoordinator {
       
         // All aarch64 distros from XoDos-Ark mirror-v4.17.3
         "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/alpine-aarch64-pd-v4.17.3.tar.xz",
-        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/archlinux-aarch64-pd-v4.17.3.tar.xz",
+        "https://github.com/termux/proot-distro/releases/download/v4.18.0/ubuntu-noble-aarch64-pd-v4.18.0.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/chimera-aarch64-pd-v4.17.3.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/debian-bookworm-aarch64-pd-v4.17.3.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/fedora-aarch64-pd-v4.17.3.tar.xz",
