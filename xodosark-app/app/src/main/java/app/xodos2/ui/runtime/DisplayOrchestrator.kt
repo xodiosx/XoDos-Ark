@@ -76,19 +76,19 @@ object DisplayOrchestrator {
         val targetId = TerminalSessionIds.WINE_X11_DISPLAY
         val user = (prefs.getString("wine_x11_startup_script", "") ?: "").trim()
         val graphicsEnv = buildSystemGraphicsEnv(prefs)
-        val payload = buildString {
-            graphicsEnv.lines().filter { it.isNotBlank() }.forEach { line ->
-                val parts = line.split("=", limit = 2)
-                if (parts.size == 2) {
-                    append("${parts[0]}=${parts[1]}\n")
-                }
-            }
-            append(AppPrefs.buildDebianX11ImplicitEnvSnippet())
-            if (user.isNotEmpty()) {
-                append(user)
-                if (!user.endsWith("\n")) append("\n")
-            }
+val payload = buildString {
+    graphicsEnv.lines()
+        .filter { it.isNotBlank() }
+        .forEach { line ->
+            append(line)          // line already contains "export ..." or "unset ..."
+            append('\n')
         }
+    append(AppPrefs.buildDebianX11ImplicitEnvSnippet())
+    if (user.isNotEmpty()) {
+        append(user)
+        if (!user.endsWith('\n')) append('\n')
+    }
+}
         if (payload.isEmpty()) return
         val bytes = payload.toByteArray(Charsets.UTF_8)
         val x0 = File(context.filesDir, "usr/tmp/.X11-unix/X0")
@@ -132,19 +132,19 @@ object DisplayOrchestrator {
         val targetId = TerminalSessionIds.ARCH_X11_DISPLAY
         val user = AppPrefs.readArchX11DesktopStartupScript(prefs).trim()
         val graphicsEnv = buildSystemGraphicsEnv(prefs)
-        val payload = buildString {
-            graphicsEnv.lines().filter { it.isNotBlank() }.forEach { line ->
-                val parts = line.split("=", limit = 2)
-                if (parts.size == 2) {
-                    append("${parts[0]}=${parts[1]}\n")
-                }
-            }
-            append(AppPrefs.buildDebianX11ImplicitEnvSnippet())
-            if (user.isNotEmpty()) {
-                append(user)
-                if (!user.endsWith("\n")) append("\n")
-            }
+val payload = buildString {
+    graphicsEnv.lines()
+        .filter { it.isNotBlank() }
+        .forEach { line ->
+            append(line)          // line already contains "export ..." or "unset ..."
+            append('\n')
         }
+    append(AppPrefs.buildDebianX11ImplicitEnvSnippet())
+    if (user.isNotEmpty()) {
+        append(user)
+        if (!user.endsWith('\n')) append('\n')
+    }
+}
         if (payload.isEmpty()) return
         val bytes = payload.toByteArray(Charsets.UTF_8)
         val x0 = File(context.filesDir, "usr/tmp/.X11-unix/X0")
@@ -178,19 +178,19 @@ object DisplayOrchestrator {
         val targetId = TerminalSessionIds.DEBIAN_X11_DISPLAY
         val user = AppPrefs.readDebianDesktopStartupScript(prefs).trim()
         val graphicsEnv = buildSystemGraphicsEnv(prefs)
-        val payload = buildString {
-            graphicsEnv.lines().filter { it.isNotBlank() }.forEach { line ->
-                val parts = line.split("=", limit = 2)
-                if (parts.size == 2) {
-                    append("${parts[0]}=${parts[1]}\n")
-                }
-            }
-            append(AppPrefs.buildDebianX11ImplicitEnvSnippet())
-            if (user.isNotEmpty()) {
-                append(user)
-                if (!user.endsWith("\n")) append("\n")
-            }
+val payload = buildString {
+    graphicsEnv.lines()
+        .filter { it.isNotBlank() }
+        .forEach { line ->
+            append(line)          // line already contains "export ..." or "unset ..."
+            append('\n')
         }
+    append(AppPrefs.buildDebianX11ImplicitEnvSnippet())
+    if (user.isNotEmpty()) {
+        append(user)
+        if (!user.endsWith('\n')) append('\n')
+    }
+}
         if (payload.isEmpty()) return
         val bytes = payload.toByteArray(Charsets.UTF_8)
         val x0 = File(context.filesDir, "usr/tmp/.X11-unix/X0")
@@ -216,60 +216,60 @@ object DisplayOrchestrator {
 
     fun buildWaylandAndGraphicsEnvSnippet(socketName: String, vulkanMode: String, openGLMode: String): String {
         val b = StringBuilder()
-        b.append("WAYLAND_DISPLAY=").append(socketName).append("\n")
+        b.append("export WAYLAND_DISPLAY=").append(socketName).append("\n")
         when (openGLMode) {
             "VIRGL" -> {
                 b.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
-                b.append("GALLIUM_DRIVER=virpipe\n")
-                b.append("MESA_LOADER_DRIVER_OVERRIDE=virpipe\n")
-                b.append("LIBGL_ALWAYS_SOFTWARE=0\n")
-                b.append("VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
-                b.append("VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
+                b.append("export GALLIUM_DRIVER=virpipe\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=virpipe\n")
+                b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
+                b.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
+                b.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
             }
             "ZINK" -> {
-                b.append("VKD3D_FEATURE_LEVEL=12_0\n")
-                b.append("MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                b.append("MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                b.append("MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                b.append("LIBGL_ALWAYS_SOFTWARE=0\n")
+                b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
             }
             "GL4ES" -> {
-                b.append("VKD3D_FEATURE_LEVEL=12_0\n")
-                b.append("MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                b.append("MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                b.append("MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                b.append("LIBGL_ALWAYS_SOFTWARE=0\n")
+                b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
                 b.append("export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/gl4es:\$LD_LIBRARY_PATH\n")
             }
             else -> {
-                b.append("GALLIUM_DRIVER=llvmpipe\n")
-                b.append("MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
-                b.append("LIBGL_ALWAYS_SOFTWARE=1\n")
+                b.append("export GALLIUM_DRIVER=llvmpipe\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
+                b.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
             }
         }
         when (vulkanMode) {
             "VENUS" -> {
-                b.append("VKD3D_FEATURE_LEVEL=12_0\n")
-                b.append("MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                b.append("MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                b.append("GALLIUM_DRIVER=zink\n")
-                b.append("VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
-                b.append("VK_DRIVER_FILES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
-                b.append("VN_DEBUG=vtest\n")
-                b.append("VTEST_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
-                b.append("VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
+                b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                b.append("export GALLIUM_DRIVER=zink\n")
+                b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
+                b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
+                b.append("export VN_DEBUG=vtest\n")
+                b.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
+                b.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
             }
             "TURNIP" -> {
-                b.append("VKD3D_FEATURE_LEVEL=12_0\n")
-                b.append("MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                b.append("MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                b.append("GALLIUM_DRIVER=zink\n")
-                b.append("VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
-                b.append("VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
-                b.append("TU_DEBUG=noconform\n")
+                b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                b.append("export GALLIUM_DRIVER=zink\n")
+                b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
+                b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
+                b.append("export TU_DEBUG=noconform\n")
             }
             else -> {
-                b.append("GALLIUM_DRIVER=llvmpipe\n")
+                b.append("export GALLIUM_DRIVER=llvmpipe\n")
                 b.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
             }
         }

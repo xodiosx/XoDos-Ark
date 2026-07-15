@@ -1324,16 +1324,12 @@ fun checkAndPromptTurnipDrivers() {
     }
 }
     
-    
-fun injectGraphicsEnvToAllTerminals() {
-    // Build the export snippet from the current preferences
+    fun injectGraphicsEnvToAllTerminals() {
     val envContent = DisplayOrchestrator.buildSystemGraphicsEnv(prefs)
+    // Keep only non‑blank lines; they already include "export"/"unset"
     val snippet = envContent.lines()
         .filter { it.isNotBlank() }
-        .joinToString(separator = "\n") { line ->
-            val parts = line.split("=", limit = 2)
-            if (parts.size == 2) "${parts[0]}=${parts[1]}" else ""
-        } + "\n"
+        .joinToString(separator = "\n") + "\n"
     val bytes = snippet.toByteArray(Charsets.UTF_8)
 
     // Inject into all currently active terminal sessions
@@ -1347,7 +1343,7 @@ fun injectGraphicsEnvToAllTerminals() {
             NativeBridge.writeInput(id, bytes)
         }
     }
-    // (Optional) also inject into headless display sessions if you want immediate effect there
+    // Also inject into headless display sessions
     val headlessIds = listOf(
         TerminalSessionIds.ARCH_WAYLAND_DISPLAY,
         TerminalSessionIds.DEBIAN_X11_DISPLAY,
@@ -1361,7 +1357,6 @@ fun injectGraphicsEnvToAllTerminals() {
     }
 }
 
-    
     
     
 fun setDesktopVulkanMode(mode: String) {
