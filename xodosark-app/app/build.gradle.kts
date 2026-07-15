@@ -30,7 +30,7 @@ kotlinOptions {
         defaultConfig {
         applicationId = "app.xodos2"
         minSdk = 26
-        targetSdk = 30
+        targetSdk = 28
       
         ndkVersion = "27.1.12297006"   
         buildConfigField("String", "COMMIT", "\"xodos2-embedded-x11\"")
@@ -50,6 +50,10 @@ kotlinOptions {
             }
         }
     }
+    // Inside the android {} block in app/build.gradle.kts
+lint {
+    checkReleaseBuilds = false   // ← turn off the slow release‑only lint
+}
 
     buildTypes {
         release {
@@ -65,6 +69,8 @@ kotlinOptions {
                 signingConfigs.getByName("debug")
             }
         }
+        
+        
     }
     packaging {
         jniLibs {
@@ -72,6 +78,10 @@ kotlinOptions {
             excludes += "**/libtermux.so"
         }
     }
+    
+    
+    
+    
     buildFeatures {
         compose = true
         aidl = true
@@ -194,7 +204,7 @@ implementation("androidx.compose.material:material-icons-extended:1.5.0") //
     implementation(libs.kotlinx.coroutines.android)
     implementation("org.apache.commons:commons-compress:1.26.1")
 implementation("org.tukaani:xz:1.9")
-implementation("org.apache.commons:commons-compress:1.26.1")
+//implementation("org.apache.commons:commons-compress:1.26.1")
 implementation("org.tukaani:xz:1.9")
 
 implementation("com.google.android.material:material:1.11.0")

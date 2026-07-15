@@ -1332,7 +1332,7 @@ fun injectGraphicsEnvToAllTerminals() {
         .filter { it.isNotBlank() }
         .joinToString(separator = "\n") { line ->
             val parts = line.split("=", limit = 2)
-            if (parts.size == 2) "export ${parts[0]}=${parts[1]}" else ""
+            if (parts.size == 2) "${parts[0]}=${parts[1]}" else ""
         } + "\n"
     val bytes = snippet.toByteArray(Charsets.UTF_8)
 

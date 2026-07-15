@@ -30,7 +30,7 @@ kotlinOptions {
         defaultConfig {
         applicationId = "app.xodos2"
         minSdk = 26
-        targetSdk = 28
+        targetSdk = 30
       
         ndkVersion = "27.1.12297006"   
         buildConfigField("String", "COMMIT", "\"xodos2-embedded-x11\"")
