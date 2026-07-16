@@ -19,9 +19,9 @@
         <SwitchPreferenceCompat app:key="displayStretch" app:defaultValue="false" />
         <SwitchPreferenceCompat app:key="Reseed" app:defaultValue="true" />
         <SwitchPreferenceCompat app:key="PIP" app:defaultValue="false" />
-        <SwitchPreferenceCompat app:key="fullscreen" app:defaultValue="false" />
+        <SwitchPreferenceCompat app:key="fullscreen" app:defaultValue="true" />
         <ListPreference app:key="forceOrientation" app:defaultValue="auto" app:entries="@array/forceOrientationVariants" app:entryValues="@array/forceOrientationVariants" />
-        <SwitchPreferenceCompat app:key="hideCutout" app:defaultValue="false" />
+        <SwitchPreferenceCompat app:key="hideCutout" app:defaultValue="true" />
         <SwitchPreferenceCompat app:defaultValue="true" app:key="keepScreenOn" />
     </PreferenceScreen>
     <PreferenceScreen app:key="pointer">
@@ -42,7 +42,7 @@
         <!-- this preference should be a part of `Prefs` but should not appear in PreferenceScreen -->
         <SwitchPreferenceCompat app:key="additionalKbdVisible" app:defaultValue="true" app:isPreferenceVisible="false" />
         <SwitchPreferenceCompat app:key="showIMEWhileExternalConnected" app:defaultValue="true" />
-        <SwitchPreferenceCompat app:key="preferScancodes" app:defaultValue="false" />
+        <SwitchPreferenceCompat app:key="preferScancodes" app:defaultValue="true" />
         <SwitchPreferenceCompat app:key="hardwareKbdScancodesWorkaround" app:defaultValue="true" />
         <SwitchPreferenceCompat app:key="dexMetaKeyCapture" app:defaultValue="false" />
         <Preference app:key="enableAccessibilityService">
@@ -62,7 +62,7 @@
     <PreferenceScreen app:key="ekbar">
         <SwitchPreferenceCompat app:key="adjustHeightForEK" app:defaultValue="true" />
         <SwitchPreferenceCompat app:key="useTermuxEKBarBehaviour" app:defaultValue="false" />
-        <SeekBarPreference app:key="opacityEKBar" app:defaultValue="100" app:min="1" android:max="100" app:seekBarIncrement="1" app:showSeekBarValue="true" app:updatesContinuously="true" />
+        <SeekBarPreference app:key="opacityEKBar" app:defaultValue="80" app:min="1" android:max="100" app:seekBarIncrement="1" app:showSeekBarValue="true" app:updatesContinuously="true" />
         <EditTextPreference app:key="extra_keys_config" />
     </PreferenceScreen>
     <PreferenceScreen app:key="userActions">
