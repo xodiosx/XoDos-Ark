@@ -261,7 +261,7 @@ val payload = buildString {
                 b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
                 b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
                 b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                b.append("export GALLIUM_DRIVER=zink\n")
+                //b.append("export GALLIUM_DRIVER=zink\n")
                 b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
                 b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
                 b.append("export TU_DEBUG=noconform\n")
@@ -314,7 +314,7 @@ val payload = buildString {
             "VENUS" -> {
                 sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
                 sb.append("export TU_DEBUG=noconform\n")
-                sb.append("export GALLIUM_DRIVER=zink\n")
+               // sb.append("export GALLIUM_DRIVER=zink\n")
                 sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
                 sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
                 sb.append("export VN_DEBUG=vtest\n")
@@ -324,7 +324,7 @@ val payload = buildString {
             "TURNIP" -> {
                 sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
                 sb.append("export TU_DEBUG=noconform\n")             
-                sb.append("export GALLIUM_DRIVER=zink\n")
+              //  sb.append("export GALLIUM_DRIVER=zink\n")
                 sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
                 sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
                 sb.append("export TU_DEBUG=noconform\n")
