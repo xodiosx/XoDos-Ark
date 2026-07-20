@@ -95,7 +95,7 @@ fun DrawerDropdownField(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            offset = DpOffset(x = 265.dp, y = (-40).dp),
+            offset = DpOffset(x = (-140).dp, y = (-40).dp),
             modifier = Modifier
                 .then(glassBlurModifier())
                 .background(
