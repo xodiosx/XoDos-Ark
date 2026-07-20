@@ -1,5 +1,7 @@
 package app.xodos2.ui
 
+import app.xodos2.ui.glass.GlassButton
+import app.xodos2.ui.glass.glassBlurModifier
 import android.Manifest
 import android.content.ActivityNotFoundException
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
@@ -20,6 +22,12 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,11 +45,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import app.xodos2.*
@@ -83,12 +93,6 @@ import java.io.InputStreamReader
 
 import android.view.WindowManager
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip          // optional, but may be needed
-import androidx.compose.ui.graphics.Brush
-
-
 fun Modifier.glassDialogStyle(): Modifier = this
     .background(
         brush = Brush.verticalGradient(
@@ -109,7 +113,6 @@ fun Modifier.glassDialogStyle(): Modifier = this
         ),
         shape = RoundedCornerShape(24.dp)
     )
-
 
 private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP")
 private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
@@ -388,7 +391,7 @@ fun proceedToDistroSelection(containerId: Int) {
         distroFetchState = DistroFetchState.LOADING
         scope.launch {
             availableDistros = withContext(Dispatchers.IO) {
-                NativeInstallCoordinator.fetchAvailableDistros(NativeInstallCoordinator.DistroSource.CUSTOM)
+                NativeInstallCoordinator.fetchAvailableDistros(NativeInstallCoordinator.DistroSource.EASYCLI)
             }
             distroFetchState = if (availableDistros.isEmpty()) DistroFetchState.ERROR else DistroFetchState.LOADED
         }
@@ -1102,7 +1105,7 @@ updateLauncherMarkers(context, launcherDefault)
     
     distroFetchState = DistroFetchState.LOADING
     availableDistros = withContext(Dispatchers.IO) {
-    NativeInstallCoordinator.fetchAvailableDistros(NativeInstallCoordinator.DistroSource.CUSTOM) 
+    NativeInstallCoordinator.fetchAvailableDistros(NativeInstallCoordinator.DistroSource.EASYCLI) 
 }
  
     distroFetchState = if (availableDistros.isEmpty()) {
@@ -1309,25 +1312,6 @@ val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
         }
     }
 }
-if (deleteInProgress) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(modifier = Modifier.size(48.dp))
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Deleting container…", style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-    }
-    return   // skip the rest of the UI until deletion finishes
-}
-
 
     // ----- graphics helpers -----
 fun checkAndPromptTurnipDrivers() {
@@ -1509,6 +1493,25 @@ fun setDesktopVulkanMode(mode: String) {
         return
     }
 
+if (deleteInProgress) {
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color(0xFF07040E)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(modifier = Modifier.size(48.dp), color = Color(0xFFC3B6F9))
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Deleting container…", color = Color.White, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+    }
+    return
+}
+
 if (backupInProgress) {
     InstallScreen(progress = backupProgress.first, message = backupProgress.second)
     return
@@ -1527,10 +1530,12 @@ if (bootstrapInProgress) {
 if (bootstrapError != null) {
     AlertDialog(
         onDismissRequest = { bootstrapError = null },
-        title = { Text("Extra drivers installation") },
-        text = { Text(bootstrapError ?: "") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Extra drivers installation", fontWeight = FontWeight.Bold, color = Color.White) },
+        text = { Text(bootstrapError ?: "", color = Color.White.copy(alpha = 0.85f)) },
         confirmButton = {
-            TextButton(onClick = { bootstrapError = null }) { Text("OK") }
+            GlassButton(onClick = { bootstrapError = null }) { Text("OK", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
         }
     )
 }
@@ -1539,30 +1544,35 @@ if (bootstrapError != null) {
 if (bootstrapDownloadInProgress) {
     AlertDialog(
         onDismissRequest = { /* cannot dismiss while downloading */ },
-        title = { Text("Downloading Extra drivers archive (200-Mb)") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Downloading Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (bootstrapDownloadProgress.first >= 0) {
                     LinearProgressIndicator(
                         progress = { bootstrapDownloadProgress.first / 100f },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFC3B6F9),
+                        trackColor = Color.White.copy(alpha = 0.1f)
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
                         bootstrapDownloadProgress.second,
+                        color = Color.White.copy(alpha = 0.85f),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 } else {
                     Text(
                         bootstrapDownloadProgress.second,
-                        color = MaterialTheme.colorScheme.error
+                        color = Color(0xFFFF6B6B)
                     )
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { bootstrapDownloadInProgress = false }) {
-                Text("Cancel")
+            GlassButton(onClick = { bootstrapDownloadInProgress = false }) {
+                Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
             }
         }
     )
@@ -1572,15 +1582,17 @@ if (installDone) {
     // Full‑screen surface to avoid the default window background
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = Color(0xFF07040E)
     ) {
         // The dialog itself – no way to close it except the Restart button
         AlertDialog(
             onDismissRequest = { /* blocked – cannot be dismissed */ },
-            title = { Text("Setup complete") },
-            text = { Text("Restart the app to apply the new container.\n\nPlease press Restart.") },
+            containerColor = Color.Transparent,
+            modifier = Modifier.glassDialogStyle(),
+            title = { Text("Setup complete", fontWeight = FontWeight.Bold, color = Color.White) },
+            text = { Text("Restart the app to apply the new container.\n\nPlease press Restart.", color = Color.White.copy(alpha = 0.85f)) },
             confirmButton = {
-                TextButton(onClick = {
+                GlassButton(onClick = {
                     val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                     }
@@ -1589,7 +1601,7 @@ if (installDone) {
                         (context as? Activity)?.finish()
                     }
                 }) {
-                    Text("Restart")
+                    Text("Restart", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             }
             // No dismissButton → the dialog cannot be closed at all
@@ -1607,34 +1619,40 @@ if (showTurnipDriverDialog) {
             // Prevent dismiss while download is in progress
             if (!isDownloading) showTurnipDriverDialog = false
         },
-        title = { Text("Turnip drivers needed") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Turnip drivers needed", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column {
                 if (!isDownloading) {
                     // Pre‑download summary
-                    Text("Turnip Vulkan driver not found for containers:")
+                    Text("Turnip Vulkan driver not found for containers:", color = Color.White.copy(alpha = 0.85f))
                     Spacer(Modifier.height(8.dp))
                     turnipMissingContainers.forEach { id ->
                         val distro = DisplayOrchestrator.getContainerDistroType(context, id) ?: "unknown"
-                        Text("• Container $id ($distro)")
+                        Text("• Container $id ($distro)", color = Color.White.copy(alpha = 0.85f))
                     }
-                    Text("\nDo you want to download and install them now?")
+                    Text("\nDo you want to download and install them now?", color = Color.White.copy(alpha = 0.85f))
                 } else {
                     // Download progress
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(48.dp), color = Color(0xFFC3B6F9))
                         Spacer(Modifier.height(16.dp))
                         Text(
                             turnipDownloadProgress.second,
+                            color = Color.White.copy(alpha = 0.85f),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(Modifier.height(12.dp))
                         LinearProgressIndicator(
                             progress = { turnipDownloadProgress.first / 100f },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFFC3B6F9),
+                            trackColor = Color.White.copy(alpha = 0.1f)
                         )
                         Text(
                             "${turnipDownloadProgress.first}%",
+                            color = Color.White.copy(alpha = 0.65f),
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -1645,14 +1663,14 @@ if (showTurnipDriverDialog) {
         confirmButton = {
             if (isDownloading) {
                 // Show "Cancel download" button
-                TextButton(onClick = {
+                GlassButton(onClick = {
                     // You can implement cancellation logic here if needed
                     // For now, just allow closing only after completion
                 }) {
-                    Text("Downloading…")
+                    Text("Downloading…", color = Color.White.copy(alpha = 0.5f))
                 }
             } else {
-                TextButton(onClick = {
+                GlassButton(onClick = {
                     // Start download, do not close dialog
                     turnipDownloadInProgress = true
                     scope.launch {
@@ -1662,16 +1680,16 @@ if (showTurnipDriverDialog) {
                         showTurnipDriverDialog = false
                     }
                 }) {
-                    Text("Download & Install")
+                    Text("Download & Install", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             }
         },
         dismissButton = {
             if (!isDownloading) {
-                TextButton(onClick = {
+                GlassButton(onClick = {
                     showTurnipDriverDialog = false
                 }) {
-                    Text("Cancel")
+                    Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
                 }
             } else {
                 // Optionally add a "Cancel download" button here
@@ -1692,12 +1710,14 @@ if (showTurnipDriverDialog) {
             confirmOverwriteContinuation?.cancel()
             confirmOverwriteContinuation = null
         },
-        title = { Text("Select installation slot") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Select installation slot", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column {
                 val target = distro?.distroName ?: "archive"
-                Text("Install \"$target\" to which container?")
-                Spacer(modifier = Modifier.height(12.dp))
+                Text("Install \"$target\" to which container?", color = Color.White.copy(alpha = 0.85f))
+                Spacer(modifier = Modifier.height(16.dp))
                 for (id in 1..3) {
                     val occupied = when (id) {
                         1 -> hasContainer1
@@ -1717,23 +1737,39 @@ if (showTurnipDriverDialog) {
                                 pendingLocalUri = null
                             
                         },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
                         colors = if (occupied) ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                            contentColor = MaterialTheme.colorScheme.onErrorContainer
-                        ) else ButtonDefaults.buttonColors()
+                            containerColor = Color(0xFFFF6B6B).copy(alpha = 0.15f),
+                            contentColor = Color(0xFFFF8B8B)
+                        ) else ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFC3B6F9).copy(alpha = 0.15f),
+                            contentColor = Color(0xFFE2DCF9)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = if (occupied) listOf(
+                                    Color(0xFFFF6B6B).copy(alpha = 0.3f),
+                                    Color(0xFFFF6B6B).copy(alpha = 0.05f)
+                                ) else listOf(
+                                    Color(0xFFC3B6F9).copy(alpha = 0.3f),
+                                    Color(0xFFC3B6F9).copy(alpha = 0.05f)
+                                )
+                            )
+                        )
                     ) {
-                        Text(label)
+                        Text(label, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = {
+            GlassButton(onClick = {
                 showSlotPicker = false
                 pendingDistro = null
                 pendingLocalUri = null
-            }) { Text("Cancel") }
+            }) { Text("Cancel", color = Color.White.copy(alpha = 0.8f)) }
         }
     )
 }
@@ -1747,28 +1783,52 @@ if (pendingOverwriteSlot != null) {
             confirmOverwriteContinuation?.resumeWith(Result.success(false))
             confirmOverwriteContinuation = null
         },
-        title = { Text("Overwrite container $slot?") },
-        text = { Text("This container already has a rootfs installed. All its files will be deleted and replaced. Make sure to backup if needed.") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Overwrite container $slot?", fontWeight = FontWeight.Bold, color = Color.White) },
+        text = { Text("This container already has a rootfs installed. All its files will be deleted and replaced. Make sure to backup if needed.", color = Color.White.copy(alpha = 0.85f)) },
         confirmButton = {
-            TextButton(onClick = {
+            GlassButton(onClick = {
                 pendingOverwriteSlot = null
                 confirmOverwriteContinuation?.resumeWith(Result.success(true))
                 confirmOverwriteContinuation = null
-            }) { Text("Overwrite") }
+            }) { Text("Overwrite", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
         },
         dismissButton = {
-            TextButton(onClick = {
+            GlassButton(onClick = {
                 pendingOverwriteSlot = null
                 confirmOverwriteContinuation?.resumeWith(Result.success(false))
                 confirmOverwriteContinuation = null
-            }) { Text("Cancel") }
+            }) { Text("Cancel", color = Color.White.copy(alpha = 0.8f)) }
         }
     )
 }
 if (showContainerManager) {
     AlertDialog(
         onDismissRequest = { showContainerManager = false },
-        title = { Text("Container Manager") },
+        containerColor = Color.Transparent,
+        modifier = Modifier
+            .then(glassBlurModifier())
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xE6131124), // deep frosted glass background
+                        Color(0xF20B0F19)
+                    )
+                ),
+                shape = RoundedCornerShape(24.dp)
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.28f),
+                        Color.White.copy(alpha = 0.05f)
+                    )
+                ),
+                shape = RoundedCornerShape(24.dp)
+            ),
+        title = { Text("Container Manager", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column {
                 for (id in 1..3) {
@@ -1781,81 +1841,101 @@ if (showContainerManager) {
                     ) {
                         Text(
                             "Container $id" + if (occupied) " (installed)" else " (empty)",
+                            color = Color.White,
                             modifier = Modifier.weight(1f)
                         )
                         // Install button
-                        // Install button
-IconButton(onClick = {
-    showContainerManager = false
-    handleContainerInstallClick(id)
-}) {
-    Icon(
-        imageVector = Icons.Default.AddCircle,
-        contentDescription = "Install to container $id",
-        tint = MaterialTheme.colorScheme.primary
-    )
-}
+                        IconButton(onClick = {
+                            showContainerManager = false
+                            handleContainerInstallClick(id)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.AddCircle,
+                                contentDescription = "Install to container $id",
+                                tint = Color(0xFFC3B6F9)
+                            )
+                        }
                         if (occupied) {
                             // Delete button – shows confirmation instead of immediate delete
                             IconButton(onClick = {
                                 showDeleteConfirmation = id
                             }) {
-                                Icon(Icons.Default.Delete, "Delete")
+                                Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF6B6B))
                             }
                             // Backup button
                             IconButton(onClick = {
                                 pendingContainerForBackup = id
                                 backupFilePicker.launch("container${id}_backup.tar.xz")
                             }) {
-                                Icon(Icons.Default.Save, "Backup")
+                                Icon(Icons.Default.Save, "Backup", tint = Color(0xFFE9D5FF))
                             }
                         }
                     }
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.15f))
 
-// ---Install bootstrap packages button ---
-Button(
-    onClick = {
-        showContainerManager = false
-        pickBootstrapFile.launch(arrayOf("application/x-xz", "*/*"))
-    },
-    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-    colors = ButtonDefaults.buttonColors(
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-    )
-) {
-    Text("Install Extra drivers packages")
-}
-
-
-// ---Download bootstrap archive button ---
-Button(
-    onClick = {
-        showContainerManager = false
-        downloadBootstrapArchive()
-    },
-    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-    colors = ButtonDefaults.buttonColors(
-        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-    )
-) {
-    Text("Download Extra drivers archive (200-Mb)")
-}
+                // ---Install bootstrap packages button ---
+                Button(
+                    onClick = {
+                        showContainerManager = false
+                        pickBootstrapFile.launch(arrayOf("application/x-xz", "*/*"))
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(alpha = 0.07f),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.22f),
+                                Color.White.copy(alpha = 0.03f)
+                            )
+                        )
+                    )
+                ) {
+                    Text("Install Extra drivers packages", fontWeight = FontWeight.Bold)
+                }
 
 
-// Clean cache button
-TextButton(onClick = {
-    showCleanCacheConfirmation = true
-}) {
-    Text("Clean cache tarballs (*.tar.xz)")
-}
+                // ---Download bootstrap archive button ---
+                Button(
+                    onClick = {
+                        showContainerManager = false
+                        downloadBootstrapArchive()
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(alpha = 0.07f),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.22f),
+                                Color.White.copy(alpha = 0.03f)
+                            )
+                        )
+                    )
+                ) {
+                    Text("Download Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold)
+                }
+
+
+                // Clean cache button
+                GlassButton(onClick = {
+                    showCleanCacheConfirmation = true
+                }) {
+                    Text("Clean cache tarballs (*.tar.xz)", color = Color(0xFFC3B6F9))
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { showContainerManager = false }) { Text("Close") }
+            GlassButton(onClick = { showContainerManager = false }) { Text("Close", color = Color.White) }
         }
     )
 }
@@ -1865,33 +1945,33 @@ if (showDeleteConfirmation != null) {
     val containerId = showDeleteConfirmation!!
     AlertDialog(
         onDismissRequest = { showDeleteConfirmation = null },
-        title = { Text("⚠️ Delete container $containerId?") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("⚠️ Delete container $containerId?", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
-            Text("This will permanently remove the installed distro and all its files from container $containerId. This action cannot be undone.\n\nAre you sure?")
+            Text("This will permanently remove the installed distro and all its files from container $containerId. This action cannot be undone.\n\nAre you sure?", color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
-    TextButton(onClick = {
-        showDeleteConfirmation = null   // close the dialog
-        deleteInProgress = true         // show loading overlay
-        scope.launch {
-            try {
-                if (NativeInstallCoordinator.deleteContainerContents(context, containerId)) {
-                    refreshContainerState()
-                    refreshLegacyFlags()
+            GlassButton(onClick = {
+                showDeleteConfirmation = null
+                deleteInProgress = true
+                scope.launch {
+                    try {
+                        if (NativeInstallCoordinator.deleteContainerContents(context, containerId)) {
+                            refreshContainerState()
+                            refreshLegacyFlags()
+                        }
+                    } finally {
+                        deleteInProgress = false
+                    }
                 }
-            } finally {
-                deleteInProgress = false   // hide overlay when done
+            }) {
+                Text("Delete", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
             }
-        }
-    }) {
-        Text("Delete", color = MaterialTheme.colorScheme.error)
-    }
-},
-        
-        
+        },
         dismissButton = {
-            TextButton(onClick = { showDeleteConfirmation = null }) {
-                Text("Cancel")
+            GlassButton(onClick = { showDeleteConfirmation = null }) {
+                Text("Cancel", color = Color.White.copy(alpha = 0.8f))
             }
         }
     )
@@ -1905,25 +1985,27 @@ if (showNativeContainerPrompt != null) {
         onDismissRequest = {
             showNativeContainerPrompt = null
         },
-        title = { Text("Use as native terminal?") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Use as native terminal?", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
-            Text("Container $containerId can be set up as a native Android terminal (using the Extra drivers packages).\n\nThis will mark the container as installed without downloading a distribution.\n\nDo you want to continue?")
+            Text("Container $containerId can be set up as a native Android terminal (using the Extra drivers packages).\n\nThis will mark the container as installed without downloading a distribution.\n\nDo you want to continue?", color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
-            TextButton(onClick = {
+            GlassButton(onClick = {
                 markContainerAsNativeTerminal(containerId)
                 showNativeContainerPrompt = null
                 Toast.makeText(context, "Container $containerId set as native terminal", Toast.LENGTH_SHORT).show()
             }) {
-                Text("Yes, use as native")
+                Text("Yes, use as native", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = {
+            GlassButton(onClick = {
                 showNativeContainerPrompt = null
                 proceedToDistroSelection(containerId)
             }) {
-                Text("No, install a distro")
+                Text("No, install a distro", color = Color.White.copy(alpha = 0.8f))
             }
         }
     )
@@ -1932,23 +2014,25 @@ if (showNativeContainerPrompt != null) {
 if (showCleanCacheConfirmation) {
     AlertDialog(
         onDismissRequest = { showCleanCacheConfirmation = false },
-        title = { Text("⚠️ Clean downloaded archives?") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("⚠️ Clean downloaded archives?", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
-            Text("All distribution tarballs (*.tar.xz) stored in the app’s cache will be deleted. If you want to install a distro again later, you’ll have to re‑download it.\n\nDo you want to continue?")
+            Text("All distribution tarballs (*.tar.xz) stored in the app’s cache will be deleted. If you want to install a distro again later, you’ll have to re‑download it.\n\nDo you want to continue?", color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
-            TextButton(onClick = {
+            GlassButton(onClick = {
                 scope.launch {
                     NativeInstallCoordinator.cleanCacheTarballs(context)
                 }
                 showCleanCacheConfirmation = false
             }) {
-                Text("Clean", color = MaterialTheme.colorScheme.error)
+                Text("Clean", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
-            TextButton(onClick = { showCleanCacheConfirmation = false }) {
-                Text("Cancel")
+            GlassButton(onClick = { showCleanCacheConfirmation = false }) {
+                Text("Cancel", color = Color.White.copy(alpha = 0.8f))
             }
         }
     )
@@ -1958,31 +2042,33 @@ if (showCleanCacheConfirmation) {
 if (showExitDialog) {
     AlertDialog(
         onDismissRequest = { showExitDialog = false },
-        title = { Text("Exit") },
-        text = { Text("Are you sure you want to exit?") },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Exit", fontWeight = FontWeight.Bold, color = Color.White) },
+        text = { Text("Are you sure you want to exit?", color = Color.White.copy(alpha = 0.85f)) },
         confirmButton = {
-            TextButton(onClick = {
-    showExitDialog = false
-    // 1. Stop the X11 server service
-    val x11Intent = Intent(context, X11ServerService::class.java)
-    context.stopService(x11Intent)
+            GlassButton(onClick = {
+                showExitDialog = false
+                // 1. Stop the X11 server service
+                val x11Intent = Intent(context, X11ServerService::class.java)
+                context.stopService(x11Intent)
 
-    // 2. the entire app process, just like Android’s Force Stop
-    //    finishAffinity() ensures all activities are removed from the stack
-    (context as? Activity)?.finishAffinity()
-    System.exit(0)
-}) { Text("Yes") }
+                // 2. the entire app process, just like Android’s Force Stop
+                //    finishAffinity() ensures all activities are removed from the stack
+                (context as? Activity)?.finishAffinity()
+                System.exit(0)
+            }) { Text("Yes", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
         },
         dismissButton = {
-            TextButton(onClick = { showExitDialog = false }) { Text("No") }
+            GlassButton(onClick = { showExitDialog = false }) { Text("No", color = Color.White.copy(alpha = 0.8f)) }
         }
     )
 }
     // ── Distro selection screen ──────────────────────────────────
 // ── Distro selection screen ──────────────────────────────────
 if (showDistroSelection) {
-    // Track which source is currently active. Default to EASYCLI (Normal)
-    var selectedSource by remember { mutableStateOf(NativeInstallCoordinator.DistroSource.CUSTOM) }
+    // Track which source is currently active. Default to EASYCLI (Latest)
+    var selectedSource by remember { mutableStateOf(NativeInstallCoordinator.DistroSource.EASYCLI) }
 
     // Reusable function to trigger the fetch based on the selected source
     val loadDistros = { source: NativeInstallCoordinator.DistroSource ->
@@ -1995,197 +2081,378 @@ if (showDistroSelection) {
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Transparent
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF07040E),
+                            Color(0xFF140D2F)
+                        )
+                    )
+                )
         ) {
-            
-            Text("Select a Linux distribution", style = MaterialTheme.typography.headlineSmall)
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // ---- The 3 Buttons Row ----
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.Top
             ) {
-                // Button 1: Normal (EasyCLI)
-                val isNormal = selectedSource == NativeInstallCoordinator.DistroSource.EASYCLI
-                val normalModifier = Modifier.weight(1f)
-                if (isNormal) {
-                    Button(onClick = { /* Already selected */ }, modifier = normalModifier) { Text("Latest", maxLines = 1) }
-                } else {
-                    OutlinedButton(onClick = {
-                        selectedSource = NativeInstallCoordinator.DistroSource.EASYCLI
-                        loadDistros(NativeInstallCoordinator.DistroSource.EASYCLI)
-                    }, modifier = normalModifier) { Text("Latest", maxLines = 1) }
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Premium Linear-style Header Section
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.Start
+                ) {
+                    Text(
+                        text = "XoDos-Ark",
+                        fontWeight = FontWeight.Black,
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontSize = 38.sp,
+                            letterSpacing = (-1.5).sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "SELECT ENVIRONMENT",
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFFC3B6F9),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 18.sp,
+                            letterSpacing = 1.5.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Choose your workspace template to install into your active container.",
+                        color = Color(0xFF9F92EC),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
 
-                // Button 2: Kali
-                val isKali = selectedSource == NativeInstallCoordinator.DistroSource.KALI
-                val kaliModifier = Modifier.weight(1f)
-                if (isKali) {
-                    Button(onClick = { /* Already selected */ }, modifier = kaliModifier) { Text("Kali", maxLines = 1) }
-                } else {
-                    OutlinedButton(onClick = {
-                        selectedSource = NativeInstallCoordinator.DistroSource.KALI
-                        loadDistros(NativeInstallCoordinator.DistroSource.KALI)
-                    }, modifier = kaliModifier) { Text("Kali", maxLines = 1) }
-                }
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // Button 3: Custom
-                val isCustom = selectedSource == NativeInstallCoordinator.DistroSource.CUSTOM
-                val customModifier = Modifier.weight(1f)
-                if (isCustom) {
-                    Button(onClick = { /* Already selected */ }, modifier = customModifier) { Text("Custom", maxLines = 1) }
-                } else {
-                    OutlinedButton(onClick = {
-                        selectedSource = NativeInstallCoordinator.DistroSource.CUSTOM
-                        loadDistros(NativeInstallCoordinator.DistroSource.CUSTOM)
-                    }, modifier = customModifier) { Text("Custom", maxLines = 1) }
+            // ---- Shadcn/ui-style Segmented Control Pills Row ----
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(glassBlurModifier())
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.08f),
+                                Color.White.copy(alpha = 0.02f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.25f),
+                                Color.White.copy(alpha = 0.04f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val tabs = listOf(
+                    "Latest" to NativeInstallCoordinator.DistroSource.EASYCLI,
+                    "Kali" to NativeInstallCoordinator.DistroSource.KALI,
+                    "Custom" to NativeInstallCoordinator.DistroSource.CUSTOM
+                )
+                tabs.forEach { (label, source) ->
+                    val isActive = selectedSource == source
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isActive) Color(0xCE7C3AED) else Color.Transparent)
+                            .clickable {
+                                if (!isActive) {
+                                    selectedSource = source
+                                    loadDistros(source)
+                                }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isActive) Color.White else Color(0xFF9F92EC),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // ---- Local file picker – ALWAYS visible ----
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(glassBlurModifier())
+                    .clickable {
+                        pickFile.launch(arrayOf("application/x-xz", "*/*"))
+                    },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White.copy(alpha = 0.05f)
+                ),
+                border = BorderStroke(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.22f),
+                            Color.White.copy(alpha = 0.03f)
+                        )
+                    )
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color(0xFF2A1E4A), shape = RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = "Select local file",
+                            modifier = Modifier.size(24.dp),
+                            tint = Color(0xFF7C3AED)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Select Local Distro",
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = "Install from a local .tar.xz archive",
+                            color = Color(0xFF9F92EC),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-
-            // ---- Local file picker – ALWAYS visible ----
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        pickFile.launch(arrayOf("application/x-xz", "*/*"))
-                    }
-                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Folder,
-                    contentDescription = "Select local file",
-                    modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Select local distro", fontWeight = FontWeight.Bold)
-                    Text("Install from a local .tar.xz archive", style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+            HorizontalDivider(color = Color(0xFF2A1E4A), thickness = 1.dp)
+            Spacer(modifier = Modifier.height(16.dp))
 
             // ---- Content depending on fetch state ----
-            when {
-                distroFetchState == DistroFetchState.LOADING -> {
-                    Box(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
-                }
-
-                distroFetchState == DistroFetchState.ERROR && availableDistros.isEmpty() -> {
-                    Column(
-                        modifier = Modifier.weight(1f).fillMaxWidth().padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            "No distros found",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            "Check your internet connection and try again.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                        TextButton(onClick = {
-                            NativeInstallCoordinator.invalidateDistroCache() 
-                            // Pass the currently selected source to retry properly
-                            loadDistros(selectedSource)
-                        }) {
-                            Text("Retry")
+            Box(modifier = Modifier.weight(1f)) {
+                when {
+                    distroFetchState == DistroFetchState.LOADING -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Color(0xFF7C3AED))
                         }
                     }
-                }
 
-                else -> {
-                    // Normal list of distros
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(availableDistros) { distro ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        val targetContainer = pendingContainerForInstall
-                                        if (targetContainer != null) {
-                                            pendingContainerForInstall = null
-                                            pendingDistro = distro
-                                            val occupied = when (targetContainer) {
-                                                1 -> hasContainer1
-                                                2 -> hasContainer2
-                                                3 -> hasContainer3
-                                                else -> false
-                                            }
-                                            if (occupied) {
-                                                pendingOverwriteSlot = targetContainer
+                    distroFetchState == DistroFetchState.ERROR && availableDistros.isEmpty() -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = Color(0xFFEF4444)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Connection offline",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Check your internet connection and try again.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFF9F92EC),
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            GlassButton(onClick = {
+                                NativeInstallCoordinator.invalidateDistroCache() 
+                                loadDistros(selectedSource)
+                            }) {
+                                Text("Retry Connection", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    else -> {
+                        // Normal list of distros
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(availableDistros) { distro ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .then(glassBlurModifier())
+                                        .clickable {
+                                            val targetContainer = pendingContainerForInstall
+                                            if (targetContainer != null) {
+                                                pendingContainerForInstall = null
+                                                pendingDistro = distro
+                                                val occupied = when (targetContainer) {
+                                                    1 -> hasContainer1
+                                                    2 -> hasContainer2
+                                                    3 -> hasContainer3
+                                                    else -> false
+                                                }
+                                                if (occupied) {
+                                                    pendingOverwriteSlot = targetContainer
+                                                } else {
+                                                    installIntoSlot(distro, targetContainer)
+                                                }
                                             } else {
-                                                installIntoSlot(distro, targetContainer)
+                                                pendingDistro = distro
+                                                showSlotPicker = true
                                             }
-                                        } else {
-                                            pendingDistro = distro
-                                            showSlotPicker = true
+                                        },
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = Color.White.copy(alpha = 0.05f)
+                                    ),
+                                    border = BorderStroke(
+                                        width = 1.dp,
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.White.copy(alpha = 0.22f),
+                                                Color.White.copy(alpha = 0.03f)
+                                            )
+                                        )
+                                    )
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // icon
+                                        val resourceName = distro.distroType.lowercase(Locale.ROOT).trim()
+                                        val iconResId = context.resources.getIdentifier(
+                                            resourceName, "drawable", context.packageName
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .background(Color(0xFF2A1E4A), shape = RoundedCornerShape(12.dp)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (iconResId != 0) {
+                                                Image(
+                                                    painter = painterResource(iconResId),
+                                                    contentDescription = distro.distroType,
+                                                    modifier = Modifier.size(32.dp)
+                                                )
+                                            } else {
+                                                val fallbackResId = context.resources.getIdentifier(
+                                                    "linux", "drawable", context.packageName
+                                                )
+                                                if (fallbackResId != 0) {
+                                                    Image(
+                                                        painter = painterResource(fallbackResId),
+                                                        contentDescription = "Linux Fallback",
+                                                        modifier = Modifier.size(32.dp)
+                                                    )
+                                                } else {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Folder,
+                                                        contentDescription = "Generic Distro",
+                                                        modifier = Modifier.size(28.dp),
+                                                        tint = Color(0xFF9F92EC)
+                                                    )
+                                                }
+                                            }
                                         }
-                                    }
-                                    .padding(vertical = 12.dp, horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // icon
-                                val resourceName = distro.distroType.lowercase(Locale.ROOT).trim()
-                                val iconResId = context.resources.getIdentifier(
-                                    resourceName, "drawable", context.packageName
-                                )
-                                if (iconResId != 0) {
-                                    Image(
-                                        painter = painterResource(iconResId),
-                                        contentDescription = distro.distroType,
-                                        modifier = Modifier.size(36.dp)
-                                    )
-                                } else {
-                                    val fallbackResId = context.resources.getIdentifier(
-                                        "linux", "drawable", context.packageName
-                                    )
-                                    if (fallbackResId != 0) {
-                                        Image(
-                                            painter = painterResource(fallbackResId),
-                                            contentDescription = "Linux Fallback",
-                                            modifier = Modifier.size(36.dp)
-                                        )
-                                    } else {
+                                        Spacer(modifier = Modifier.width(16.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = distro.distroName.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() },
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White,
+                                                style = MaterialTheme.typography.titleMedium.copy(
+                                                    fontSize = 19.sp
+                                                )
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = distro.archiveName,
+                                                color = Color(0xFF9F92EC),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontSize = 11.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(Color(0xFF2A1E4A), shape = RoundedCornerShape(6.dp))
+                                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = "v${distro.version}",
+                                                        color = Color(0xFFC3B6F9),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(Color(0xFF2A1E4A), shape = RoundedCornerShape(6.dp))
+                                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        text = distro.size,
+                                                        color = Color(0xFFC3B6F9),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontSize = 10.sp
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
                                         Icon(
-                                            imageVector = Icons.Default.Folder,
-                                            contentDescription = "Generic Distro",
-                                            modifier = Modifier.size(36.dp),
-                                            tint = MaterialTheme.colorScheme.outline
+                                            imageVector = Icons.Default.AddCircle,
+                                            contentDescription = "Install distro",
+                                            tint = Color(0xFF7C3AED),
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        "${distro.distroName.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }} ${distro.version}",
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(distro.archiveName, style = MaterialTheme.typography.bodySmall)
-                                    Text(distro.size, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                         }
@@ -2195,24 +2462,56 @@ if (showDistroSelection) {
 
             Spacer(modifier = Modifier.height(16.dp))
             Button(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .then(glassBlurModifier()),
                 onClick = {
                     showDistroSelection = false
                     pendingContainerForInstall = null
                     prefs.edit().putBoolean("setup_done", true).apply()
-                }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.09f),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.25f),
+                            Color.White.copy(alpha = 0.04f)
+                        )
+                    )
+                )
             ) {
-                Text("Continue without installing")
+                Text(
+                    text = "Continue without installing",
+                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
+    }
     }
     return
 }
 
 
     // ── Original main UI (drawer + terminal/desktop) ────────────
+    val isAnyDialogVisible = showContainerManager || 
+                             showDeleteConfirmation != null || 
+                             showCleanCacheConfirmation || 
+                             showNativeContainerPrompt != null || 
+                             showSlotPicker || 
+                             showTurnipDriverDialog || 
+                             showExitDialog ||
+                             bootstrapDownloadInProgress
+
     AppDrawer(
         drawerState = drawerState,
+        isBackgroundBlurred = isAnyDialogVisible,
         drawerContent = {
       
 
@@ -2262,8 +2561,8 @@ if (showDistroSelection) {
             },
             vulkanOptions = VULKAN_MODES,
             openGLOptions = when (desktopVulkanMode) {
-                "TURNIP" -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
-                "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "TURNIP" -> listOf("ZINK", "VIRGL", "GL4ES")
+                "VENUS"  -> listOf("LLVMPIPE", "VIRGL", "ZINK")
                 else     -> OPENGL_MODES
             },
             hasArchRootfs = hasContainer1,
@@ -2318,8 +2617,8 @@ if (showDistroSelection) {
             },
             vulkanOptions = VULKAN_MODES,
             openGLOptions = when (desktopVulkanMode) {
-                "TURNIP" -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
-                "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "TURNIP" -> listOf("ZINK", "VIRGL", "GL4ES")
+                "VENUS"  -> listOf("LLVMPIPE", "VIRGL", "ZINK")
                 else     -> OPENGL_MODES
             },
             hasDebianRootfs = hasContainer2,
@@ -2378,8 +2677,8 @@ if (showDistroSelection) {
             },
             vulkanOptions = VULKAN_MODES,
             openGLOptions = when (desktopVulkanMode) {
-                "TURNIP" -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
-                "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "TURNIP" -> listOf("ZINK", "VIRGL", "GL4ES")
+                "VENUS"  -> listOf("LLVMPIPE", "VIRGL", "ZINK")
                 else     -> OPENGL_MODES
             },
             hasWineRootfs = hasContainer3,
@@ -2487,8 +2786,3 @@ ShellScreen(
         )
     }
 }
-
-
-
-
-
