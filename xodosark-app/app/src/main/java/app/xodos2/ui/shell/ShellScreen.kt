@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -56,6 +57,19 @@ import app.xodos2.wayland.input.InputRouteState
 import com.termux.view.TerminalView
 import org.json.JSONArray
 import org.json.JSONObject
+
+// ── Glass Dialog & Custom Imports ────────────────────────────────
+import app.xodos2.ui.glass.GlassButton
+import app.xodos2.ui.glassDialogStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Arrangement
 
 private val DEFAULT_EXTRA_KEYS_JSON = """
 [
@@ -100,8 +114,8 @@ fun ShellScreen(
     }
 
     val sharedPrefs = remember {
-    context.getSharedPreferences("xodos2_terminal_prefs", Context.MODE_PRIVATE)
-}
+        context.getSharedPreferences("xodos2_terminal_prefs", Context.MODE_PRIVATE)
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -114,25 +128,28 @@ fun ShellScreen(
     if (showCloseSessionDialog) {
         AlertDialog(
             onDismissRequest = { showCloseSessionDialog = false },
-            title = { Text("Close terminal") },
+            containerColor = ComposeColor.Transparent,
+            modifier = Modifier.glassDialogStyle(),
+            title = { Text("Close terminal", fontWeight = FontWeight.Bold, color = ComposeColor.White) },
             text = {
                 Text(
                     if (terminalSessionIds.size <= 1) "Are you sure you want to exit?"
-                    else "Close current terminal session?"
+                    else "Close current terminal session?",
+                    color = ComposeColor.White.copy(alpha = 0.85f)
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                GlassButton(onClick = {
                     showCloseSessionDialog = false
                     if (terminalSessionIds.size <= 1) {
                         onExitRequested()
                     } else {
                         onCloseCurrentSession()
                     }
-                }) { Text(if (terminalSessionIds.size <= 1) "Exit" else "Close") }
+                }) { Text(if (terminalSessionIds.size <= 1) "Exit" else "Close", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                TextButton(onClick = { showCloseSessionDialog = false }) { Text("Cancel") }
+                GlassButton(onClick = { showCloseSessionDialog = false }) { Text("Cancel", color = ComposeColor.White.copy(alpha = 0.8f)) }
             }
         )
     }
@@ -143,7 +160,9 @@ fun ShellScreen(
         
         AlertDialog(
             onDismissRequest = { showExtraKeysEditor = false },
-            title = { Text("Edit Extra Keys") },
+            containerColor = ComposeColor.Transparent,
+            modifier = Modifier.glassDialogStyle(),
+            title = { Text("Edit Extra Keys", fontWeight = FontWeight.Bold, color = ComposeColor.White) },
             text = {
                 Column {
                     OutlinedTextField(
@@ -154,18 +173,26 @@ fun ShellScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp)
+                            .height(180.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = ComposeColor.White,
+                            unfocusedTextColor = ComposeColor.White.copy(alpha = 0.8f),
+                            focusedContainerColor = ComposeColor.Black.copy(alpha = 0.2f),
+                            unfocusedContainerColor = ComposeColor.Black.copy(alpha = 0.2f),
+                            focusedBorderColor = ComposeColor(0xFFC3B6F9),
+                            unfocusedBorderColor = ComposeColor.White.copy(alpha = 0.15f)
+                        )
                     )
                     Text(
                         text = "Supports Termux format objects: {\"key\": \"ESC\", \"display\": \"␛\"} or {\"macro\": \"history\\n\", \"display\": \"H\"} as well as single character/key strings.\n\nMust be a valid 2D JSON Array.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = androidx.compose.ui.graphics.Color.Gray,
+                        color = ComposeColor.White.copy(alpha = 0.5f),
                         modifier = Modifier.padding(top = 8.dp)
                     )
                     if (errorText.isNotEmpty()) {
                         Text(
                             text = errorText, 
-                            color = androidx.compose.ui.graphics.Color.Red, 
+                            color = ComposeColor(0xFFFF6B6B), 
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -173,7 +200,7 @@ fun ShellScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                GlassButton(onClick = {
                     try {
                         JSONArray(editingJson) 
                         extraKeysJson = editingJson
@@ -182,14 +209,17 @@ fun ShellScreen(
                     } catch (e: Exception) {
                         errorText = "Invalid JSON format: ${e.localizedMessage}"
                     }
-                }) { Text("Save") }
+                }) { Text("Save", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                Row {
-                    TextButton(onClick = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    GlassButton(onClick = {
                         editingJson = DEFAULT_EXTRA_KEYS_JSON
-                    }) { Text("Reset") }
-                    TextButton(onClick = { showExtraKeysEditor = false }) { Text("Close") }
+                    }) { Text("Reset", color = ComposeColor.White.copy(alpha = 0.8f)) }
+                    GlassButton(onClick = { showExtraKeysEditor = false }) { Text("Close", color = ComposeColor.White.copy(alpha = 0.8f)) }
                 }
             }
         )
