@@ -9,6 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.xodos2.TerminalSessionIds
@@ -20,6 +22,7 @@ import app.xodos2.ui.drawer.menu.DrawerMenuActions
 import app.xodos2.ui.drawer.menu.DrawerMenuLabels
 import app.xodos2.ui.drawer.menu.DrawerMenuOptions
 import app.xodos2.ui.drawer.menu.DrawerScriptEditor
+import app.xodos2.ui.glass.GlassButton
 import app.xodos2.ui.prefs.AppPrefs
 import app.xodos2.ui.runtime.TerminalSessionController
 import app.xodos2.ui.runtime.NativeInstallCoordinator
@@ -318,27 +321,27 @@ DesktopLaunchersSection(
                 }
             },
             confirmButton = {
-                TextButton(
+                GlassButton(
                     onClick = {
                         prefs.edit().putString(prefKey, deScriptText.trim()).apply()
                         editingDeName = null
                     }
                 ) {
-                    Text("Save")
+                    Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                Row {
-                    TextButton(
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    GlassButton(
                         onClick = {
                             deScriptText = DesktopInstallScripts.buildDesktopInstallScript(distroId, targetDe)
                         }
                     ) {
-                        Text("Reset", color = MaterialTheme.colorScheme.error)
+                        Text("Reset", color = Color(0xFFFF6B6B))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(onClick = { editingDeName = null }) {
-                        Text("Cancel")
+                    GlassButton(onClick = { editingDeName = null }) {
+                        Text("Cancel", color = Color.White.copy(alpha = 0.8f))
                     }
                 }
             }

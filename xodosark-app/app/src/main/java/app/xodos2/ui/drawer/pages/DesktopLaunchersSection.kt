@@ -15,6 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
+import app.xodos2.ui.glass.GlassButton
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -151,26 +154,26 @@ fun DesktopLaunchersSection(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                GlassButton(onClick = {
                     saveCustomScript(prefs, containerId, binary, editScript.trim())
                     editingBinary = null
                 }) {
-                    Text("Save")
+                    Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     // Reset button – restore the default script
-                    TextButton(onClick = {
+                    GlassButton(onClick = {
                         editScript = DesktopDetector.defaultLaunchScript(binary)
                         // Optionally delete the saved custom script so the default becomes permanent
                         deleteCustomScript(prefs, containerId, binary)
                     }) {
-                        Text("Reset", color = MaterialTheme.colorScheme.error)
+                        Text("Reset", color = Color(0xFFFF6B6B))
                     }
                     Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { editingBinary = null }) {
-                        Text("Cancel")
+                    GlassButton(onClick = { editingBinary = null }) {
+                        Text("Cancel", color = Color.White.copy(alpha = 0.8f))
                     }
                 }
             }
