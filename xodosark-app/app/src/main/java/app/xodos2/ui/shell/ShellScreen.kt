@@ -31,6 +31,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.font.FontWeight
+import app.xodos2.ui.glassDialogStyle
+import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -55,7 +62,6 @@ import app.xodos2.shell.ShellViewClient
 import app.xodos2.wayland.input.InputRouteState
 import com.termux.view.TerminalView
 import org.json.JSONArray
-import org.json.JSONObject
 
 private val DEFAULT_EXTRA_KEYS_JSON = """
 [
@@ -63,12 +69,6 @@ private val DEFAULT_EXTRA_KEYS_JSON = """
   ["TAB", "CTRL", "ALT", "LEFT", "DOWN", "RIGHT", "PGDN"]
 ]
 """.trimIndent()
-
-private data class ExtraKeyItem(
-    val key: String = "",
-    val macro: String = "",
-    val display: String = ""
-)
 
 private class ViewCache(
     val controller: ShellSessionController,
@@ -100,9 +100,8 @@ fun ShellScreen(
     }
 
     val sharedPrefs = remember {
-    context.getSharedPreferences("xodos2_terminal_prefs", Context.MODE_PRIVATE)
-}
-
+        context.getSharedPreferences("xodos2_terminal_prefs", Context.MODE_PRIVATE)
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var showCloseSessionDialog by remember { mutableStateOf(false) }
@@ -143,7 +142,9 @@ fun ShellScreen(
         
         AlertDialog(
             onDismissRequest = { showExtraKeysEditor = false },
-            title = { Text("Edit Extra Keys") },
+            containerColor = ComposeColor.Transparent,
+            modifier = Modifier.glassDialogStyle(),
+            title = { Text("Edit Extra Keys", fontWeight = FontWeight.Bold, color = ComposeColor.White) },
             text = {
                 Column {
                     OutlinedTextField(
@@ -154,18 +155,26 @@ fun ShellScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(180.dp)
+                            .height(180.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ComposeColor(0xFFC3B6F9),
+                            unfocusedBorderColor = ComposeColor.White.copy(alpha = 0.2f),
+                            focusedLabelColor = ComposeColor(0xFFC3B6F9),
+                            unfocusedLabelColor = ComposeColor.White.copy(alpha = 0.5f),
+                            focusedTextColor = ComposeColor.White,
+                            unfocusedTextColor = ComposeColor.White
+                        )
                     )
                     Text(
-                        text = "Supports Termux format objects: {\"key\": \"ESC\", \"display\": \"␛\"} or {\"macro\": \"history\\n\", \"display\": \"H\"} as well as single character/key strings.\n\nMust be a valid 2D JSON Array.",
+                        text = "Supported keys: CTRL, ALT, ESC, TAB, HOME, END, PGUP, PGDN, UP, DOWN, LEFT, RIGHT, COPY, PASTE, or any single character (e.g., '-', '/').\n\nMust be a valid 2D JSON Array.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = androidx.compose.ui.graphics.Color.Gray,
+                        color = ComposeColor.White.copy(alpha = 0.6f),
                         modifier = Modifier.padding(top = 8.dp)
                     )
                     if (errorText.isNotEmpty()) {
                         Text(
                             text = errorText, 
-                            color = androidx.compose.ui.graphics.Color.Red, 
+                            color = ComposeColor(0xFFF44336), 
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -173,23 +182,39 @@ fun ShellScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    try {
-                        JSONArray(editingJson) 
-                        extraKeysJson = editingJson
-                        sharedPrefs.edit().putString("extra_keys_layout", editingJson).apply()
-                        showExtraKeysEditor = false
-                    } catch (e: Exception) {
-                        errorText = "Invalid JSON format: ${e.localizedMessage}"
-                    }
-                }) { Text("Save") }
+                TextButton(
+                    onClick = {
+                        try {
+                            JSONArray(editingJson) 
+                            extraKeysJson = editingJson
+                            sharedPrefs.edit().putString("extra_keys_layout", editingJson).apply()
+                            showExtraKeysEditor = false
+                        } catch (e: Exception) {
+                            errorText = "Invalid JSON format: ${e.localizedMessage}"
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = ComposeColor(0xFFC3B6F9))
+                ) { 
+                    Text("Save", fontWeight = FontWeight.Bold) 
+                }
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = {
-                        editingJson = DEFAULT_EXTRA_KEYS_JSON
-                    }) { Text("Reset") }
-                    TextButton(onClick = { showExtraKeysEditor = false }) { Text("Close") }
+                    TextButton(
+                        onClick = {
+                            editingJson = DEFAULT_EXTRA_KEYS_JSON
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = ComposeColor(0xFFC3B6F9))
+                    ) { 
+                        Text("Reset") 
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    TextButton(
+                        onClick = { showExtraKeysEditor = false },
+                        colors = ButtonDefaults.textButtonColors(contentColor = ComposeColor.White.copy(alpha = 0.7f))
+                    ) { 
+                        Text("Close") 
+                    }
                 }
             }
         )
@@ -610,7 +635,7 @@ private fun rebuildExtraKeys(
     // Fixed row height to guarantee identical height for every row
     val rowHeight = 44.dpToPx(context)
 
-    fun addScrollRow(keys: List<ExtraKeyItem>): LinearLayout {
+    fun addScrollRow(keys: List<String>): LinearLayout {
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_HORIZONTAL
@@ -619,68 +644,56 @@ private fun rebuildExtraKeys(
             )
         }
         
-        for (item in keys) {
-            val displayLabel = if (item.display.isNotEmpty()) {
-                item.display
-            } else {
-                getDisplayLabel(item.key)
-            }
-            
+        for (label in keys) {
+            val displayLabel = getDisplayLabel(label)
             val btn = makeButton(displayLabel)
+            val action = getActionFor(label)
             
-            if (item.macro.isNotEmpty()) {
-                // Execute Macro Directly
-                btn.setOnClickListener {
-                    terminalView.currentSession?.write(item.macro)
+            when (action) {
+                "CTRL_MOD" -> {
+                    ctrlButton = btn
+                    btn.setOnClickListener {
+                        viewClient.ctrlActive = !viewClient.ctrlActive
+                        if (viewClient.ctrlActive) viewClient.altActive = false
+                        updateButtonColors()
+                    }
                 }
-            } else {
-                val action = getActionFor(item.key)
-                when (action) {
-                    "CTRL_MOD" -> {
-                        ctrlButton = btn
-                        btn.setOnClickListener {
-                            viewClient.ctrlActive = !viewClient.ctrlActive
-                            if (viewClient.ctrlActive) viewClient.altActive = false
-                            updateButtonColors()
-                        }
+                "ALT_MOD" -> {
+                    altButton = btn
+                    btn.setOnClickListener {
+                        viewClient.altActive = !viewClient.altActive
+                        if (viewClient.altActive) viewClient.ctrlActive = false
+                        updateButtonColors()
                     }
-                    "ALT_MOD" -> {
-                        altButton = btn
-                        btn.setOnClickListener {
-                            viewClient.altActive = !viewClient.altActive
-                            if (viewClient.altActive) viewClient.ctrlActive = false
-                            updateButtonColors()
-                        }
-                    }
-                    "SPECIAL_COPY" -> btn.setOnClickListener { terminalView.showContextMenu() }
-                    "SPECIAL_PASTE" -> {
-                        btn.setOnClickListener {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.primaryClip?.let { clip ->
-                                if (clip.itemCount > 0) {
-                                    val textToPaste = clip.getItemAt(0).text?.toString() ?: ""
-                                    terminalView.currentSession?.write(textToPaste)
-                                }
+                }
+                "SPECIAL_COPY" -> btn.setOnClickListener { terminalView.showContextMenu() }
+                "SPECIAL_PASTE" -> {
+                    btn.setOnClickListener {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.primaryClip?.let { clip ->
+                            if (clip.itemCount > 0) {
+                                val textToPaste = clip.getItemAt(0).text?.toString() ?: ""
+                                terminalView.currentSession?.write(textToPaste)
                             }
                         }
                     }
-                    else -> {
-                        val fireAction = {
-                            sendModifiedSequence(
-                                terminalView, action, viewClient.ctrlActive, viewClient.altActive,
-                                onConsumed = {
-                                    viewClient.ctrlActive = false
-                                    viewClient.altActive = false
-                                    updateButtonColors()
-                                }
-                            )
-                        }
+                }
+                else -> {
+                    val fireAction = {
+                        sendModifiedSequence(
+                            terminalView, action, viewClient.ctrlActive, viewClient.altActive,
+                            onConsumed = {
+                                viewClient.ctrlActive = false
+                                viewClient.altActive = false
+                                updateButtonColors()
+                            }
+                        )
+                    }
 
-                        if (item.key.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
-                            setRepeatClickListener(btn, fireAction)
-                        } else {
-                            btn.setOnClickListener { fireAction() }
-                        }
+                    if (label.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
+                        setRepeatClickListener(btn, fireAction)
+                    } else {
+                        btn.setOnClickListener { fireAction() }
                     }
                 }
             }
@@ -693,24 +706,10 @@ private fun rebuildExtraKeys(
         val jsonArray = JSONArray(jsonString)
         for (i in 0 until jsonArray.length()) {
             val rowArray = jsonArray.getJSONArray(i)
-            val rowKeys = mutableListOf<ExtraKeyItem>()
-            
+            val rowKeys = mutableListOf<String>()
             for (j in 0 until rowArray.length()) {
-                val item = rowArray.get(j)
-                when (item) {
-                    is String -> {
-                        rowKeys.add(ExtraKeyItem(key = item))
-                    }
-                    is JSONObject -> {
-                        rowKeys.add(ExtraKeyItem(
-                            key = item.optString("key", ""),
-                            macro = item.optString("macro", ""),
-                            display = item.optString("display", "")
-                        ))
-                    }
-                }
+                rowKeys.add(rowArray.getString(j))
             }
-            
             scrollParent.addView(addScrollRow(rowKeys))
             
             // Fixed column row – same height as scroll rows
@@ -728,19 +727,13 @@ private fun rebuildExtraKeys(
                 fixedRow.addView(editBtn)
             } else {
                 // Placeholder with same height as the corresponding row's first button
-                val placeholderText = if (rowKeys.isNotEmpty()) {
-                    if (rowKeys.first().display.isNotEmpty()) rowKeys.first().display else getDisplayLabel(rowKeys.first().key)
-                } else {
-                    "ESC"
-                }
-                
+                val placeholderText = getDisplayLabel(rowKeys.firstOrNull() ?: "ESC")
                 val spaceBtn = makeButton(placeholderText, isTransparent = true, isFixed = true)
                 fixedRow.addView(spaceBtn)
             }
             fixedParent.addView(fixedRow)
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
+    } catch (_: Exception) {
     }
 }
 
