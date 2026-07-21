@@ -1900,6 +1900,31 @@ if (showContainerManager) {
                 }
 
 
+                // ---Clean cache button ---
+                Button(
+                    onClick = {
+                        showCleanCacheConfirmation = true
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White.copy(alpha = 0.07f),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.22f),
+                                Color.White.copy(alpha = 0.03f)
+                            )
+                        )
+                    )
+                ) {
+                    Text("Clean cache tarballs (*.tar.xz)", fontWeight = FontWeight.Bold)
+                }
+
+
                 // ---Download bootstrap archive button ---
                 Button(
                     onClick = {
@@ -1923,14 +1948,6 @@ if (showContainerManager) {
                     )
                 ) {
                     Text("Download Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold)
-                }
-
-
-                // Clean cache button
-                GlassButton(onClick = {
-                    showCleanCacheConfirmation = true
-                }) {
-                    Text("Clean cache tarballs (*.tar.xz)", color = Color(0xFFC3B6F9))
                 }
             }
         },
