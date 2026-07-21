@@ -41,23 +41,7 @@ fun InstallScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Elegant loading icon
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(Color(0xFF1A122E), shape = RoundedCornerShape(16.dp))
-                    .border(1.dp, Color(0xFF2A1E4A), shape = RoundedCornerShape(16.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Installing",
-                    modifier = Modifier.size(32.dp),
-                    tint = Color(0xFF7C3AED)
-                )
-            }
 
-            Spacer(modifier = Modifier.height(24.dp))
 
             // Premium Card Container
             Card(
