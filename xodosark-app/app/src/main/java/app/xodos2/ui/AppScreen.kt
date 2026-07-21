@@ -93,11 +93,6 @@ import java.io.InputStreamReader
 
 import android.view.WindowManager
 
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip          // optional, but may be needed
-import androidx.compose.ui.graphics.Brush
-
 fun Modifier.glassDialogStyle(): Modifier = this
     .background(
         brush = Brush.verticalGradient(
