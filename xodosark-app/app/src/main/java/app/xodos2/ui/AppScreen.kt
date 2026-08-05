@@ -622,6 +622,7 @@ fun prepareWaylandBackend() {
         desktopSocketName = desktopSocketName,
         vulkanMode = desktopVulkanMode,
         openGLMode = desktopOpenGLMode,
+        vortekMode = desktopVortekMode,
         currentHiddenInjectedKey = desktopHiddenInjectedKey,
     ).hiddenInjectedKey
     AppLogger.log("Wayland backend prepared")
@@ -661,6 +662,7 @@ fun prepareX11Backend() {
             desktopSocketName = desktopSocketName,
             vulkanMode = desktopVulkanMode,
             openGLMode = desktopOpenGLMode,
+            vortekMode = desktopVortekMode,
             currentHiddenInjectedKey = desktopHiddenInjectedKey,
         ).hiddenInjectedKey
         pendingAutoShowWayland = true
