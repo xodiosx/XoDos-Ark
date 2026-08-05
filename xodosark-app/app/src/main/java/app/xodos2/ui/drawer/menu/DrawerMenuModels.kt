@@ -4,6 +4,7 @@ data class DrawerMenuLabels(
     val launcherDefaultLabel: String,
     val desktopVulkanLabel: String,
     val desktopOpenGLLabel: String,
+    val desktopVortekLabel: String,
     val terminalFontLabel: String,
     val terminalSessionLabel: String,
     val mouseModeLabel: String,
@@ -15,6 +16,7 @@ data class DrawerMenuOptions(
     val launcherDefaultOptions: List<String>,
     val desktopVulkanOptions: List<String>,
     val desktopOpenGLOptions: List<String>,
+    val desktopVortekOptions: List<String>,
     val terminalFontOptions: List<String>,
     val terminalSessionOptions: List<String>,
     val mouseModeOptions: List<String>,
@@ -36,6 +38,7 @@ data class DrawerMenuActions(
     val onLauncherDefaultSelect: (String) -> Unit,
     val onDesktopVulkanSelect: (String) -> Unit,
     val onDesktopOpenGLSelect: (String) -> Unit,
+    val onDesktopVortekSelect: (String) -> Unit,
     val onTerminalFontSelect: (String) -> Unit,
     /** Special values allowed: "New session" and "Close current session". */
     val onTerminalSessionSelect: (String) -> Unit,

@@ -145,6 +145,16 @@ fun DrawerMenu(
                     },
                 )
 
+                DrawerDropdownField(
+                    label = "Vortek",
+                    value = labels.desktopVortekLabel,
+                    options = options.desktopVortekOptions,
+                    onSelect = {
+                        actions.onDesktopVortekSelect(it)
+                        actions.onCloseDrawerRequest()
+                    },
+                )
+
                 DrawerExpandableSection(title = "View", defaultExpanded = true) {
                     DrawerDropdownField(
                         label = "Mouse Mode",
