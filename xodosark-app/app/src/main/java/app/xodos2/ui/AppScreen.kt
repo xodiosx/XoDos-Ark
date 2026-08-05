@@ -97,6 +97,7 @@ import app.xodos2.ui.glassDialogStyle
 
 private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP")
 private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
+private val VORTEK_MODES = listOf("Disabled", "VORTEK_AUTO", "VORTEK_OPTIMIZED", "VORTEK_COMPAT", "VORTEK_PASSTHROUGH")
 
 private const val X11_MODE_LABEL_NATIVE = "Native"
 private const val X11_MODE_LABEL_SCALED = "Scaled"
@@ -419,6 +420,7 @@ var wineWaylandScriptEditorOpen by remember { mutableStateOf(false) }
     var pendingAutoShowWayland by remember { mutableStateOf(false) }
     var desktopVulkanMode by remember { mutableStateOf("LLVMPIPE") }
     var desktopOpenGLMode by remember { mutableStateOf("LLVMPIPE") }
+    var desktopVortekMode by remember { mutableStateOf("Disabled") }
     var desktopHiddenInjectedKey by remember { mutableStateOf("") }
     var rendererSessionResetEpoch by remember { mutableIntStateOf(0) }
     var desktopLaunchBlackout by remember(startInTerminal) { mutableStateOf(!startInTerminal) }
@@ -1066,6 +1068,7 @@ fun downloadBootstrapArchive() {
             prefs = prefs,
             allowedVulkan = VULKAN_MODES,
             allowedOpenGL = OPENGL_MODES,
+            allowedVortek = VORTEK_MODES,
         )
         if (!r.ok) {
             errorMsg = "Failed to initialize native layer"
@@ -1097,10 +1100,11 @@ File(context.filesDir, "drivers").listFiles { f ->
        onAppReady() 
         desktopVulkanMode = r.desktopModes.vulkan
         desktopOpenGLMode = r.desktopModes.openGL
+        desktopVortekMode = r.desktopModes.vortek
         GraphicsModeController.applyAndMaybeToggleVirglHost(
             prefs = prefs,
-            previous = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode),
-            modes = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode),
+            previous = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode, desktopVortekMode),
+            modes = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode, desktopVortekMode),
         )
         
 updateLauncherMarkers(context, launcherDefault) 
@@ -1397,11 +1401,12 @@ fun checkAndPromptTurnipDrivers() {
     
     
 fun setDesktopVulkanMode(mode: String) {
-    val prev = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode)
+    val prev = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode, desktopVortekMode)
     var next = GraphicsModeController.sanitize(
-        GraphicsModeController.Modes(vulkan = mode, openGL = desktopOpenGLMode),
+        GraphicsModeController.Modes(vulkan = mode, openGL = desktopOpenGLMode, vortek = desktopVortekMode),
         allowedVulkan = VULKAN_MODES,
         allowedOpenGL = OPENGL_MODES,
+        allowedVortek = VORTEK_MODES,
     )
 
     // force OpenGL to LLVMPIPE when Venus is active
@@ -1427,20 +1432,41 @@ fun setDesktopVulkanMode(mode: String) {
 }
 
     fun setDesktopOpenGLMode(mode: String) {
-        val prev = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode)
+        val prev = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode, desktopVortekMode)
         val next = GraphicsModeController.sanitize(
-            GraphicsModeController.Modes(vulkan = desktopVulkanMode, openGL = mode),
+            GraphicsModeController.Modes(vulkan = desktopVulkanMode, openGL = mode, vortek = desktopVortekMode),
             allowedVulkan = VULKAN_MODES,
             allowedOpenGL = OPENGL_MODES,
+            allowedVortek = VORTEK_MODES,
         )
         if (GraphicsModeController.applyAndMaybeToggleVirglHost(prefs, prev, next)) {
             rendererSessionResetEpoch++
         }
         desktopVulkanMode = next.vulkan
         desktopOpenGLMode = next.openGL
+        desktopVortekMode = next.vortek
         DisplayOrchestrator.updateContainersSystemEnvironment(context, prefs)
         injectGraphicsEnvToAllTerminals()  
         AppLogger.log("OpenGL mode set to $mode")
+    }
+
+    fun setDesktopVortekMode(mode: String) {
+        val prev = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode, desktopVortekMode)
+        val next = GraphicsModeController.sanitize(
+            GraphicsModeController.Modes(vulkan = desktopVulkanMode, openGL = desktopOpenGLMode, vortek = mode),
+            allowedVulkan = VULKAN_MODES,
+            allowedOpenGL = OPENGL_MODES,
+            allowedVortek = VORTEK_MODES,
+        )
+        if (GraphicsModeController.applyAndMaybeToggleVirglHost(prefs, prev, next)) {
+            rendererSessionResetEpoch++
+        }
+        desktopVulkanMode = next.vulkan
+        desktopOpenGLMode = next.openGL
+        desktopVortekMode = next.vortek
+        DisplayOrchestrator.updateContainersSystemEnvironment(context, prefs)
+        injectGraphicsEnvToAllTerminals()  
+        AppLogger.log("Vortek mode set to $mode")
     }
 
 
@@ -2533,6 +2559,7 @@ if (showDistroSelection) {
             launcherDefault = launcherDefault,
             desktopVulkanMode = desktopVulkanMode,
             desktopOpenGLMode = desktopOpenGLMode,
+            desktopVortekMode = desktopVortekMode,
             mouseMode = mouseMode,
             resolutionPercent = resolutionPercent,
             scalePercent = scalePercent,
@@ -2547,6 +2574,7 @@ if (showDistroSelection) {
             onLauncherDefaultSelect = { setLauncherDefaultFromMenuLabel(it) },
             onDesktopVulkanSelect = { setDesktopVulkanMode(it) },
             onDesktopOpenGLSelect = { setDesktopOpenGLMode(it) },
+            onDesktopVortekSelect = { setDesktopVortekMode(it) },
             onTerminalFontSelectLabel = { label ->
                 val id = ShellFonts.options.find { it.label == label }?.id ?: ShellFonts.DEFAULT_ID
                 persistTerminalFont(id)
@@ -2572,6 +2600,7 @@ if (showDistroSelection) {
                 "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
                 else     -> OPENGL_MODES
             },
+            vortekOptions = VORTEK_MODES,
             hasArchRootfs = hasContainer1,
             onContainerManagerClick = {
                 scope.launch { drawerState.close() }
@@ -2596,6 +2625,7 @@ if (showDistroSelection) {
             launcherDefault = launcherDefault,
             desktopVulkanMode = desktopVulkanMode,
             desktopOpenGLMode = desktopOpenGLMode,
+            desktopVortekMode = desktopVortekMode,
             mouseMode = mouseMode,
             resolutionPercent = resolutionPercent,
             scalePercent = scalePercent,
@@ -2606,6 +2636,7 @@ if (showDistroSelection) {
             onLauncherDefaultSelect = { setLauncherDefaultFromMenuLabel(it) },
             onDesktopVulkanSelect = { setDesktopVulkanMode(it) },
             onDesktopOpenGLSelect = { setDesktopOpenGLMode(it) },
+            onDesktopVortekSelect = { setDesktopVortekMode(it) },
             onTerminalFontSelectLabel = { label ->
                 val id = ShellFonts.options.find { it.label == label }?.id ?: ShellFonts.DEFAULT_ID
                 persistTerminalFont(id)
@@ -2628,6 +2659,7 @@ if (showDistroSelection) {
                 "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
                 else     -> OPENGL_MODES
             },
+            vortekOptions = VORTEK_MODES,
             hasDebianRootfs = hasContainer2,
             onContainerManagerClick = {
                 scope.launch { drawerState.close() }
@@ -2656,6 +2688,7 @@ if (showDistroSelection) {
             launcherDefault = launcherDefault,
             desktopVulkanMode = desktopVulkanMode,
             desktopOpenGLMode = desktopOpenGLMode,
+            desktopVortekMode = desktopVortekMode,
             mouseMode = mouseMode,
             resolutionPercent = resolutionPercent,
             scalePercent = scalePercent,
@@ -2666,6 +2699,7 @@ if (showDistroSelection) {
             onLauncherDefaultSelect = { setLauncherDefaultFromMenuLabel(it) },
             onDesktopVulkanSelect = { setDesktopVulkanMode(it) },
             onDesktopOpenGLSelect = { setDesktopOpenGLMode(it) },
+            onDesktopVortekSelect = { setDesktopVortekMode(it) },
             onTerminalFontSelectLabel = { label ->
                 val id = ShellFonts.options.find { it.label == label }?.id ?: ShellFonts.DEFAULT_ID
                 persistTerminalFont(id)
@@ -2688,6 +2722,7 @@ if (showDistroSelection) {
                 "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
                 else     -> OPENGL_MODES
             },
+            vortekOptions = VORTEK_MODES,
             hasWineRootfs = hasContainer3,
             onContainerManagerClick = {
                 scope.launch { drawerState.close() }
