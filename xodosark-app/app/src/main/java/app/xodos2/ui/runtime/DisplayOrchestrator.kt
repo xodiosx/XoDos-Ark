@@ -242,13 +242,6 @@ val payload = buildString {
                 b.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
                 b.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
             }
-            "ZINK", "VORTEK" -> {
-                b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
-                b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                b.append("export GALLIUM_DRIVER=zink\n")
-                b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
-            }
             "GL4ES" -> {
                 b.append("export MESA_GL_VERSION_OVERRIDE=2.1\n")
                 b.append("export LIBGL_FB=3\n")
@@ -256,18 +249,25 @@ val payload = buildString {
                 b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
                 b.append("export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/gl4es:\$LD_LIBRARY_PATH\n")
             }
-            else -> {
-                if (isVortekActive) {
-                    b.append("export GALLIUM_DRIVER=zink\n")
+            "ZINK" -> {
+                if (vulkanMode == "TURNIP") {
+                    b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
                     b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                    b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
+                    b.append("export GALLIUM_DRIVER=zink\n")
                     b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                    b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
                 } else {
-                    b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")             
+                    b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VN_DEBUG || true\n")             
                     b.append("export GALLIUM_DRIVER=llvmpipe\n")
                     b.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
                     b.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
                 }
+            }
+            else -> {
+                b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VN_DEBUG || true\n")             
+                b.append("export GALLIUM_DRIVER=llvmpipe\n")
+                b.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
+                b.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
             }
         }
 
@@ -321,30 +321,30 @@ val payload = buildString {
                 sb.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
                 sb.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
             }
-            "ZINK", "VORTEK" -> {
-                sb.append("export VKD3D_FEATURE_LEVEL=12_0\n")
-                sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")               
-                sb.append("export GALLIUM_DRIVER=zink\n")
-                sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
-            }
             "GL4ES" -> {
                 sb.append("export MESA_GL_VERSION_OVERRIDE=2.1\n")
                 sb.append("export LIBGL_FB=3\n")
                 sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
                 sb.append("export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/gl4es:\$LD_LIBRARY_PATH\n")
             }
-            else -> {
-                if (isVortekActive) {
+            "ZINK" -> {
+                if (vulkan == "TURNIP") {
+                    sb.append("export VKD3D_FEATURE_LEVEL=12_0\n")
+                    sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")               
                     sb.append("export GALLIUM_DRIVER=zink\n")
-                    sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
                     sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
-                    sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
                 } else {
-                    sb.append("unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG GALLIUM_DRIVER || true\n")
+                    sb.append("unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VN_DEBUG GALLIUM_DRIVER || true\n")
                     sb.append("export GALLIUM_DRIVER=llvmpipe\n")
                     sb.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
                     sb.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
                 }
+            }
+            else -> {
+                sb.append("unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VN_DEBUG GALLIUM_DRIVER || true\n")
+                sb.append("export GALLIUM_DRIVER=llvmpipe\n")
+                sb.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
+                sb.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
             }
         }
 
