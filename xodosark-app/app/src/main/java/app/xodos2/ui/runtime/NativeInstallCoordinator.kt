@@ -620,12 +620,14 @@ object NativeInstallCoordinator {
         prefs: SharedPreferences,
         allowedVulkan: List<String>,
         allowedOpenGL: List<String>,
+        allowedVortek: List<String> = listOf("Disabled", "VORTEK_AUTO", "VORTEK_OPTIMIZED", "VORTEK_COMPAT", "VORTEK_PASSTHROUGH"),
     ): InitResult {
         migrateRendererPrefsIfNeeded(prefs)
         val desktopModes = GraphicsModeController.loadFromPrefs(
             prefs = prefs,
             allowedVulkan = allowedVulkan,
             allowedOpenGL = allowedOpenGL,
+            allowedVortek = allowedVortek,
         )
         val ok = withContext(Dispatchers.IO) {
             if (!NativeBridge.init(

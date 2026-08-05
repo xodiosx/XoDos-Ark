@@ -15,22 +15,27 @@ object GraphicsModeController {
 
     private const val KEY_VULKAN = "desktop_vulkan_mode"
     private const val KEY_OPENGL = "desktop_opengl_mode"
+    private const val KEY_VORTEK = "desktop_vortek_mode"
 
     data class Modes(
         val vulkan: String,
         val openGL: String,
+        val vortek: String = "Disabled",
     )
 
     fun loadFromPrefs(
         prefs: SharedPreferences,
         allowedVulkan: List<String>,
         allowedOpenGL: List<String>,
+        allowedVortek: List<String> = listOf("Disabled", "VORTEK_AUTO", "VORTEK_OPTIMIZED", "VORTEK_COMPAT", "VORTEK_PASSTHROUGH"),
         defaultVulkan: String = "LLVMPIPE",
         defaultOpenGL: String = "LLVMPIPE",
+        defaultVortek: String = "Disabled",
     ): Modes {
         val vkRaw = prefs.getString(KEY_VULKAN, defaultVulkan) ?: defaultVulkan
         val glRaw = prefs.getString(KEY_OPENGL, defaultOpenGL) ?: defaultOpenGL
-        return sanitize(Modes(vkRaw, glRaw), allowedVulkan, allowedOpenGL, defaultVulkan, defaultOpenGL)
+        val vtRaw = prefs.getString(KEY_VORTEK, defaultVortek) ?: defaultVortek
+        return sanitize(Modes(vkRaw, glRaw, vtRaw), allowedVulkan, allowedOpenGL, allowedVortek, defaultVulkan, defaultOpenGL, defaultVortek)
     }
 
     fun persist(
@@ -40,6 +45,7 @@ object GraphicsModeController {
         prefs.edit()
             .putString(KEY_VULKAN, modes.vulkan)
             .putString(KEY_OPENGL, modes.openGL)
+            .putString(KEY_VORTEK, modes.vortek)
             .apply()
     }
 
@@ -47,12 +53,15 @@ object GraphicsModeController {
         modes: Modes,
         allowedVulkan: List<String>,
         allowedOpenGL: List<String>,
+        allowedVortek: List<String> = listOf("Disabled", "VORTEK_AUTO", "VORTEK_OPTIMIZED", "VORTEK_COMPAT", "VORTEK_PASSTHROUGH"),
         defaultVulkan: String = "LLVMPIPE",
         defaultOpenGL: String = "LLVMPIPE",
+        defaultVortek: String = "Disabled",
     ): Modes {
         val vk = if (modes.vulkan in allowedVulkan) modes.vulkan else defaultVulkan
         val gl = if (modes.openGL in allowedOpenGL) modes.openGL else defaultOpenGL
-        return Modes(vulkan = vk, openGL = gl)
+        val vt = if (modes.vortek in allowedVortek) modes.vortek else defaultVortek
+        return Modes(vulkan = vk, openGL = gl, vortek = vt)
     }
 
     /**

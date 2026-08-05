@@ -214,9 +214,21 @@ val payload = buildString {
         headlessInjectHandler.post(waiter)
     }
 
-    fun buildWaylandAndGraphicsEnvSnippet(socketName: String, vulkanMode: String, openGLMode: String): String {
+    fun buildWaylandAndGraphicsEnvSnippet(
+        socketName: String,
+        vulkanMode: String,
+        openGLMode: String,
+        vortekMode: String = "Disabled",
+    ): String {
         val b = StringBuilder()
         b.append("export WAYLAND_DISPLAY=").append(socketName).append("\n")
+        if (vortekMode != "Disabled") {
+            b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/vortek_icd.aarch64.json\n")
+            b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/vortek_icd.aarch64.json\n")
+            b.append("export VORTEK_AUTO_EXTENSIONS=1\n")
+            b.append("export VORTEK_OPTIMIZE=1\n")
+            b.append("export VORTEK_MODE=").append(vortekMode).append("\n")
+        }
         when (openGLMode) {
             "VIRGL" -> {
                 b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
@@ -280,8 +292,16 @@ val payload = buildString {
     fun buildSystemGraphicsEnv(prefs: SharedPreferences): String {
         val vulkan = prefs.getString("desktop_vulkan_mode", "LLVMPIPE") ?: "LLVMPIPE"
         val openGL = prefs.getString("desktop_opengl_mode", "LLVMPIPE") ?: "LLVMPIPE"
+        val vortek = prefs.getString("desktop_vortek_mode", "Disabled") ?: "Disabled"
         val sb = StringBuilder()
         sb.append("export DISPLAY=:0\n")
+        if (vortek != "Disabled") {
+            sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/vortek_icd.aarch64.json\n")
+            sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/vortek_icd.aarch64.json\n")
+            sb.append("export VORTEK_AUTO_EXTENSIONS=1\n")
+            sb.append("export VORTEK_OPTIMIZE=1\n")
+            sb.append("export VORTEK_MODE=").append(vortek).append("\n")
+        }
         when (openGL) {
             "VIRGL" -> {
                 sb.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
@@ -344,6 +364,7 @@ val payload = buildString {
     fun updateContainersSystemEnvironment(context: Context, prefs: SharedPreferences) {
         val envContent = buildSystemGraphicsEnv(prefs)
         for (id in 1..3) {
+            app.xodos2.VortekAssets.installVortekToContainer(context, id)
             val containerDir = NativeInstallCoordinator.containerPath(context, id)
             if (!containerDir.isDirectory) continue
             val etcDir = File(containerDir, "etc")
