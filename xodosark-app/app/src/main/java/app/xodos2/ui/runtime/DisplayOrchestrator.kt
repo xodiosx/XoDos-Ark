@@ -222,69 +222,75 @@ val payload = buildString {
     ): String {
         val b = StringBuilder()
         b.append("export WAYLAND_DISPLAY=").append(socketName).append("\n")
-        if (vortekMode != "Disabled") {
+
+        val isVortekActive = vortekMode != "Disabled" || vulkanMode == "VORTEK" || openGLMode == "VORTEK"
+
+        if (isVortekActive) {
             b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/vortek_icd.aarch64.json\n")
             b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/vortek_icd.aarch64.json\n")
             b.append("export VORTEK_AUTO_EXTENSIONS=1\n")
             b.append("export VORTEK_OPTIMIZE=1\n")
-            b.append("export VORTEK_MODE=").append(vortekMode).append("\n")
+            val vMode = if (vortekMode != "Disabled") vortekMode else "VORTEK_AUTO"
+            b.append("export VORTEK_MODE=").append(vMode).append("\n")
         }
+
         when (openGLMode) {
             "VIRGL" -> {
-                b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
                 b.append("export GALLIUM_DRIVER=virpipe\n")
                 b.append("export MESA_LOADER_DRIVER_OVERRIDE=virpipe\n")
                 b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
                 b.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
                 b.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
             }
-            "ZINK" -> {
+            "ZINK", "VORTEK" -> {
                 b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
                 b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                b.append("export GALLIUM_DRIVER=zink\n")
                 b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
                 b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
             }
             "GL4ES" -> {
-            //    b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
-                b.append("export MESA_GL_VERSION_OVERRIDE=2.1 \n")
+                b.append("export MESA_GL_VERSION_OVERRIDE=2.1\n")
                 b.append("export LIBGL_FB=3\n")
                 b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-              //  b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
                 b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
                 b.append("export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/gl4es:\$LD_LIBRARY_PATH\n")
             }
             else -> {
-                b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")             
-                b.append("export GALLIUM_DRIVER=llvmpipe\n")
-                b.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
-                b.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
+                if (isVortekActive) {
+                    b.append("export GALLIUM_DRIVER=zink\n")
+                    b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                    b.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
+                    b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                } else {
+                    b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")             
+                    b.append("export GALLIUM_DRIVER=llvmpipe\n")
+                    b.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
+                    b.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
+                }
             }
         }
-        when (vulkanMode) {
-            "VENUS" -> {
-                
-                b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
-                b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
-                b.append("export VN_DEBUG=vtest\n")
-                b.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
-                b.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
+
+        if (!isVortekActive) {
+            when (vulkanMode) {
+                "VENUS" -> {
+                    b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
+                    b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
+                    b.append("export VN_DEBUG=vtest\n")
+                    b.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
+                    b.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
+                }
+                "TURNIP" -> {
+                    b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
+                    b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                    b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
+                    b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
+                    b.append("export TU_DEBUG=noconform\n")
+                }
+                else -> {
+                    b.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
+                }
             }
-            "TURNIP" -> {
-                b.append("export VKD3D_FEATURE_LEVEL=12_0\n")
-              //  b.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
-                b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                //b.append("export GALLIUM_DRIVER=zink\n")
-                b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
-                b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
-                b.append("export TU_DEBUG=noconform\n")
-            }
-            else -> {
-                b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")           
-                
-                b.append("unset  VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
-                b.append("export GALLIUM_DRIVER=llvmpipe\n")
-              }
         }
         return b.toString()
     }
@@ -295,69 +301,76 @@ val payload = buildString {
         val vortek = prefs.getString("desktop_vortek_mode", "Disabled") ?: "Disabled"
         val sb = StringBuilder()
         sb.append("export DISPLAY=:0\n")
-        if (vortek != "Disabled") {
+
+        val isVortekActive = vortek != "Disabled" || vulkan == "VORTEK" || openGL == "VORTEK"
+
+        if (isVortekActive) {
             sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/vortek_icd.aarch64.json\n")
             sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/vortek_icd.aarch64.json\n")
             sb.append("export VORTEK_AUTO_EXTENSIONS=1\n")
             sb.append("export VORTEK_OPTIMIZE=1\n")
-            sb.append("export VORTEK_MODE=").append(vortek).append("\n")
+            val vMode = if (vortek != "Disabled") vortek else "VORTEK_AUTO"
+            sb.append("export VORTEK_MODE=").append(vMode).append("\n")
         }
+
         when (openGL) {
             "VIRGL" -> {
-                sb.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
                 sb.append("export GALLIUM_DRIVER=virpipe\n")
                 sb.append("export MESA_LOADER_DRIVER_OVERRIDE=virpipe\n")
                 sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
                 sb.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
                 sb.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/vtest.sock\n")
             }
-            "ZINK" -> {
+            "ZINK", "VORTEK" -> {
                 sb.append("export VKD3D_FEATURE_LEVEL=12_0\n")
                 sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")               
                 sb.append("export GALLIUM_DRIVER=zink\n")
-                sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
                 sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
             }
             "GL4ES" -> {
-                sb.append("export MESA_GL_VERSION_OVERRIDE=2.1 \n")
+                sb.append("export MESA_GL_VERSION_OVERRIDE=2.1\n")
                 sb.append("export LIBGL_FB=3\n")
-              //  sb.append("export GALLIUM_DRIVER=zink\n")
-            //    sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
                 sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
                 sb.append("export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/gl4es:\$LD_LIBRARY_PATH\n")
             }
             else -> {
-                sb.append("unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG GALLIUM_DRIVER || true\n")
-                sb.append("export GALLIUM_DRIVER=llvmpipe\n")
-                sb.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
-                sb.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
-                
+                if (isVortekActive) {
+                    sb.append("export GALLIUM_DRIVER=zink\n")
+                    sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+                    sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
+                    sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                } else {
+                    sb.append("unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG GALLIUM_DRIVER || true\n")
+                    sb.append("export GALLIUM_DRIVER=llvmpipe\n")
+                    sb.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
+                    sb.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
+                }
             }
         }
-        when (vulkan) {
-            "VENUS" -> {
-                sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                sb.append("export TU_DEBUG=noconform\n")
-               // sb.append("export GALLIUM_DRIVER=zink\n")
-                sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
-                sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
-                sb.append("export VN_DEBUG=vtest\n")
-                sb.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
-                sb.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
-            }
-            "TURNIP" -> {
-                sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-                sb.append("export TU_DEBUG=noconform\n")             
-              //  sb.append("export GALLIUM_DRIVER=zink\n")
-                sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
-                sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
-                sb.append("export TU_DEBUG=noconform\n")
-            }
-            else -> {
-                sb.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
-                
+
+        if (!isVortekActive) {
+            when (vulkan) {
+                "VENUS" -> {
+                    sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                    sb.append("export TU_DEBUG=noconform\n")
+                    sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
+                    sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
+                    sb.append("export VN_DEBUG=vtest\n")
+                    sb.append("export VTEST_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
+                    sb.append("export VTEST_RENDERER_SOCKET_NAME=/run/xodos2-virgl/venus.sock\n")
+                }
+                "TURNIP" -> {
+                    sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+                    sb.append("export TU_DEBUG=noconform\n")             
+                    sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
+                    sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
+                }
+                else -> {
+                    sb.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
+                }
             }
         }
+
         return sb.toString()
     }
 
@@ -529,6 +542,7 @@ fun extractDriverTarball(context: Context, containerId: Int, tarball: File) {
         desktopSocketName: String,
         vulkanMode: String,
         openGLMode: String,
+        vortekMode: String = "Disabled",
         currentHiddenInjectedKey: String,
     ): WaylandEnvState {
         val hasClients = try {
@@ -536,12 +550,12 @@ fun extractDriverTarball(context: Context, containerId: Int, tarball: File) {
         } catch (_: Throwable) {
             false
         }
-        val hiddenKey = "$desktopSocketName|$vulkanMode|$openGLMode"
+        val hiddenKey = "$desktopSocketName|$vulkanMode|$openGLMode|$vortekMode"
         ensureArchWaylandDisplaySession()
         if (currentHiddenInjectedKey != hiddenKey) {
             NativeBridge.writeInput(
                 TerminalSessionIds.ARCH_WAYLAND_DISPLAY,
-                buildWaylandAndGraphicsEnvSnippet(desktopSocketName, vulkanMode, openGLMode)
+                buildWaylandAndGraphicsEnvSnippet(desktopSocketName, vulkanMode, openGLMode, vortekMode)
                     .toByteArray(Charsets.UTF_8)
             )
         }
