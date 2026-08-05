@@ -44,6 +44,7 @@ fun WineDrawerPage(
     launcherDefault: String,
     desktopVulkanMode: String,
     desktopOpenGLMode: String,
+    desktopVortekMode: String = "Disabled",
     mouseMode: Int,
     resolutionPercent: Int,
     scalePercent: Int,
@@ -54,6 +55,7 @@ fun WineDrawerPage(
     onLauncherDefaultSelect: (String) -> Unit,
     onDesktopVulkanSelect: (String) -> Unit,
     onDesktopOpenGLSelect: (String) -> Unit,
+    onDesktopVortekSelect: (String) -> Unit = {},
     onTerminalFontSelectLabel: (String) -> Unit,
     onTerminalSessionStateChange: (TerminalSessionController.State) -> Unit,
     onMouseModeSelectLabel: (String) -> Unit,
@@ -61,6 +63,7 @@ fun WineDrawerPage(
     onScalePercentSelectLabel: (String) -> Unit,
     vulkanOptions: List<String>,
     openGLOptions: List<String>,
+    vortekOptions: List<String> = listOf("Disabled", "VORTEK_AUTO", "VORTEK_OPTIMIZED", "VORTEK_COMPAT", "VORTEK_PASSTHROUGH"),
     hasWineRootfs: Boolean = true,
     onContainerManagerClick: () -> Unit,
     onRequestKeyboard: () -> Unit = {},
@@ -127,6 +130,7 @@ fun WineDrawerPage(
             launcherDefaultLabel = launcherMenuLabel,
             desktopVulkanLabel = desktopVulkanMode,
             desktopOpenGLLabel = desktopOpenGLMode,
+            desktopVortekLabel = desktopVortekMode,
             terminalFontLabel = terminalFontLabel,
             terminalSessionLabel = terminalSessionLabel,
             mouseModeLabel = mouseModeLabel,
@@ -141,6 +145,7 @@ fun WineDrawerPage(
             ),
             desktopVulkanOptions = vulkanOptions,
             desktopOpenGLOptions = openGLOptions,
+            desktopVortekOptions = vortekOptions,
             terminalFontOptions = ShellFonts.options.map { it.label },
             terminalSessionOptions = buildList {
                 add(TerminalSessionIds.sessionPickerLine(TerminalSessionIds.FIRST_TERMINAL, context))
@@ -185,6 +190,7 @@ fun WineDrawerPage(
             onLauncherDefaultSelect = onLauncherDefaultSelect,
             onDesktopVulkanSelect = onDesktopVulkanSelect,
             onDesktopOpenGLSelect = onDesktopOpenGLSelect,
+            onDesktopVortekSelect = onDesktopVortekSelect,
             onTerminalFontSelect = onTerminalFontSelectLabel,
             onTerminalSessionSelect = { label ->
                 val next = when (label) {
