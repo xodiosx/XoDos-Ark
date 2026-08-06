@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "name": "Vortek Xclipse Native",
+  "description": "Samsung Xclipse driver package with in-process BCn compatibility wrapper. Set VK_INSTANCE_LAYERS=VK_LAYER_VORTEK_XCLIPSE.",
+  "author": "Vortek / ExynosTools",
+  "packageVersion": "0.1-native-prototype",
+  "vendor": "SAMSUNG",
+  "driverVersion": "Vulkan 1.4.304",
+  "minApi": 35,
+  "libraryName": "vulkan.samsung.so",
+  "layerLibrary": "libVkLayer_VortekXclipse.so",
+  "layerName": "VK_LAYER_VORTEK_XCLIPSE"
+}
