@@ -426,13 +426,24 @@ fn spawn_server(
         .env("TMPDIR", &rt_str);
 
     // CRITICAL: Unset LD_LIBRARY_PATH for usr/bin prefix to avoid symbol mixing.
-    if using_usr_bin {
-        cmd.env_remove("LD_LIBRARY_PATH");
-        cmd.env("PATH", ctx.data_dir.join("usr/bin").to_string_lossy().into_owned());
+if using_usr_bin {
+    // For the Android‑specific binary, we must provide the correct libepoxy.
+    if binary_name == "virgl_test_server_android" {
+        let opt_lib = ctx.data_dir.join("usr/opt/virglrenderer-android/lib");
+        if opt_lib.exists() {
+            cmd.env("LD_LIBRARY_PATH", opt_lib);
+        } else {
+            // fallback (should not happen in your setup)
+            cmd.env_remove("LD_LIBRARY_PATH");
+        }
     } else {
-        let ld_path = build_ld_paths(ctx);
-        cmd.env("LD_LIBRARY_PATH", &ld_path);
+        cmd.env_remove("LD_LIBRARY_PATH");
     }
+    cmd.env("PATH", ctx.data_dir.join("usr/bin").to_string_lossy().into_owned());
+} else {
+    let ld_path = build_ld_paths(ctx);
+    cmd.env("LD_LIBRARY_PATH", &ld_path);
+}
 
     for &(k, v) in extra_envs {
         cmd.env(k, v);
