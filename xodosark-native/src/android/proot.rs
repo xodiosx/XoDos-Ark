@@ -219,8 +219,8 @@ pub(super) fn build_exec_args(
         argv.push(CString::new("--link2symlink").unwrap());
         argv.push(CString::new("--sysvipc").unwrap());
         argv.push(CString::new("--kill-on-exit").unwrap());
-        argv.push(CString::new("--root-id").unwrap());
-
+    //    argv.push(CString::new("--root-id").unwrap());
+        argv.push(CString::new("--change-id=0:0").unwrap());
         // 2. Core Android bindings
         argv.push(CString::new("--bind=/dev").unwrap());
         argv.push(CString::new("--bind=/data").unwrap());
@@ -259,17 +259,17 @@ pub(super) fn build_exec_args(
         argv.push(CString::new(format!("--bind={}:{}", host_x11_dir.display(), "/tmp/.X11-unix")).context("x11 unix socket bind")?);
 
 // 4b. Vortek socket directory binding
-let host_vortek_dir = ctx.data_dir.join("usr/tmp").join(".vortek");
-let guest_vortek_dir = rootfs.join("tmp/.vortek");
+//let host_vortek_dir = ctx.data_dir.join("usr/tmp").join(".vortek");
+//let guest_vortek_dir = rootfs.join("tmp/.vortek");
 
 // Ensure both directories exist before binding
-fs::create_dir_all(&host_vortek_dir)?;
-fs::create_dir_all(&guest_vortek_dir)?;
-fs::set_permissions(&host_vortek_dir, PermissionsExt::from_mode(0o1777))?;
-fs::set_permissions(&guest_vortek_dir, PermissionsExt::from_mode(0o1777))?;
+//fs::create_dir_all(&host_vortek_dir)?;
+//fs::create_dir_all(&guest_vortek_dir)?;
+//fs::set_permissions(&host_vortek_dir, PermissionsExt::from_mode(0o1777))?;
+//fs::set_permissions(&guest_vortek_dir, PermissionsExt::from_mode(0o1777))?;
 
 // Bind host usr/tmp/.vortek to guest /tmp/.vortek
-argv.push(CString::new(format!("--bind={}:/tmp/.vortek", host_vortek_dir.display())).context("vortek socket bind")?);
+//argv.push(CString::new(format!("--bind={}:/tmp/.vortek", host_vortek_dir.display())).context("vortek socket bind")?);
 
 
 
@@ -332,10 +332,10 @@ argv.push(CString::new(format!("--bind={}:/tmp/.vortek", host_vortek_dir.display
 
         // 14. Shell detection
         let standard_shells: &[&str] = &[
-            "bin/bash", "usr/bin/bash",
-            "bin/sh", "usr/bin/sh",
-            "bin/dash", "usr/bin/dash",
-            "bin/ash", "usr/bin/ash",
+            "usr/bin/bash", "bin/bash",
+            "usr/bin/sh", "bin/sh",
+            "usr/bin/dash", "bin/dash",
+            "usr/bin/ash", "bin/ash",
         ];
 
         let shell_info = standard_shells.iter()
