@@ -166,48 +166,74 @@ object NativeInstallCoordinator {
                     }
                 }
 
-                DistroSource.EASYCLI -> {
+                                DistroSource.EASYCLI -> {
                     // =======================================================
-                    // 2. SCRAPE EASYCLI DISTROS
+                    // 2. SCRAPE LXC INDEX (Alternative to EasyCLI)
                     // =======================================================
-                    val easyCliUrl = "https://easycli.sh/proot-distro/"
+                    val lxcIndexUrl = "https://images.linuxcontainers.org/meta/1.0/index-system"
                     try {
-                        withTimeout(15_000L) {
-                            val doc = org.jsoup.Jsoup.connect(easyCliUrl).timeout(10_000).get()
-                            val links = doc.select("a[href]")
+                        withTimeout(20_000L) {
+                            val url = URL(lxcIndexUrl)
+                            val connection = url.openConnection() as HttpURLConnection
+                            connection.requestMethod = "GET"
+                            connection.connectTimeout = 10_000
+                            connection.readTimeout = 10_000
 
+                            // The index file is plain text, semicolon-delimited
+                            val response = connection.inputStream.bufferedReader().use { it.readText() }
+                            
                             coroutineScope {
-                                val easyCliDeferred = links.filter { link ->
-                                    val href = link.attr("abs:href")
-                                    href.contains("aarch64", ignoreCase = true) && 
-                                    (href.endsWith(".tar.xz", ignoreCase = true) || href.endsWith(".tar.gz", ignoreCase = true))
-                                }.map { link ->
-                                    async {
-                                        val fullUrl = link.attr("abs:href")
-                                        val archiveName = fullUrl.substringAfterLast('/')
-                                        val distroName = archiveName.split('-').firstOrNull()?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() } ?: "Unknown"
-                                        val distroType = guessDistroType(archiveName)
-                                        val version = extractVersion(archiveName)
-                                        val realSize = getFileSizeFromUrl(fullUrl)
+                                val lxcDeferred = response.lines()
+                                    // Filter for arm64 architecture and default variant
+                                    .filter { it.contains(";arm64;default;") }
+                                    .map { line ->
+                                        async {
+                                            // Format: distro;release;arch;variant;date;/path
+                                            val parts = line.split(';')
+                                            if (parts.size >= 5) {
+                                                val lxcDistro = parts[0]
+                                                val lxcRelease = parts[1]
+                                                val arch = parts[2]
+                                                val variant = parts[3]
+                                                val date = parts[4]
 
-                                        DistroDescriptor(
-                                            distroName = distroName,
-                                            distroType = distroType,
-                                            archiveName = archiveName,
-                                            downloadUrl = fullUrl,
-                                            version = version,
-                                            size = realSize,
-                                            extractDirName = ""
-                                        )
+                                                // The LXC server requires the colon in the timestamp to be URL-encoded
+                                                val encodedDate = date.replace(":", "%3A")
+                                                
+                                                // Construct the direct tarball URL
+                                                val fullUrl = "https://images.linuxcontainers.org/images/$lxcDistro/$lxcRelease/$arch/$variant/$encodedDate/rootfs.tar.xz"
+                                                
+                                                // Create a unique local name so cache files don't clash
+                                                val archiveName = "${lxcDistro}_${lxcRelease}_${arch}_rootfs.tar.xz"
+                                                
+                                                val distroName = "${lxcDistro.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }} $lxcRelease"
+                                                val distroType = guessDistroType(lxcDistro)
+                                                
+                                                // Fetch file size (can take a moment for many distros, consider skipping if UI is too slow)
+                                                val realSize = getFileSizeFromUrl(fullUrl)
+
+                                                DistroDescriptor(
+                                                    distroName = distroName,
+                                                    distroType = distroType,
+                                                    archiveName = archiveName,
+                                                    downloadUrl = fullUrl,
+                                                    version = lxcRelease,
+                                                    size = realSize,
+                                                    extractDirName = ""
+                                                )
+                                            } else {
+                                                null
+                                            }
+                                        }
                                     }
-                                }
-                                all.addAll(easyCliDeferred.awaitAll())
+                                all.addAll(lxcDeferred.awaitAll().filterNotNull())
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e("NativeInstall", "Failed to fetch EasyCLI distros", e)
+                        Log.e("NativeInstall", "Failed to fetch LXC distros", e)
                     }
                 }
+
                 else -> {}
             }
 
@@ -815,8 +841,5 @@ private fun copyAssetToContainer(context: Context, containerId: Int, assetName: 
             Log.e("NativeInstall", "Failed to apply PRoot bypasses", e)
         }
     }
-    
-    
-    
-    
+        
 }
