@@ -338,31 +338,28 @@ pub(super) fn build_exec_args(
             "usr/bin/ash", "bin/ash",
         ];
 
-        let shell_info = standard_shells.iter()
-            .find(|c| path_exists_in_rootfs(rootfs, c))
-            .map(|&path| {
-                let binary = path.strip_prefix("usr/").unwrap_or(path);
-                (binary, binary)
-            })
-            .or_else(|| {
-                if path_exists_in_rootfs(rootfs, "bin/busybox") || path_exists_in_rootfs(rootfs, "usr/bin/busybox") {
-                    Some(("busybox", "sh"))
-                } else {
-                    None
-                }
-            });
-
-        let (binary, applet) = shell_info.ok_or_else(|| anyhow::anyhow!("no usable shell found in rootfs"))?;
-
-        if binary == "busybox" {
-            argv.push(CString::new("/bin/busybox").unwrap());
-            argv.push(CString::new(applet).unwrap());
-            argv.push(CString::new("-i").unwrap());
+let shell_info = standard_shells.iter()
+    .find(|c| path_exists_in_rootfs(rootfs, c))
+    .map(|&path| (path, path))   // <-- no stripping, keep full path
+    .or_else(|| {
+        if path_exists_in_rootfs(rootfs, "bin/busybox") || path_exists_in_rootfs(rootfs, "usr/bin/busybox") {
+            Some(("busybox", "sh"))
         } else {
-            argv.push(CString::new(format!("/{}", binary)).unwrap());
-            argv.push(CString::new("-l").unwrap());
-            argv.push(CString::new("-i").unwrap());
+            None
         }
+    });
+
+let (binary, applet) = shell_info.ok_or_else(|| anyhow::anyhow!("no usable shell found in rootfs"))?;
+
+if binary == "busybox" {
+    argv.push(CString::new("/bin/busybox").unwrap());
+    argv.push(CString::new(applet).unwrap());
+    argv.push(CString::new("-i").unwrap());
+} else {
+    argv.push(CString::new(format!("/{}", binary)).unwrap()); // now /usr/bin/bash or /bin/bash
+    argv.push(CString::new("-l").unwrap());
+    argv.push(CString::new("-i").unwrap());
+}
 
         // Proot Environment setup
         env.extend(vec![
