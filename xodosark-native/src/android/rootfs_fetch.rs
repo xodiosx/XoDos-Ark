@@ -10,6 +10,7 @@ use super::{
     get_application_context, has_rootfs, ROOTFS_READY_SENTINEL,
 };
 use anyhow::{Context, Result};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -205,11 +206,11 @@ fn sanitize_archive_path(path: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Safely unpacks an archive, defers hard links, fixes permissions, and resolves links via copies.
+/// Safely unpacks an archive, defers hard links, fixes permissions, and resolves links via multi-pass copies.
 fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Path) -> Result<()> {
-    let mut deferred_links = Vec::new();
+    let mut deferred_links: Vec<(PathBuf, PathBuf)> = Vec::new();
 
-    // Pass 1: Extract everything EXCEPT hard links
+    // Pass 1: Extract everything except hard links.
     for entry_result in archive.entries().context("failed to read archive entries")? {
         let mut entry = match entry_result {
             Ok(e) => e,
@@ -233,9 +234,14 @@ fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Pat
         };
 
         let dest_path = temp_extract.join(&safe_entry_path);
+        let entry_type = entry.header().entry_type();
 
-        if entry.header().entry_type().is_hard_link() {
-            // Defer processing to prevent out-of-order sequence issues and sanitize the target
+        // Unprivileged Android cannot create block/character devices or fifos. Skip them to avoid log spam.
+        if entry_type.is_block_special() || entry_type.is_character_special() || entry_type.is_fifo() {
+            continue;
+        }
+
+        if entry_type.is_hard_link() {
             if let Ok(Some(link_name)) = entry.link_name() {
                 if let Some(safe_link_path) = sanitize_archive_path(&link_name) {
                     let link_target = temp_extract.join(safe_link_path);
@@ -244,38 +250,91 @@ fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Pat
                     log::warn!("Skipping unsafe hard-link target: {:?}", link_name);
                 }
             }
+        } else if entry_type.is_directory() {
+            if let Err(e) = std::fs::create_dir_all(&dest_path) {
+                log::warn!("Failed to create directory {:?}: {:?}", dest_path, e);
+            }
+        } else if entry_type.is_symlink() {
+            if let Ok(Some(target)) = entry.link_name() {
+                if let Some(parent) = dest_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let _ = std::fs::remove_file(&dest_path);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::symlink;
+                    let _ = symlink(&target, &dest_path);
+                }
+            }
         } else {
-            // Normal files, directories, and symlinks
-            if let Err(err) = entry.unpack_in(temp_extract) {
-                log::warn!("Skipping entry due to unpack error on {:?}: {:?}", dest_path, err);
+            // Regular file: extract explicitly
+            if let Some(parent) = dest_path.parent() {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    log::warn!("Failed to create parent dir for file {:?}: {:?}", dest_path, e);
+                    continue;
+                }
+            }
+            let _ = std::fs::remove_file(&dest_path);
+            match entry.unpack(&dest_path) {
+                Ok(_) => {}
+                Err(err) => {
+                    log::warn!("Failed to unpack file {:?}: {:?}", dest_path, err);
+                }
             }
         }
     }
 
-    // Pass 2: Recursively fix permissions so Android can read everything we just dumped
+    // Pass 2: Recursively fix permissions so Android can read everything we just dumped.
     fix_permissions_recursive(temp_extract);
 
-    // Pass 3: Resolve deferred hard links via copy fallbacks
-    for (dest_path, link_target) in deferred_links {
-        if let Some(parent) = dest_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+    // Pass 3: Resolve all deferred hard links via physical file copies.
+    // We iterate multiple times to handle chains of hard links.
+    let mut resolved = HashSet::new();
+    let mut remaining = deferred_links;
+    let mut progress = true;
+
+    while progress {
+        progress = false;
+        let mut next_remaining = Vec::new();
+
+        for (dest_path, link_target) in remaining {
+            // If target exists and is not itself a deferred link that hasn't been resolved,
+            // we can copy. To check if target is a deferred link, we see if it's in the set of unresolved
+            // destinations. Since we don't have that set easily, we rely on file existence.
+            // But if target is a hard link that hasn't been resolved yet, it may not exist (or may be placeholder from previous step).
+            // To be safe, we only copy if target exists and is not empty? Actually for hard links, target should be a real file.
+            // We'll copy if target exists; if not, we leave for next iteration.
+            if link_target.exists() {
+                match std::fs::copy(&link_target, &dest_path) {
+                    Ok(_) => {
+                        if let Ok(meta) = std::fs::metadata(&link_target) {
+                            let _ = std::fs::set_permissions(&dest_path, meta.permissions());
+                        }
+                        resolved.insert(dest_path.clone());
+                        progress = true;
+                    }
+                    Err(copy_err) => {
+                        log::warn!("Hard-link copy failed for {:?} -> {:?}: {:?}", link_target, dest_path, copy_err);
+                        // Even if copy fails, we'll retry next iteration? Probably should not loop forever.
+                        // For now, we'll leave it in remaining.
+                        next_remaining.push((dest_path, link_target));
+                    }
+                }
+            } else {
+                // Target not yet created, try later.
+                next_remaining.push((dest_path, link_target));
+            }
         }
 
-        match std::fs::copy(&link_target, &dest_path) {
-            Ok(_) => {
-                // Explicitly copy permissions to ensure execution bits (0o755) aren't lost to umask
-                if let Ok(meta) = std::fs::metadata(&link_target) {
-                    let _ = std::fs::set_permissions(&dest_path, meta.permissions());
-                }
-            }
-            Err(copy_err) => {
-                log::warn!(
-                    "Copy fallback failed for {:?} -> {:?}: {:?}, using dummy.",
-                    link_target, dest_path, copy_err
-                );
-                let _ = std::fs::write(&dest_path, b"");
-            }
-        }
+        remaining = next_remaining;
+    }
+
+    // After loop, if any hard links remain unresolved, fail extraction.
+    if !remaining.is_empty() {
+        anyhow::bail!(
+            "Unresolved hard links after extraction: {} links could not be resolved",
+            remaining.len()
+        );
     }
 
     Ok(())
@@ -350,7 +409,7 @@ fn extract_tarball(tarball_path: &Path, dest: &Path, temp_extract: &Path) -> Res
         // Clean up the now-empty temp_extract
         let _ = std::fs::remove_dir_all(temp_extract);
     }
-std::fs::create_dir_all(dest.join("etc")).ok();
+    std::fs::create_dir_all(dest.join("etc")).ok();
 
     setup_fake_sysdata(dest)?;
     patch_user_group_files(dest);
@@ -398,7 +457,6 @@ fn setup_fake_sysdata(rootfs: &Path) -> Result<()> {
 
     Ok(())
 }
-
 
 // ---------------------------------------------------------------------------
 // public entry points
@@ -545,7 +603,6 @@ pub fn ensure_rootfs_with_progress(
     Ok(())
 }
 
-
 fn patch_user_group_files(rootfs: &Path) {
     let username = match std::process::Command::new("id")
         .arg("-un")
@@ -610,7 +667,6 @@ fn patch_user_group_files(rootfs: &Path) {
         );
     }
 }
-
 
 fn write_fixdbus_script(rootfs: &Path) {
     let script_path = rootfs.join("bin/fixdbus");
