@@ -94,13 +94,7 @@ external fun startVirglServers(mask: Int)
         containerId: Int
     ): Boolean
 
-    // ── Advanced generic download (optional, kept for compatibility) ──
-    external fun ensureRootfs(
-        url: String,
-        archiveName: String,
-        extractPath: String,
-        callback: ProgressCallback
-    ): Boolean
+
 
     // This one can be removed if not used – it requires a local file path, not yet implemented
     // external fun extractLocalRootfs(

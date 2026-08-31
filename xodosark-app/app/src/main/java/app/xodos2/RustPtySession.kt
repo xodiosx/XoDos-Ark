@@ -23,9 +23,7 @@ class RustPtySession(
     private val utf8InputBuffer = ByteArray(5)
     private var didAppendWelcomeBanner: Boolean = false
 
-    // Track whether we have already attempted to spawn the PTY session
     private var spawnAttempted = false
-
     private var appliedPtyRows: Int = -1
     private var appliedPtyCols: Int = -1
 
@@ -37,62 +35,54 @@ class RustPtySession(
     }
 
     override fun updateSize(columns: Int, rows: Int) {
-        // 1. Ensure the emulator exists, regardless of spawn success
         if (emulator == null) {
-            emulator = TerminalEmulator(
-                this,
-                columns,
-                rows,
-                4000, // high transcript rows
-                sessionClient
-            )
+            emulator = TerminalEmulator(this, columns, rows, 4000, sessionClient)
         }
 
-        // 2. Attempt to spawn the PTY session only once
         if (!spawnAttempted) {
             spawnAttempted = true
+            
             val rootfsKind = TerminalSessionIds.rootfsKindForNativeId(sessionId)
+            
+            // Uses your existing NativeBridge integer mapping
             val spawnOk = NativeBridge.spawnSessionInRootfs(sessionId, rows, columns, rootfsKind)
 
             if (!spawnOk) {
-                Log.e(TAG, "spawnSession failed ($sessionId)")
-                // Write an error message into the emulator so the user sees something
+                Log.e(TAG, "spawnSession failed ($sessionId) for rootfsKind: $rootfsKind")
                 val errorMsg = "\u001b[31mFailed to start session. Check container installation.\u001b[0m\r\n"
                     .toByteArray(Charsets.UTF_8)
                 emulator?.append(errorMsg, errorMsg.size)
+                return // Stop execution if spawn failed
             } else {
                 Log.i(TAG, "spawnSession succeeded ($sessionId)")
             }
         }
 
-        // 3. Sync the kernel window size (safe to call)
-        syncPtyKernelWindowSize(rows, columns)
+        if (NativeBridge.isSessionAlive(sessionId)) {
+            syncPtyKernelWindowSize(rows, columns)
+            emulator?.resize(columns, rows)
 
-        // 4. Resize the emulator if it already existed (safe to call repeatedly)
-        emulator?.resize(columns, rows)
-
-        // 5. Append welcome banner only after successful spawn
-        if (!didAppendWelcomeBanner && spawnAttempted && NativeBridge.isSessionAlive(sessionId)) {
-            didAppendWelcomeBanner = true
-            val distroName = getDistroName()
-            val welcome = buildWelcomeLine(sessionId, distroName)
-            emulator?.append(welcome, welcome.size)
+            if (!didAppendWelcomeBanner) {
+                didAppendWelcomeBanner = true
+                val distroName = getDistroName()
+                val welcome = buildWelcomeLine(sessionId, distroName)
+                emulator?.append(welcome, welcome.size)
+            }
         }
 
-        // 6. Bind the PTY relay
         PtyOutputRelay.bind(this, terminalView)
     }
 
-    // Helper to get distro name from container .rootfs_type file
     private fun getDistroName(): String {
         val containerId = when (TerminalSessionIds.namespaceOf(sessionId)) {
             TerminalSessionIds.NS_ARCH   -> 1
             TerminalSessionIds.NS_DEBIAN -> 2
             TerminalSessionIds.NS_WINE   -> 3
-            else -> 0
+            else -> 1
         }
         var distroName = ""
         if (containerId > 0) {
+            // Checks directly inside containers/1/ or containers/2/
             val rootfsTypeFile = File(context.filesDir, "containers/$containerId/.rootfs_type")
             if (rootfsTypeFile.exists()) {
                 distroName = rootfsTypeFile.readText().trim()
@@ -100,19 +90,18 @@ class RustPtySession(
         }
         if (distroName.isEmpty()) {
             distroName = when (TerminalSessionIds.namespaceOf(sessionId)) {
-                TerminalSessionIds.NS_ARCH   -> "Container 1"
-                TerminalSessionIds.NS_DEBIAN -> "Container 2"
-                TerminalSessionIds.NS_WINE   -> "Container 3"
-                else -> "Unknown"
+                TerminalSessionIds.NS_ARCH   -> "Arch Linux"
+                TerminalSessionIds.NS_DEBIAN -> "Debian"
+                TerminalSessionIds.NS_WINE   -> "Wine Environment"
+                else -> "Unknown Container"
             }
         }
         return distroName
     }
 
-    // getEmulator() never throws; guarantees a valid emulator.
     override fun getEmulator(): TerminalEmulator {
         if (emulator == null) {
-            Log.w(TAG, "getEmulator called before updateSize, creating dummy emulator with 80x24")
+            Log.w(TAG, "getEmulator called before updateSize, creating dummy emulator")
             emulator = TerminalEmulator(this, 80, 24, 4000, sessionClient)
         }
         return emulator!!
@@ -168,9 +157,7 @@ class RustPtySession(
         NativeBridge.writeInput(sessionId, clip.toByteArray(Charsets.UTF_8))
     }
 
-    override fun onBell() {
-        // Optional: system beep; keep quiet on mobile.
-    }
+    override fun onBell() {}
 
     override fun onColorsChanged() {
         terminalView.postInvalidate()
@@ -183,7 +170,7 @@ class RustPtySession(
             val rgb = when (distroName.lowercase()) {
                 "archlinux", "arch" -> intArrayOf(0x17, 0x93, 0xD1)
                 "debian"            -> intArrayOf(0x8A, 0x2B, 0xE2)
-                "nixos"            -> intArrayOf(0x8A, 0x2B, 0xE2)
+                "nixos"             -> intArrayOf(0x8A, 0x2B, 0xE2)
                 "ubuntu"            -> intArrayOf(0xE9, 0x54, 0x20)
                 "fedora"            -> intArrayOf(0x29, 0x47, 0xAB)
                 "alpine"            -> intArrayOf(0x0D, 0x59, 0x7F)
@@ -196,7 +183,7 @@ class RustPtySession(
                 "artix"             -> intArrayOf(0x2E, 0x85, 0xC1)
                 "rocky"             -> intArrayOf(0x6F, 0xB7, 0x3F)
                 "trisquel"          -> intArrayOf(0xF7, 0x9D, 0x32)
-                "linux"            -> intArrayOf(0xD7, 0x0A, 0x53)
+                "linux"             -> intArrayOf(0xD7, 0x0A, 0x53)
                 else -> when (TerminalSessionIds.namespaceOf(sessionId)) {
                     TerminalSessionIds.NS_ARCH   -> intArrayOf(0x17, 0x93, 0xD1)
                     TerminalSessionIds.NS_DEBIAN -> intArrayOf(0x8A, 0x2B, 0xE2)
