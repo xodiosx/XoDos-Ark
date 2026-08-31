@@ -46,7 +46,6 @@ class RustPtySession(
                 4000, // high transcript rows
                 sessionClient
             )
-            // Add a banner or error later after spawn attempt
         }
 
         // 2. Attempt to spawn the PTY session only once
@@ -59,21 +58,20 @@ class RustPtySession(
                 Log.e(TAG, "spawnSession failed ($sessionId)")
                 // Write an error message into the emulator so the user sees something
                 val errorMsg = "\u001b[31mFailed to start session. Check container installation.\u001b[0m\r\n"
-                emulator?.append(errorMsg, errorMsg.length)
+                    .toByteArray(Charsets.UTF_8)
+                emulator?.append(errorMsg, errorMsg.size)
             } else {
                 Log.i(TAG, "spawnSession succeeded ($sessionId)")
             }
         }
 
-        // 3. Sync the kernel window size (only if spawn succeeded, but safe to call)
+        // 3. Sync the kernel window size (safe to call)
         syncPtyKernelWindowSize(rows, columns)
 
-        // 4. Handle resizing if the emulator already existed
-        if (emulator != null && (columns != emulator!!.columns || rows != emulator!!.rows)) {
-            emulator!!.resize(columns, rows)
-        }
+        // 4. Resize the emulator if it already existed (safe to call repeatedly)
+        emulator?.resize(columns, rows)
 
-        // 5. Append welcome banner only after successful spawn (optional)
+        // 5. Append welcome banner only after successful spawn
         if (!didAppendWelcomeBanner && spawnAttempted && NativeBridge.isSessionAlive(sessionId)) {
             didAppendWelcomeBanner = true
             val distroName = getDistroName()
@@ -111,8 +109,7 @@ class RustPtySession(
         return distroName
     }
 
-    // getEmulator() now never throws because we guarantee initialization in updateSize.
-    // Still, add a fallback to create a dummy if called before updateSize (should not happen).
+    // getEmulator() never throws; guarantees a valid emulator.
     override fun getEmulator(): TerminalEmulator {
         if (emulator == null) {
             Log.w(TAG, "getEmulator called before updateSize, creating dummy emulator with 80x24")
