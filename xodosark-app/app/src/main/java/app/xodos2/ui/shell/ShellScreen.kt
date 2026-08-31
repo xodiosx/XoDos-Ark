@@ -832,11 +832,29 @@ private class ShellSessionController(
 
     fun attachSessionIfNeeded(id: Int) {
         if (id == attachedId) return
-        attachedId = id
-        val s = sessionFor(id)
-        terminalView.attachSession(s)
-        PtyOutputRelay.bind(s, terminalView)
-        terminalView.post { terminalView.updateSize() }
+        
+        val attachLogic = {
+            attachedId = id
+            val s = sessionFor(id)
+            terminalView.attachSession(s)
+            PtyOutputRelay.bind(s, terminalView)
+            terminalView.updateSize()
+        }
+
+        // Defer attachment if the view hasn't been measured by Android yet
+        if (terminalView.width > 0 && terminalView.height > 0) {
+            attachLogic()
+        } else {
+            terminalView.addOnLayoutChangeListener(object : android.view.View.OnLayoutChangeListener {
+                override fun onLayoutChange(
+                    v: android.view.View, left: Int, top: Int, right: Int, bottom: Int,
+                    oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int
+                ) {
+                    v.removeOnLayoutChangeListener(this)
+                    attachLogic()
+                }
+            })
+        }
     }
 
     fun pruneSessionsExcept(keep: Set<Int>) {
