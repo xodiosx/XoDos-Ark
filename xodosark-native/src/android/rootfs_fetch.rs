@@ -250,7 +250,7 @@ fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Pat
                     log::warn!("Skipping unsafe hard-link target: {:?}", link_name);
                 }
             }
-        } else if entry_type.is_directory() {
+        } else if entry_type.is_dir() {
             if let Err(e) = std::fs::create_dir_all(&dest_path) {
                 log::warn!("Failed to create directory {:?}: {:?}", dest_path, e);
             }
@@ -298,12 +298,6 @@ fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Pat
         let mut next_remaining = Vec::new();
 
         for (dest_path, link_target) in remaining {
-            // If target exists and is not itself a deferred link that hasn't been resolved,
-            // we can copy. To check if target is a deferred link, we see if it's in the set of unresolved
-            // destinations. Since we don't have that set easily, we rely on file existence.
-            // But if target is a hard link that hasn't been resolved yet, it may not exist (or may be placeholder from previous step).
-            // To be safe, we only copy if target exists and is not empty? Actually for hard links, target should be a real file.
-            // We'll copy if target exists; if not, we leave for next iteration.
             if link_target.exists() {
                 match std::fs::copy(&link_target, &dest_path) {
                     Ok(_) => {
@@ -315,8 +309,6 @@ fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Pat
                     }
                     Err(copy_err) => {
                         log::warn!("Hard-link copy failed for {:?} -> {:?}: {:?}", link_target, dest_path, copy_err);
-                        // Even if copy fails, we'll retry next iteration? Probably should not loop forever.
-                        // For now, we'll leave it in remaining.
                         next_remaining.push((dest_path, link_target));
                     }
                 }
