@@ -7,8 +7,9 @@
 //! If any of them is missing, the container is treated as non‑proot and a
 //! lightweight Android shell is launched with `PREFIX` pointing to its `/usr`.
 
+//! Proot argv and environment for the interactive shell, plus PTY‑spawn logic.
+
 use super::{get_application_context, has_rootfs};
-use super::{host_pulse_runtime_dir, guest_pulse_server_env, GUEST_PULSE_RUNTIME_MOUNT};
 use anyhow::{Context, Result};
 use nix::pty::{forkpty, ForkptyResult, Winsize};
 use nix::unistd::{dup, execve, Pid};
@@ -16,72 +17,26 @@ use std::ffi::CString;
 use std::fs::{self, File};
 use std::io::Write;
 use std::os::fd::IntoRawFd;
-use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::{Path, PathBuf};
+use log::{info, warn, error};
 
 // --------------------------------------------------------------------------
-// Constants – match latest proot‑distro (Python version)
+// Compatibility check
 // --------------------------------------------------------------------------
 
-const DEFAULT_FAKE_KERNEL_RELEASE: &str = "6.17.0-PRoot-Distro";
-const DEFAULT_FAKE_KERNEL_VERSION: &str =
-    "#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000";
-
-// --------------------------------------------------------------------------
-// Pulse / profile helpers
-// --------------------------------------------------------------------------
-
-const PULSE_CLIENT_NO_SHM: &str = "\
-# xodos2: bind-mounted; do not edit.\n\
-# Host Pulse uses socket IPC only (no memfd across namespaces).\n\
-enable-shm = no\n\
-enable-memfd = no\n\
-";
-
-const GUEST_PROFILE_XODOS2_RUNTIME: &str = "\
-# xodos2: bind-mounted; do not edit.\n\
-# Keep essential runtime defaults across `su - user` (login shells read /etc/profile.d).\n\
-# Only sets defaults when variables are unset; user exports remain authoritative.\n\
-\n\
-: \"${XDG_RUNTIME_DIR:=/run/user/0}\"\n\
-: \"${PULSE_SERVER:=unix:/run/xodos2-pulse/native}\"\n\
-export XDG_RUNTIME_DIR PULSE_SERVER\n\
-\n\
-# Start system D‑Bus if not already running (critical for Xfce & wallpaper)\n\
-if ! pgrep -x dbus-daemon >/dev/null 2>&1; then\n\
-    dbus-daemon --system --fork 2>/dev/null || true\n\
-    if command -v dbus-launch >/dev/null 2>&1; then\n\
-        eval \"$(dbus-launch --sh-syntax)\" 2>/dev/null || true\n\
-        export DBUS_SESSION_BUS_ADDRESS\n\
-    fi\n\
-fi\n\
-\n\
-# Best-effort: set default sink if server becomes reachable.\n\
-if command -v pactl >/dev/null 2>&1; then\n\
-  for _i in 1 2 3 4 5 6 7 8 9 10; do\n\
-    pactl info >/dev/null 2>&1 && break\n\
-    sleep 0.1\n\
-  done\n\
-  pactl set-default-sink xodos2-out >/dev/null 2>&1 || true\n\
-fi\n\
-";
-
-fn write_pulse_guest_client_fragment(data_dir: &Path) -> PathBuf {
-    let path = data_dir.join("proot_pulse_client_no_shm.conf");
-    if let Err(e) = fs::write(&path, PULSE_CLIENT_NO_SHM) {
-        log::warn!("proot: write {:?}: {:?}", path, e);
-    }
-    path
+fn is_proot_compatible(rootfs: &Path) -> bool {
+    let compatible = has_rootfs(rootfs)
+        && rootfs.join("sys/.empty").is_dir()
+        && (rootfs.join("etc/os-release").exists()
+            || (rootfs.join("usr/bin").is_dir() && rootfs.join("root").is_dir()));
+    info!("proot: rootfs {:?} proot_compatible={}", rootfs, compatible);
+    compatible
 }
 
-fn write_guest_profile_fragment(data_dir: &Path) -> PathBuf {
-    let path = data_dir.join("proot_profile_xodos2_runtime.sh");
-    if let Err(e) = fs::write(&path, GUEST_PROFILE_XODOS2_RUNTIME) {
-        log::warn!("proot: write {:?}: {:?}", path, e);
-    }
-    path
-}
+// --------------------------------------------------------------------------
+// Proot binary and loader paths
+// --------------------------------------------------------------------------
 
 fn proot_and_loader_paths() -> Result<(PathBuf, PathBuf)> {
     let ctx = get_application_context()?;
@@ -93,100 +48,12 @@ fn proot_and_loader_paths() -> Result<(PathBuf, PathBuf)> {
     if !loader.exists() {
         anyhow::bail!("loader not found: {:?}", loader);
     }
+    info!("proot: using proot={:?}, loader={:?}", proot, loader);
     Ok((proot, loader))
 }
 
 // --------------------------------------------------------------------------
-// Compatibility check (broadened for non‑standard distros)
-// --------------------------------------------------------------------------
-
-fn is_proot_compatible(rootfs: &Path) -> bool {
-    has_rootfs(rootfs)
-        && rootfs.join("sys/.empty").is_dir()
-        && (rootfs.join("etc/os-release").exists()
-            || (rootfs.join("usr/bin").is_dir() && rootfs.join("root").is_dir()))
-}
-
-// --------------------------------------------------------------------------
-// Fake /proc and /sys content
-// --------------------------------------------------------------------------
-
-fn ensure_fake_sysdata(rootfs: &Path) -> Result<()> {
-    let sysdata_dir = rootfs
-        .parent()
-        .context("rootfs parent directory")?
-        .join("sysdata");
-    fs::create_dir_all(&sysdata_dir)?;
-    fs::set_permissions(&sysdata_dir, PermissionsExt::from_mode(0o700))?;
-
-    let sys_empty = rootfs.join("sys/.empty");
-    fs::create_dir_all(&sys_empty)?;
-
-    let write_if_missing = |path: &Path, content: &str| -> Result<()> {
-        if !path.exists() {
-            fs::write(path, content)?;
-        }
-        Ok(())
-    };
-
-    write_if_missing(&sysdata_dir.join("loadavg"), "0.12 0.07 0.02 2/165 765\n")?;
-    write_if_missing(
-        &sysdata_dir.join("stat"),
-        "cpu  1957 0 2877 93280 262 342 254 87 0 0\n\
-         ctxt 140223\n\
-         btime 1680020856\n\
-         processes 772\n\
-         procs_running 2\n\
-         procs_blocked 0\n",
-    )?;
-    write_if_missing(&sysdata_dir.join("uptime"), "124.08 932.80\n")?;
-
-    let fake_version = format!(
-        "Linux version {} (proot@xodos2) (gcc (GCC) 13.3.0, GNU ld (GNU Binutils) 2.42) {}\n",
-        DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION
-    );
-    write_if_missing(&sysdata_dir.join("version"), &fake_version)?;
-    write_if_missing(&sysdata_dir.join("vmstat"), "nr_free_pages 1743136\n")?;
-    write_if_missing(&sysdata_dir.join("sysctl_entry_cap_last_cap"), "40\n")?;
-    write_if_missing(&sysdata_dir.join("sysctl_inotify_max_user_watches"), "4096\n")?;
-    write_if_missing(&sysdata_dir.join("sysctl_kernel_overflowuid"), "65534\n")?;
-    write_if_missing(&sysdata_dir.join("sysctl_kernel_overflowgid"), "65534\n")?;
-
-    Ok(())
-}
-
-fn fake_proc_bindings(_rootfs: &Path, sysdata_dir: &Path) -> Result<Vec<CString>> {
-    let mut binds = Vec::new();
-    let pairs = [
-        ("/proc/loadavg", "loadavg"),
-        ("/proc/stat", "stat"),
-        ("/proc/uptime", "uptime"),
-        ("/proc/version", "version"),
-        ("/proc/vmstat", "vmstat"),
-        ("/proc/sys/kernel/cap_last_cap", "sysctl_entry_cap_last_cap"),
-        ("/proc/sys/fs/inotify/max_user_watches", "sysctl_inotify_max_user_watches"),
-        ("/proc/sys/kernel/overflowuid", "sysctl_kernel_overflowuid"),
-        ("/proc/sys/kernel/overflowgid", "sysctl_kernel_overflowgid"),
-    ];
-
-    for (real_path, fake_name) in pairs {
-        let real = Path::new(real_path);
-        let readable = fs::File::open(real).map(|f| f.metadata().is_ok()).unwrap_or(false);
-        if !readable {
-            let fake_file = sysdata_dir.join(fake_name);
-            if fake_file.exists() {
-                binds.push(
-                    CString::new(format!("--bind={}:{}", fake_file.display(), real_path))
-                        .context("bind fake proc")?,
-                );
-            }
-        }
-    }
-    Ok(binds)
-}
-
-// --------------------------------------------------------------------------
-// Argument builder (main logic)
+// Argument builder
 // --------------------------------------------------------------------------
 
 pub(super) fn build_exec_args(
@@ -196,62 +63,74 @@ pub(super) fn build_exec_args(
     let mut argv: Vec<CString> = Vec::new();
     let mut env: Vec<CString> = Vec::new();
 
-   if is_proot_compatible(rootfs) {
-    let (proot, _loader) = proot_and_loader_paths()?;
-    argv.push(CString::new(proot.to_string_lossy().as_bytes())?);
+    if is_proot_compatible(rootfs) {
+        // ---------- Minimal, proven proot command ----------
+        let (proot, _loader) = proot_and_loader_paths()?;
+        argv.push(CString::new(proot.to_string_lossy().as_bytes())?);
 
-    // Basic options
-    argv.push(CString::new("--change-id=0:0").unwrap());
-    argv.push(CString::new("--link2symlink").unwrap());
-    argv.push(CString::new("--kill-on-exit").unwrap());
-    argv.push(CString::new("--sysvipc").unwrap());
-    argv.push(CString::new(format!("--rootfs={}", rootfs.display())).unwrap());
+        argv.push(CString::new("--change-id=0:0").unwrap());
+        argv.push(CString::new("--link2symlink").unwrap());
+        argv.push(CString::new("--kill-on-exit").unwrap());
+        argv.push(CString::new("--sysvipc").unwrap());
+        argv.push(CString::new(format!("--rootfs={}", rootfs.display())).unwrap());
 
-    // Essential binds
-    argv.push(CString::new("--bind=/dev").unwrap());
-    argv.push(CString::new("--bind=/proc").unwrap());
-    argv.push(CString::new("--bind=/sys").unwrap());
+        // Essential binds
+        argv.push(CString::new("--bind=/dev").unwrap());
+        argv.push(CString::new("--bind=/proc").unwrap());
+        argv.push(CString::new("--bind=/sys").unwrap());
 
-    // Bind a writable /tmp (use the rootfs's tmp directory)
-    let tmp_bind = format!("--bind={}:/tmp", rootfs.join("tmp").display());
-    argv.push(CString::new(tmp_bind).unwrap());
+        // Bind a writable /tmp inside the rootfs
+        let tmp_dir = rootfs.join("tmp");
+        fs::create_dir_all(&tmp_dir)?;
+        argv.push(CString::new(format!("--bind={}:/tmp", tmp_dir.display())).unwrap());
 
-    argv.push(CString::new("--cwd=/root").unwrap());
+        argv.push(CString::new("--cwd=/root").unwrap());
 
-    // Use env -i to clear and set minimal environment
-    argv.push(CString::new("/usr/bin/env").unwrap());
-    argv.push(CString::new("-i").unwrap());
+        // Clear environment and set only necessary variables
+        argv.push(CString::new("/usr/bin/env").unwrap());
+        argv.push(CString::new("-i").unwrap());
 
-    env.push(CString::new("HOME=/root").unwrap());
-    env.push(CString::new("TERM=xterm-256color").unwrap());
-    env.push(CString::new("LANG=C.UTF-8").unwrap());
-    env.push(CString::new("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").unwrap());
+        env.push(CString::new("HOME=/root").unwrap());
+        env.push(CString::new("TERM=xterm-256color").unwrap());
+        env.push(CString::new("LANG=C.UTF-8").unwrap());
+        env.push(CString::new("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin").unwrap());
 
-    // Shell detection (full path, no stripping)
-    let standard_shells = [
-        "/usr/bin/bash", "/bin/bash",
-        "/usr/bin/sh", "/bin/sh",
-        "/usr/bin/dash", "/bin/dash",
-        "/usr/bin/ash", "/bin/ash",
-    ];
+        // Shell detection – use full path without stripping
+        let standard_shells = [
+            "/usr/bin/bash", "/bin/bash",
+            "/usr/bin/sh", "/bin/sh",
+            "/usr/bin/dash", "/bin/dash",
+            "/usr/bin/ash", "/bin/ash",
+        ];
 
-    let shell_path = standard_shells.iter()
-        .find(|s| rootfs.join(s.trim_start_matches('/')).exists())
-        .or(Some("/bin/sh"))?;
+        info!("proot: checking shells in rootfs {:?}: {:?}", rootfs, standard_shells);
 
-    argv.push(CString::new(shell_path.to_string()).unwrap());
-    argv.push(CString::new("-l").unwrap());
-} else {
+        let shell_path = standard_shells.iter()
+            .find(|s| {
+                let exists = rootfs.join(s.trim_start_matches('/')).exists();
+                info!("proot: checking shell {}: exists={}", s, exists);
+                exists
+            })
+            .ok_or_else(|| {
+                error!("proot: no usable shell found in rootfs {:?}", rootfs);
+                anyhow::anyhow!("no usable shell found in rootfs")
+            })?;
+
+        info!("proot: selected shell: {}", shell_path);
+
+        argv.push(CString::new(shell_path.to_string()).unwrap());
+        argv.push(CString::new("-l").unwrap());
+    } else {
         // ---------- fallback: Termux-style Native Bionic environment ----------
+        warn!("proot: rootfs {:?} is not proot-compatible, using fallback", rootfs);
         let prefix = ctx.data_dir.join("usr");
         let prefix_str = prefix.to_string_lossy().into_owned();
-        let home_dir = "/data/data/app.xodos2/files/home"; 
+        let home_dir = "/data/data/app.xodos2/files/home";
         let tmp_dir = format!("{}/tmp", prefix_str);
 
         let _ = fs::create_dir_all(&tmp_dir);
         let _ = fs::create_dir_all(home_dir);
 
-        // Architecture-based Bionic Dynamic Linker Selection
         #[cfg(target_pointer_width = "64")]
         let linker = "/system/bin/linker64";
         #[cfg(target_pointer_width = "32")]
@@ -259,7 +138,7 @@ pub(super) fn build_exec_args(
 
         let bash_path = format!("{}/bin/bash", prefix_str);
         let sh_path = format!("{}/bin/sh", prefix_str);
-        
+
         let (shell_path, is_bionic) = if Path::new(&bash_path).exists() {
             (bash_path, true)
         } else if Path::new(&sh_path).exists() {
@@ -285,36 +164,12 @@ pub(super) fn build_exec_args(
             CString::new("PS1=[XoDos-Ark\\W]\\$ ").unwrap(),
         ]);
     }
-// Virgl / GPU acceleration socket for bionic fallback
-let virgl_dir = "/data/data/app.xodos2/files/virgl-run";
-let vtest_sock = format!("{}/vtest.sock", virgl_dir);
-let venus_sock = format!("{}/venus.sock", virgl_dir);
 
-let socket_name = if std::path::Path::new(&vtest_sock).exists() {
-    vtest_sock
-} else {
-    venus_sock
-};
-
-env.push(CString::new(format!("VTEST_SOCKET_NAME={}", socket_name)).unwrap());
-env.push(CString::new(format!("VTEST_RENDERER_SOCKET_NAME={}", socket_name)).unwrap());
-    // ---------- Common Android System Context Forwarding ----------
-    let android_vars = [
-        "ANDROID_ART_ROOT",
-        "ANDROID_DATA",
-        "ANDROID_I18N_ROOT",
-        "ANDROID_ROOT",
-        "ANDROID_RUNTIME_ROOT",
-        "ANDROID_TZDATA_ROOT",
-        "BOOTCLASSPATH",
-        "DEX2OATBOOTCLASSPATH",
-        "EXTERNAL_STORAGE",
-    ];
-    for &var in &android_vars {
-        if let Ok(val) = std::env::var(var) {
-            env.push(CString::new(format!("{}={}", var, val)).context(var)?);
-        }
-    }
+    // Log the final argv and env for debugging
+    let argv_strings: Vec<String> = argv.iter().map(|s| s.to_string_lossy().into_owned()).collect();
+    info!("proot: final argv = {:?}", argv_strings);
+    let env_strings: Vec<String> = env.iter().map(|s| s.to_string_lossy().into_owned()).collect();
+    info!("proot: final env = {:?}", env_strings);
 
     Ok((argv, env))
 }
@@ -353,12 +208,15 @@ pub fn fork_pty_shell_in_rootfs(
 
     match result {
         ForkptyResult::Child => {
+            info!("proot: child about to execve: {:?}", argv_refs);
             if execve(argv[0].as_c_str(), &argv_refs, &env_refs).is_err() {
+                error!("proot: execve failed: {:?}", std::io::Error::last_os_error());
                 unsafe { nix::libc::_exit(1) };
             }
             unreachable!();
         }
         ForkptyResult::Parent { child, master } => {
+            info!("proot: forkpty succeeded, child pid = {}", child);
             let master_read_fd = dup(&master).context("dup master for read")?.into_raw_fd();
             let master_write_fd = master.into_raw_fd();
             let master_read = unsafe { File::from_raw_fd(master_read_fd) };
@@ -367,27 +225,4 @@ pub fn fork_pty_shell_in_rootfs(
             Ok((ChildProcess { pid: child }, master_read, stdin, master_write_fd))
         }
     }
-}
-
-pub(super) fn path_exists_in_rootfs(rootfs: &Path, relative_path: &str) -> bool {
-    let full_path = rootfs.join(relative_path);
-    if full_path.exists() {
-        return true;
-    }
-    if full_path.is_symlink() {
-        if let Ok(target) = fs::read_link(&full_path) {
-            let resolved = if target.is_relative() {
-                full_path.parent().unwrap_or(Path::new("/")).join(target)
-            } else {
-                let target_str = target.to_string_lossy();
-                if target_str.starts_with('/') {
-                    rootfs.join(&target_str[1..])
-                } else {
-                    rootfs.join(target_str.as_ref())
-                }
-            };
-            return resolved.exists();
-        }
-    }
-    false
 }
