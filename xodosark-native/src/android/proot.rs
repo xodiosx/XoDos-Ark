@@ -318,27 +318,38 @@ pub(super) fn build_exec_args(
             fs::write(&hosts, "127.0.0.1 localhost.localdomain localhost\n::1 localhost.localdomain localhost ip6-localhost ip6-loopback\n")?;
         }
 
-        // 14. Shell detection with symlink-safe existence check
-        let standard_shells = [
-            "/usr/bin/bash", "/bin/bash",
-            "/usr/bin/sh", "/bin/sh",
-            "/usr/bin/dash", "/bin/dash",
-            "/usr/bin/ash", "/bin/ash",
-        ];
+      // 14. Shell detection (standard shells + BusyBox fallback)
+let standard_shells = [
+    "/usr/bin/bash", "/bin/bash",
+    "/usr/bin/sh", "/bin/sh",
+    "/usr/bin/dash", "/bin/dash",
+    "/usr/bin/ash", "/bin/ash",
+];
 
-        log::info!("proot: checking shells in rootfs {:?}: {:?}", rootfs, standard_shells);
-        let shell_path = standard_shells.iter()
-            .find(|s| path_exists_in_rootfs(rootfs, s))
-            .ok_or_else(|| {
-                log::error!("proot: no usable shell found in rootfs {:?}", rootfs);
-                anyhow::anyhow!("no usable shell found in rootfs")
-            })?;
-        log::info!("proot: selected shell: {}", shell_path);
+let shell_path = standard_shells.iter()
+    .find(|s| path_exists_in_rootfs(rootfs, s))
+    .map(|s| (*s, false))  // (path, is_busybox)
+    .or_else(|| {
+        if path_exists_in_rootfs(rootfs, "/usr/bin/busybox") {
+            Some(("/usr/bin/busybox", true))
+        } else if path_exists_in_rootfs(rootfs, "/bin/busybox") {
+            Some(("/bin/busybox", true))
+        } else {
+            None
+        }
+    })
+    .ok_or_else(|| anyhow::anyhow!("no usable shell found in rootfs"))?;
 
-        argv.push(CString::new(shell_path.to_string()).unwrap());
-        argv.push(CString::new("-l").unwrap());
-        argv.push(CString::new("-i").unwrap());
-
+let (shell_binary, is_busybox) = shell_path;
+if is_busybox {
+    argv.push(CString::new(shell_binary).unwrap());
+    argv.push(CString::new("sh").unwrap());   // busybox applet
+    argv.push(CString::new("-i").unwrap());
+} else {
+    argv.push(CString::new(shell_binary).unwrap());
+    argv.push(CString::new("-l").unwrap());
+    argv.push(CString::new("-i").unwrap());
+}
         // Proot Environment setup (no PROOT_LOADER, no PROOT_TMP_DIR)
         env.extend(vec![
             CString::new("HOME=/root").unwrap(),
