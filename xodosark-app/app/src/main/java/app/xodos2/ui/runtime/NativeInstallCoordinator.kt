@@ -80,8 +80,7 @@ CheckSpace
 #VerbosePkgLists
 ParallelDownloads = 5
 DownloadUser = alpm
-DisableSandboxFilesystem
-DisableSandboxSyscalls
+DisableSandbox
 
 # By default, pacman accepts packages signed by keys that its local keyring
 # trusts (see pacman-key and its man page), as well as unsigned packages.
