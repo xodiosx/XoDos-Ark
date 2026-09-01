@@ -300,16 +300,27 @@ object NativeInstallCoordinator {
         }
     
     private fun configureDns(context: Context, containerId: Int) {
-        try {
-            val rootfsPath = containerPath(context, containerId)
-            val resolvConf = File(rootfsPath, "etc/resolv.conf")
-            resolvConf.parentFile?.mkdirs()
-            resolvConf.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
-            Log.i("NativeInstall", "DNS configured for container $containerId")
-        } catch (e: Exception) {
-            Log.e("NativeInstall", "Failed to write resolv.conf", e)
+    try {
+        val rootfsPath = containerPath(context, containerId)
+        val resolvConf = File(rootfsPath, "etc/resolv.conf")
+
+        // Remove existing symlink or broken file first
+        if (resolvConf.exists() || android.system.Os.lstat(resolvConf.absolutePath) != null) {
+            val isSymlink = try {
+                android.system.Os.lstat(resolvConf.absolutePath).st_mode and android.system.OsConstants.S_IFMT == android.system.OsConstants.S_IFLNK
+            } catch (_: Exception) { false }
+            if (isSymlink) {
+                resolvConf.delete()
+            }
         }
+
+        resolvConf.parentFile?.mkdirs()
+        resolvConf.writeText("nameserver 8.8.8.8\nnameserver 1.1.1.1\n")
+        Log.i("NativeInstall", "DNS configured for container $containerId")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write resolv.conf", e)
     }
+}
 
   fun writeContainerEnvironment(context: Context, containerId: Int, distroId: String) {
     val rootfs = containerPath(context, containerId)
