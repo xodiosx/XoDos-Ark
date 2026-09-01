@@ -41,6 +41,100 @@ object NativeInstallCoordinator {
     // Cached distros mapped by their source to allow independent, selective fetching
     private var cachedDistros = mutableMapOf<DistroSource, List<DistroDescriptor>>()
 
+private val ARCH_PACMAN_CONF = """
+#
+# /etc/pacman.conf
+#
+# See the pacman.conf(5) manpage for option and repository directives
+
+#
+# GENERAL OPTIONS
+#
+[options]
+# The following paths are commented out with their default values listed.
+# If you wish to use different paths, uncomment and update the paths.
+#RootDir     = /
+#DBPath      = /var/lib/pacman/
+#CacheDir    = /var/cache/pacman/pkg/
+#LogFile     = /var/log/pacman.log
+#GPGDir      = /etc/pacman.d/gnupg/
+#HookDir     = /etc/pacman.d/hooks/
+HoldPkg     = pacman glibc
+#XferCommand = /usr/bin/curl -L -C - -f -o %o %u
+#XferCommand = /usr/bin/wget --passive-ftp -c -O %o %u
+#CleanMethod = KeepInstalled
+Architecture = aarch64
+
+# Pacman won't upgrade packages listed in IgnorePkg and members of IgnoreGroup
+#IgnorePkg   =
+#IgnoreGroup =
+
+#NoUpgrade   =
+#NoExtract   =
+
+# Misc options
+#UseSyslog
+#Color
+#NoProgressBar
+CheckSpace
+#VerbosePkgLists
+ParallelDownloads = 5
+DownloadUser = alpm
+DisableSandboxFilesystem
+DisableSandboxSyscalls
+
+# By default, pacman accepts packages signed by keys that its local keyring
+# trusts (see pacman-key and its man page), as well as unsigned packages.
+SigLevel    = Required DatabaseOptional
+LocalFileSigLevel = Optional
+#RemoteFileSigLevel = Required
+
+# NOTE: You must run `pacman-key --init` before first using pacman; the local
+# keyring can then be populated with the keys of all official Arch Linux ARM
+# packagers with `pacman-key --populate archlinuxarm`.
+
+#
+# REPOSITORIES
+#   - can be defined here or included from another file
+#   - pacman will search repositories in the order defined here
+#   - local/custom mirrors can be added here or in separate files
+#   - repositories listed first will take precedence when packages
+#     have identical names, regardless of version number
+#   - URLs will have ${'$'}repo replaced by the name of the current repo
+#   - URLs will have ${'$'}arch replaced by the name of the architecture
+#
+# Repository entries are of the format:
+#       [repo-name]
+#       Server = ServerName
+#       Include = IncludePath
+#
+# The header [repo-name] is crucial - it must be present and
+# uncommented to enable the repo.
+#
+
+# The testing repositories are disabled by default. To enable, uncomment the
+# repo name header and Include lines. You can add preferred servers immediately
+# after the header, and they will be used before the default mirrors.
+
+[core]
+Include = /etc/pacman.d/mirrorlist
+
+[extra]
+Include = /etc/pacman.d/mirrorlist
+
+[alarm]
+Include = /etc/pacman.d/mirrorlist
+
+[aur]
+Include = /etc/pacman.d/mirrorlist
+
+# An example of a custom package repository.  See the pacman manpage for
+# tips on creating your own repositories.
+#[custom]
+#SigLevel = Optional TrustAll
+#Server = file:///home/custompkgs
+""".trimIndent()
+
     private suspend fun getFileSizeFromUrl(urlString: String): String = withContext(Dispatchers.IO) {
         try {
             val url = URL(urlString)
@@ -845,32 +939,30 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
         return
     }
 
+    // 1. Write the known-good pacman.conf directly to the rootfs (no shell involved)
+    val pacmanConf = File(rootfs, "etc/pacman.conf")
+    try {
+        pacmanConf.parentFile?.mkdirs()
+        pacmanConf.writeText(ARCH_PACMAN_CONF)
+        Log.i("NativeInstall", "Written Arch pacman.conf for container $containerId")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write pacman.conf", e)
+        return
+    }
+
+    // 2. Ensure /tmp exists for bind
     File(rootfs, "tmp").mkdirs()
 
+    // 3. Run keyring init and hook disabling via PRoot (no shell variables)
     val fixScript = """
-        # Remove any existing sandbox-related lines (commented or not)
-        sed -i '/DisableSandbox/d' /etc/pacman.conf
-        sed -i '/DisableSandboxFilesystem/d' /etc/pacman.conf
-        sed -i '/DisableSandboxSyscalls/d' /etc/pacman.conf
-
-        # Ensure [options] section exists
-        grep -q '^\[options\]' /etc/pacman.conf || echo '[options]' >> /etc/pacman.conf
-
-        # Insert the three directives right after [options]
-        sed -i '/^\[options\]/a DisableSandbox\nDisableSandboxFilesystem\nDisableSandboxSyscalls' /etc/pacman.conf
-
-        # Keyring initialization
         mkdir -p /etc/pacman.d/gnupg
         chmod 700 /etc/pacman.d/gnupg
         if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -f /etc/pacman.d/gnupg/pubring.kbx ]; then
             pacman-key --init
             pacman-key --populate archlinuxarm 2>/dev/null || pacman-key --populate archlinux
         fi
-
-        # Disable problematic systemd hooks
         find /usr/share/libalpm/hooks -name '*sysusers*.hook' -exec mv {} {}.disabled \; 2>/dev/null
         find /usr/share/libalpm/hooks -name '*tmpfiles*.hook' -exec mv {} {}.disabled \; 2>/dev/null
-
         true
     """.trimIndent()
 
