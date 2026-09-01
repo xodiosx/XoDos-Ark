@@ -848,22 +848,26 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
     File(rootfs, "tmp").mkdirs()
 
     val fixScript = """
-        # 1. Disable pacman sandbox (fixes Landlock error)
+        # 1. Disable pacman sandbox in the correct [options] section
+        if ! grep -q '^\[options\]' /etc/pacman.conf; then
+            echo '[options]' >> /etc/pacman.conf
+        fi
         if ! grep -q '^DisableSandbox' /etc/pacman.conf; then
-            echo 'DisableSandbox' >> /etc/pacman.conf
+            sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
         fi
 
-        # 2. Initialize pacman keyring if missing
+        # 2. Ensure GnuPG directory exists with correct permissions
+        mkdir -p /etc/pacman.d/gnupg
+        chmod 700 /etc/pacman.d/gnupg
+
+        # 3. Initialize keyring if missing
         if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -f /etc/pacman.d/gnupg/pubring.kbx ]; then
             pacman-key --init
             pacman-key --populate archlinuxarm 2>/dev/null || pacman-key --populate archlinux
         fi
 
-        # 3. Disable systemd-sysusers hook (prevents "Protocol driver not attached" errors)
-        #    The hook tries to create system users, which fails under PRoot.
+        # 4. Disable systemd hooks that fail under PRoot
         find /usr/share/libalpm/hooks -name '*sysusers*.hook' -exec mv {} {}.disabled \; 2>/dev/null
-
-        # 4. Also disable systemd-tmpfiles hook if it causes similar issues
         find /usr/share/libalpm/hooks -name '*tmpfiles*.hook' -exec mv {} {}.disabled \; 2>/dev/null
 
         true
@@ -879,6 +883,7 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
         "--bind=/dev",
         "--bind=/proc",
         "--bind=/sys",
+        "--bind=/dev/urandom:/dev/random",   // avoid blocking entropy
         "--bind=${rootfs.absolutePath}/tmp:/tmp",
         "--cwd=/root",
         "/bin/sh", "-c", fixScript
