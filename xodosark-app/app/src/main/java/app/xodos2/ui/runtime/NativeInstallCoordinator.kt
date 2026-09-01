@@ -848,26 +848,16 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
     File(rootfs, "tmp").mkdirs()
 
     val fixScript = """
+        # Remove any existing sandbox-related lines (commented or not)
+        sed -i '/DisableSandbox/d' /etc/pacman.conf
+        sed -i '/DisableSandboxFilesystem/d' /etc/pacman.conf
+        sed -i '/DisableSandboxSyscalls/d' /etc/pacman.conf
+
         # Ensure [options] section exists
         grep -q '^\[options\]' /etc/pacman.conf || echo '[options]' >> /etc/pacman.conf
 
-        # Function to ensure a directive is uncommented and present
-        ensure_directive() {
-            local directive="\$1"
-            # If an uncommented line exists, do nothing
-            grep -q "^\$directive" /etc/pacman.conf && return 0
-            # If a commented line exists (#Directive), uncomment it
-            if grep -q "^[[:space:]]*#[[:space:]]*\${directive}" /etc/pacman.conf; then
-                sed -i "s/^[[:space:]]*#[[:space:]]*\${directive}/\${directive}/" /etc/pacman.conf
-            else
-                # Add after [options] line
-                sed -i "/^\[options\]/a \${directive}" /etc/pacman.conf
-            fi
-        }
-
-        ensure_directive "DisableSandbox"
-        ensure_directive "DisableSandboxFilesystem"
-        ensure_directive "DisableSandboxSyscalls"
+        # Insert the three directives right after [options]
+        sed -i '/^\[options\]/a DisableSandbox\nDisableSandboxFilesystem\nDisableSandboxSyscalls' /etc/pacman.conf
 
         # Keyring initialization
         mkdir -p /etc/pacman.d/gnupg
