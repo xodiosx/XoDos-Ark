@@ -853,15 +853,15 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
 
         # Function to ensure a directive is uncommented and present
         ensure_directive() {
-            local directive="$1"
+            local directive="\$1"
             # If an uncommented line exists, do nothing
-            grep -q "^$directive" /etc/pacman.conf && return 0
+            grep -q "^\$directive" /etc/pacman.conf && return 0
             # If a commented line exists (#Directive), uncomment it
-            if grep -q "^[[:space:]]*#[[:space:]]*$directive" /etc/pacman.conf; then
-                sed -i "s/^[[:space:]]*#[[:space:]]*$directive/$directive/" /etc/pacman.conf
+            if grep -q "^[[:space:]]*#[[:space:]]*\${directive}" /etc/pacman.conf; then
+                sed -i "s/^[[:space:]]*#[[:space:]]*\${directive}/\${directive}/" /etc/pacman.conf
             else
                 # Add after [options] line
-                sed -i "/^\[options\]/a $directive" /etc/pacman.conf
+                sed -i "/^\[options\]/a \${directive}" /etc/pacman.conf
             fi
         }
 
