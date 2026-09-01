@@ -149,8 +149,8 @@ fn validate_rootfs_structure(rootfs_path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Recursively ensures all extracted files are readable/writable by the app
-/// so that deferred hard-link copies (and future cleanup) don't fail due to 0000 permissions.
+/// Recursively ensures all extracted files and directories have standard permissions.
+/// Directories: 755, regular files: 644 (or 755 if executable bit originally set).
 fn fix_permissions_recursive(path: &Path) {
     if let Ok(metadata) = std::fs::symlink_metadata(path) {
         let file_type = metadata.file_type();
@@ -159,10 +159,8 @@ fn fix_permissions_recursive(path: &Path) {
             let mut perms = metadata.permissions();
 
             if file_type.is_dir() {
-                // Standard directory permissions: rwxr-xr-x (755)
                 perms.set_mode(0o755);
             } else {
-                // For files: preserve execute bit if originally set, otherwise 644
                 let original_mode = perms.mode();
                 let is_executable = original_mode & 0o111 != 0;
                 perms.set_mode(if is_executable { 0o755 } else { 0o644 });
@@ -189,9 +187,7 @@ fn sanitize_archive_path(path: &Path) -> Option<PathBuf> {
     for component in path.components() {
         match component {
             std::path::Component::Normal(c) => safe_path.push(c),
-            // Reject any path trying to traverse upwards via `../`
             std::path::Component::ParentDir => return None,
-            // Ignore RootDir (`/`), CurDir (`./`), and prefixes
             _ => continue,
         }
     }
@@ -233,7 +229,7 @@ fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Pat
         let dest_path = temp_extract.join(&safe_entry_path);
         let entry_type = entry.header().entry_type();
 
-        // Unprivileged Android cannot create block/character devices or fifos. Skip them to avoid log spam.
+        // Unprivileged Android cannot create block/character devices or fifos. Skip them.
         if entry_type.is_block_special() || entry_type.is_character_special() || entry_type.is_fifo() {
             continue;
         }
@@ -318,13 +314,17 @@ fn unpack_archive_safe<R: Read>(mut archive: tar::Archive<R>, temp_extract: &Pat
         remaining = next_remaining;
     }
 
-    // After loop, if any hard links remain unresolved, fail extraction.
+    // If any hard links remain unresolved, fail extraction.
     if !remaining.is_empty() {
         anyhow::bail!(
             "Unresolved hard links after extraction: {} links could not be resolved",
             remaining.len()
         );
     }
+
+    // After hard-link resolution, run permission fix again (directories may have been created
+    // with default 700 during this phase).
+    fix_permissions_recursive(temp_extract);
 
     Ok(())
 }
@@ -361,14 +361,13 @@ fn extract_tarball(tarball_path: &Path, dest: &Path, temp_extract: &Path) -> Res
     };
 
     // ---------------------------------------------------------------
-    // NEW: Accept both flat (./usr ./bin ./etc) and wrapped (subdir/) tarballs
+    // Accept both flat (./usr ./bin ./etc) and wrapped (subdir/) tarballs
     // ---------------------------------------------------------------
     if is_rootfs_dir(temp_extract) {
         // Flat tarball – the temp_extract itself is the rootfs
         let _ = std::fs::remove_dir_all(dest);
         std::fs::rename(temp_extract, dest)
             .context("rename temp_extract rootfs to dest")?;
-        // temp_extract no longer exists, no extra cleanup needed
     } else {
         // Wrapped tarball – find the single top-level directory
         let entries: Vec<_> = std::fs::read_dir(temp_extract)
@@ -398,6 +397,14 @@ fn extract_tarball(tarball_path: &Path, dest: &Path, temp_extract: &Path) -> Res
         // Clean up the now-empty temp_extract
         let _ = std::fs::remove_dir_all(temp_extract);
     }
+
+    // Ensure the root directory has standard permissions (755)
+    if let Ok(metadata) = std::fs::metadata(dest) {
+        let mut perms = metadata.permissions();
+        perms.set_mode(0o755);
+        let _ = std::fs::set_permissions(dest, perms);
+    }
+
     std::fs::create_dir_all(dest.join("etc")).ok();
 
     setup_fake_sysdata(dest)?;

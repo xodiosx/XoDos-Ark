@@ -614,6 +614,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
             writeContainerEnvironment(context, containerId, detected)
             applyProotBypasses(context, containerId, detected)
             saveContainerDistro(context, containerId, detected)
+            applyArchPacmanFixes(context, containerId, detected)
         }
         ok
     }
@@ -664,6 +665,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
             writeContainerEnvironment(context, containerId, detected)
             applyProotBypasses(context, containerId, detected)
             saveContainerDistro(context, containerId, detected)
+            applyArchPacmanFixes(context, containerId, detected)
         }
         ok
     }
@@ -832,6 +834,72 @@ private fun copyAssetToContainer(context: Context, containerId: Int, assetName: 
     }
 }
 
+private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType: String) {
+    if (distroType != "archlinux" && distroType != "archarm") return
+
+    val rootfs = containerPath(context, containerId)
+    val nativeLibDir = context.applicationInfo.nativeLibraryDir
+    val prootBinary = File(nativeLibDir, "libproot.so")
+    if (!prootBinary.exists()) {
+        Log.e("NativeInstall", "proot binary not found for pacman fix")
+        return
+    }
+
+    File(rootfs, "tmp").mkdirs()
+
+    val fixScript = """
+        # 1. Disable pacman sandbox (fixes Landlock error)
+        if ! grep -q '^DisableSandbox' /etc/pacman.conf; then
+            echo 'DisableSandbox' >> /etc/pacman.conf
+        fi
+
+        # 2. Initialize pacman keyring if missing
+        if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -f /etc/pacman.d/gnupg/pubring.kbx ]; then
+            pacman-key --init
+            pacman-key --populate archlinuxarm 2>/dev/null || pacman-key --populate archlinux
+        fi
+
+        # 3. Disable systemd-sysusers hook (prevents "Protocol driver not attached" errors)
+        #    The hook tries to create system users, which fails under PRoot.
+        find /usr/share/libalpm/hooks -name '*sysusers*.hook' -exec mv {} {}.disabled \; 2>/dev/null
+
+        # 4. Also disable systemd-tmpfiles hook if it causes similar issues
+        find /usr/share/libalpm/hooks -name '*tmpfiles*.hook' -exec mv {} {}.disabled \; 2>/dev/null
+
+        true
+    """.trimIndent()
+
+    val cmd = listOf(
+        prootBinary.absolutePath,
+        "--change-id=0:0",
+        "--link2symlink",
+        "--kill-on-exit",
+        "--sysvipc",
+        "--rootfs=${rootfs.absolutePath}",
+        "--bind=/dev",
+        "--bind=/proc",
+        "--bind=/sys",
+        "--bind=${rootfs.absolutePath}/tmp:/tmp",
+        "--cwd=/root",
+        "/bin/sh", "-c", fixScript
+    )
+
+    try {
+        val process = ProcessBuilder(cmd)
+            .directory(context.cacheDir)
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        val exitCode = process.waitFor()
+        if (exitCode != 0) {
+            Log.w("NativeInstall", "Arch pacman fix exited with $exitCode: $output")
+        } else {
+            Log.i("NativeInstall", "Arch pacman fix applied for container $containerId")
+        }
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to apply Arch pacman fix", e)
+    }
+}
 
     private fun migrateRendererPrefsIfNeeded(prefs: SharedPreferences) {
         val rawLegacy = prefs.getString("desktop_renderer_mode", "") ?: ""
