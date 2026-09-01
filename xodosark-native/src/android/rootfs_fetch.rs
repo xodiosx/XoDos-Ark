@@ -155,25 +155,22 @@ fn fix_permissions_recursive(path: &Path) {
     if let Ok(metadata) = std::fs::symlink_metadata(path) {
         let file_type = metadata.file_type();
 
-        // Only modify permissions for actual files and directories, ignore symlinks
         if file_type.is_dir() || file_type.is_file() {
             let mut perms = metadata.permissions();
-            let mode = perms.mode();
 
-            // Add owner read/write
-            let mut new_mode = mode | 0o600;
             if file_type.is_dir() {
-                // Add owner execute (search) for directories
-                new_mode |= 0o100;
+                // Standard directory permissions: rwxr-xr-x (755)
+                perms.set_mode(0o755);
+            } else {
+                // For files: preserve execute bit if originally set, otherwise 644
+                let original_mode = perms.mode();
+                let is_executable = original_mode & 0o111 != 0;
+                perms.set_mode(if is_executable { 0o755 } else { 0o644 });
             }
 
-            if mode != new_mode {
-                perms.set_mode(new_mode);
-                let _ = std::fs::set_permissions(path, perms);
-            }
+            let _ = std::fs::set_permissions(path, perms);
         }
 
-        // Recurse into directories
         if file_type.is_dir() {
             if let Ok(entries) = std::fs::read_dir(path) {
                 for entry in entries.flatten() {
