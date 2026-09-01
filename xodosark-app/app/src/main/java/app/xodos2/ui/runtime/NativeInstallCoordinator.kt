@@ -68,6 +68,32 @@ object NativeInstallCoordinator {
         }
     }
 
+/**
+ * Fetch metadata for a direct URL pointing to a rootfs tarball.
+ * This is used by the custom URL installer dialog.
+ */
+suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(Dispatchers.IO) {
+    val archiveName = url.substringAfterLast('/')
+    val distroType = guessDistroType(archiveName)
+    val distroName = archiveName
+        .split(Regex("[-_.]"))
+        .firstOrNull()
+        ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+        ?: "Custom URL"
+    val version = extractVersion(archiveName)
+    val size = getFileSizeFromUrl(url)   // already private, but called from within the object
+
+    DistroDescriptor(
+        distroName = "$distroName (URL)",
+        distroType = distroType,
+        archiveName = archiveName,
+        downloadUrl = url,
+        version = version,
+        size = size,
+        extractDirName = ""
+    )
+}
+
     /**
      * Fetches available distributions based on the selected source.
      * @param source The platform to scrape or load from.
@@ -92,9 +118,9 @@ object NativeInstallCoordinator {
         "https://github.com/termux/proot-distro/releases/download/v4.18.0/ubuntu-noble-aarch64-pd-v4.18.0.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/chimera-aarch64-pd-v4.17.3.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/debian-bookworm-aarch64-pd-v4.17.3.tar.xz",
-        "https://easycli.sh/proot-distro/v5.0.0/fedora_43-1.6_aarch64_rootfs.tar.xz",
-        "https://easycli.sh/proot-distro/v5.0.0/archlinuxarm_2026.04.03_aarch64_rootfs.tar.xz",
-        "https://easycli.sh/proot-distro/v5.0.0/debian_trixie_aarch64_rootfs.tar.xz"
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/fedora-aarch64-pd-v4.17.3.tar.xz",
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/archlinux-aarch64-pd-v4.17.3.tar.xz",
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-arm64-rf/kali-rootfs-arm64.tar.xz"
     )
 }
 
