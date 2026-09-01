@@ -1,28 +1,16 @@
-name: Mirror Roofs arm64 release
+name: Mirror termux/proot-distro v4.29.0 (Pre-release)
 
 on:
   workflow_dispatch:
     inputs:
-      source_owner:
-        description: 'Upstream owner'
-        required: true
-        default: 'AryanVBW'
-      source_repo:
-        description: 'Upstream repo'
-        required: true
-        default: 'Roofs'
-      source_tag:
-        description: 'Upstream release tag'
-        required: true
-        default: 'arm64'
       target_tag:
-        description: 'Release tag in this repo'
-        required: true
-        default: 'mirror-arm64'
+        description: 'Release tag in this repo (leave empty to use upstream tag)'
+        required: false
+        default: 'v4.29.0'
       target_title:
-        description: 'Release title in this repo'
-        required: true
-        default: 'Mirrored Roofs arm64'
+        description: 'Release title in this repo (leave empty to use upstream title)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -37,11 +25,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download upstream release assets
+      - name: Download upstream release assets and metadata
         env:
-          SOURCE_OWNER: ${{ inputs.source_owner }}
-          SOURCE_REPO: ${{ inputs.source_repo }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
+          SOURCE_OWNER: termux
+          SOURCE_REPO: proot-distro
+          SOURCE_TAG: v4.29.0
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -72,6 +60,11 @@ jobs:
           with urllib.request.urlopen(req) as r:
               release = json.load(r)
 
+          # Save upstream release title (name) and tag for later use
+          release_title = release.get("name") or release.get("tag_name") or tag
+          with open("upstream_title.txt", "w") as f:
+              f.write(release_title)
+
           assets = release.get("assets", [])
           if not assets:
               raise SystemExit("No assets found in the upstream release")
@@ -91,14 +84,39 @@ jobs:
                   shutil.copyfileobj(r, f)
           PY
 
-      - name: Publish release in this repository
+      - name: Determine target tag and title
+        id: vars
+        env:
+          TARGET_TAG_INPUT: ${{ inputs.target_tag }}
+          TARGET_TITLE_INPUT: ${{ inputs.target_title }}
+        run: |
+          set -euo pipefail
+
+          # Use input tag if provided, otherwise fall back to source tag (v4.29.0)
+          if [[ -n "$TARGET_TAG_INPUT" ]]; then
+            FINAL_TAG="$TARGET_TAG_INPUT"
+          else
+            FINAL_TAG="v4.29.0"
+          fi
+
+          # Use input title if provided, otherwise read upstream title from file
+          if [[ -n "$TARGET_TITLE_INPUT" ]]; then
+            FINAL_TITLE="$TARGET_TITLE_INPUT"
+          else
+            FINAL_TITLE="$(cat upstream_title.txt)"
+          fi
+
+          echo "tag=${FINAL_TAG}" >> "$GITHUB_OUTPUT"
+          echo "title=${FINAL_TITLE}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish pre-release in this repository
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_OWNER: ${{ inputs.source_owner }}
-          SOURCE_REPO: ${{ inputs.source_repo }}
-          SOURCE_TAG: ${{ inputs.source_tag }}
-          TARGET_TAG: ${{ inputs.target_tag }}
-          TARGET_TITLE: ${{ inputs.target_title }}
+          SOURCE_OWNER: termux
+          SOURCE_REPO: proot-distro
+          SOURCE_TAG: v4.29.0
+          TARGET_TAG: ${{ steps.vars.outputs.tag }}
+          TARGET_TITLE: ${{ steps.vars.outputs.title }}
         run: |
           set -euo pipefail
 
@@ -112,4 +130,6 @@ jobs:
           gh release create "$TARGET_TAG" "${files[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$TARGET_TITLE" \
-            --notes "$notes"
+            --notes "$notes" \
+            --prerelease \
+            --latest=false
