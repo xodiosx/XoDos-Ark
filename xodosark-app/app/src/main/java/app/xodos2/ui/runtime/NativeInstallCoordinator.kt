@@ -70,7 +70,7 @@ object NativeInstallCoordinator {
 
 /**
  * Fetch metadata for a direct URL pointing to a rootfs tarball.
- * This is used by the custom URL installer dialog.
+ * Used by the custom URL installer dialog.
  */
 suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(Dispatchers.IO) {
     val archiveName = url.substringAfterLast('/')
@@ -93,7 +93,6 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
         extractDirName = ""
     )
 }
-
     /**
      * Fetches available distributions based on the selected source.
      * @param source The platform to scrape or load from.

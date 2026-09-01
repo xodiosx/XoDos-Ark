@@ -2209,7 +2209,7 @@ if (showDistroSelection) {
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // ─── NEW: Direct URL Install Card (only on Custom tab) ───
+                // ─── Direct URL Install Card (only on Custom tab) ───
                 if (selectedSource == NativeInstallCoordinator.DistroSource.CUSTOM) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
@@ -2270,34 +2270,34 @@ if (showDistroSelection) {
                             Spacer(modifier = Modifier.height(12.dp))
                             GlassButton(
                                 onClick = {
-                                    val trimmedUrl = customUrlText.trim()
-                                    val pattern = Regex(
-                                        "^https?://.*\\.(tar\\.xz|tar\\.gz)$",
-                                        RegexOption.IGNORE_CASE
-                                    )
-                                    if (!pattern.matches(trimmedUrl)) {
-                                        customUrlError = "Invalid URL. Must be http(s) and end with .tar.xz or .tar.gz"
-                                    } else {
-                                        customUrlError = ""
-                                        // Fetch metadata in background
-                                        scope.launch {
-                                            isFetchingCustomUrl = true
-                                            try {
-                                                val descriptor = withContext(Dispatchers.IO) {
-                                                    NativeInstallCoordinator.fetchDistroInfoFromUrl(trimmedUrl)
+                                    if (!isFetchingCustomUrl) {
+                                        val trimmedUrl = customUrlText.trim()
+                                        val pattern = Regex(
+                                            "^https?://.*\\.(tar\\.xz|tar\\.gz)$",
+                                            RegexOption.IGNORE_CASE
+                                        )
+                                        if (!pattern.matches(trimmedUrl)) {
+                                            customUrlError = "Invalid URL. Must be http(s) and end with .tar.xz or .tar.gz"
+                                        } else {
+                                            customUrlError = ""
+                                            scope.launch {
+                                                isFetchingCustomUrl = true
+                                                try {
+                                                    val descriptor = withContext(Dispatchers.IO) {
+                                                        NativeInstallCoordinator.fetchDistroInfoFromUrl(trimmedUrl)
+                                                    }
+                                                    fetchedDistro = descriptor
+                                                    showCustomUrlDialog = true
+                                                } catch (e: Exception) {
+                                                    customUrlError = "Failed to fetch URL: ${e.message}"
+                                                } finally {
+                                                    isFetchingCustomUrl = false
                                                 }
-                                                fetchedDistro = descriptor
-                                                showCustomUrlDialog = true
-                                            } catch (e: Exception) {
-                                                customUrlError = "Failed to fetch URL: ${e.message}"
-                                            } finally {
-                                                isFetchingCustomUrl = false
                                             }
                                         }
                                     }
                                 },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isFetchingCustomUrl
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 if (isFetchingCustomUrl) {
                                     CircularProgressIndicator(
@@ -2414,7 +2414,6 @@ if (showDistroSelection) {
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 items(availableDistros) { distro ->
-                                    // (unchanged distro card)
                                     Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -2442,7 +2441,6 @@ if (showDistroSelection) {
                                         border = BorderStroke(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))))
                                     ) {
                                         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                            // icon and texts (same as before)
                                             Box(Modifier.size(48.dp).background(Color(0xFF2A1E4A), shape = RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
                                                 val resourceName = distro.distroType.lowercase(Locale.ROOT).trim()
                                                 val iconResId = context.resources.getIdentifier(resourceName, "drawable", context.packageName)
@@ -2499,7 +2497,7 @@ if (showDistroSelection) {
         }
     }
 
-    // ─── NEW: Custom URL metadata dialog ─────────────────────
+    // ─── Custom URL metadata dialog ─────────────────────
     if (showCustomUrlDialog && fetchedDistro != null) {
         val descriptor = fetchedDistro!!
         AlertDialog(
@@ -2570,7 +2568,6 @@ if (showDistroSelection) {
         )
     }
 }
-
 
     // ── Original main UI (drawer + terminal/desktop) ────────────
     val isAnyDialogVisible = showContainerManager || 
