@@ -848,25 +848,36 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
     File(rootfs, "tmp").mkdirs()
 
     val fixScript = """
-        # 1. Disable pacman sandbox in the correct [options] section
-        if ! grep -q '^\[options\]' /etc/pacman.conf; then
-            echo '[options]' >> /etc/pacman.conf
-        fi
-        if ! grep -q '^DisableSandbox' /etc/pacman.conf; then
-            sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
-        fi
+        # Ensure [options] section exists
+        grep -q '^\[options\]' /etc/pacman.conf || echo '[options]' >> /etc/pacman.conf
 
-        # 2. Ensure GnuPG directory exists with correct permissions
+        # Function to ensure a directive is uncommented and present
+        ensure_directive() {
+            local directive="$1"
+            # If an uncommented line exists, do nothing
+            grep -q "^$directive" /etc/pacman.conf && return 0
+            # If a commented line exists (#Directive), uncomment it
+            if grep -q "^[[:space:]]*#[[:space:]]*$directive" /etc/pacman.conf; then
+                sed -i "s/^[[:space:]]*#[[:space:]]*$directive/$directive/" /etc/pacman.conf
+            else
+                # Add after [options] line
+                sed -i "/^\[options\]/a $directive" /etc/pacman.conf
+            fi
+        }
+
+        ensure_directive "DisableSandbox"
+        ensure_directive "DisableSandboxFilesystem"
+        ensure_directive "DisableSandboxSyscalls"
+
+        # Keyring initialization
         mkdir -p /etc/pacman.d/gnupg
         chmod 700 /etc/pacman.d/gnupg
-
-        # 3. Initialize keyring if missing
         if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -f /etc/pacman.d/gnupg/pubring.kbx ]; then
             pacman-key --init
             pacman-key --populate archlinuxarm 2>/dev/null || pacman-key --populate archlinux
         fi
 
-        # 4. Disable systemd hooks that fail under PRoot
+        # Disable problematic systemd hooks
         find /usr/share/libalpm/hooks -name '*sysusers*.hook' -exec mv {} {}.disabled \; 2>/dev/null
         find /usr/share/libalpm/hooks -name '*tmpfiles*.hook' -exec mv {} {}.disabled \; 2>/dev/null
 
@@ -883,7 +894,7 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
         "--bind=/dev",
         "--bind=/proc",
         "--bind=/sys",
-        "--bind=/dev/urandom:/dev/random",   // avoid blocking entropy
+        "--bind=/dev/urandom:/dev/random",
         "--bind=${rootfs.absolutePath}/tmp:/tmp",
         "--cwd=/root",
         "/bin/sh", "-c", fixScript
