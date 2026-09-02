@@ -945,64 +945,57 @@ private fun applyNixOsFixes(context: Context, containerId: Int, distroType: Stri
     val bashrc = File(homeDir, ".bashrc")
     val bashProfile = File(homeDir, ".bash_profile")
 
-    // The main environment setup and nix-channel override
-    val bashrcContent = """
-        echo ' Welcome to NixOS '
-        # Override nix-channel to make --update safe
-        nix-channel() {
-        export NATIVE_LIB=/data/data/app.xodos2/files/usr
-            if [ "\$1" = "--update" ]; then
-                # Use the second argument as channel name, default to nixos-unstable
-                CHANNEL="\${2:-nixos-24.11}"
-                TARBALL_URL="https://channels.nixos.org/\$CHANNEL/nixexprs.tar.xz"
-                TARGET_DIR="\$HOME/.nix-defexpr/channels/nixpkgs"
-                TMP_DIR=\$(mktemp -d)
+    val bashrcContent = "echo ' Welcome to NixOS '\n" +
+            "# Override nix-channel to make --update safe\n" +
+            "nix-channel() {\n" +
+            "export NATIVE_LIB=/data/data/app.xodos2/files/usr\n" +
+            "    if [ \"\$1\" = \"--update\" ]; then\n" +
+            "        # Use the second argument as channel name, default to nixos-unstable\n" +
+            "        CHANNEL=\"\${2:-nixos-24.11}\"\n" +
+            "        TARBALL_URL=\"https://channels.nixos.org/\$CHANNEL/nixexprs.tar.xz\"\n" +
+            "        TARGET_DIR=\"\$HOME/.nix-defexpr/channels/nixpkgs\"\n" +
+            "        TMP_DIR=\$(mktemp -d)\n" +
+            "\n" +
+            "        echo \"🔄 Updating \$CHANNEL channel safely...\"\n" +
+            "        curl -L \"\$TARBALL_URL\" -o \"\$TMP_DIR/nixpkgs.tar.xz\" || {\n" +
+            "            echo \"Download failed\"; rm -rf \"\$TMP_DIR\"; return 1\n" +
+            "        }\n" +
+            "       PATH=\"\$NATIVE_LIB/bin:\$PATH\" LD_LIBRARY_PATH=\"\$NATIVE_LIB/lib:\$LD_LIBRARY_PATH\" tar -xJf \"\$TMP_DIR/nixpkgs.tar.xz\" -C \"\$TMP_DIR\" || {\n" +
+            "            echo \"Extraction failed\"; rm -rf \"\$TMP_DIR\"; return 1\n" +
+            "        }\n" +
+            "        EXTRACTED=\$(find \"\$TMP_DIR\" -maxdepth 1 -type d -name \"nixos-*\" | head -n1)\n" +
+            "        if [ -z \"\$EXTRACTED\" ]; then\n" +
+            "            echo \"Error: extracted folder not found\"; rm -rf \"\$TMP_DIR\"; return 1\n" +
+            "        fi\n" +
+            "        rm -rf \"\$TARGET_DIR\"\n" +
+            "        mv \"\$EXTRACTED\" \"\$TARGET_DIR\"\n" +
+            "        rm -rf \"\$TMP_DIR\"\n" +
+            "        echo \"✅ Channel updated to \$CHANNEL\"\n" +
+            "        echo \"💡 Ensure NIX_PATH is set: export NIX_PATH=nixpkgs=~/.nix-defexpr/channels/nixpkgs\"\n" +
+            "    else\n" +
+            "        # Forward all other arguments to the real nix-channel\n" +
+            "        command nix-channel \"\$@\"\n" +
+            "    fi\n" +
+            "}\n" +
+            "\n" +
+            "# XoDos-ark environment\n" +
+            "unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n" +
+            "export WAYLAND_DISPLAY=wayland-xodos2\n" +
+            "if [ -f /.x11 ]; then\n" +
+            " export DISPLAY=:0\n" +
+            " unset WAYLAND_DISPLAY\n" +
+            "fi\n" +
+            "export PULSE_SERVER=127.0.0.1\n" +
+            "export MOZ_FAKE_NO_SANDBOX=1\n" +
+            "export DISTRO=nixos\n" +
+            "source /etc/environment\n"
 
-                echo "🔄 Updating \$CHANNEL channel safely..."
-                curl -L "\$TARBALL_URL" -o "\$TMP_DIR/nixpkgs.tar.xz" || {
-                    echo "Download failed"; rm -rf "\$TMP_DIR"; return 1
-                }
-               PATH="\$NATIVE_LIB/bin:\$PATH" LD_LIBRARY_PATH="\$NATIVE_LIB/lib:\$LD_LIBRARY_PATH" tar -xJf "\$TMP_DIR/nixpkgs.tar.xz" -C "\$TMP_DIR" || {
-                    echo "Extraction failed"; rm -rf "\$TMP_DIR"; return 1
-                }
-                EXTRACTED=\$(find "\$TMP_DIR" -maxdepth 1 -type d -name "nixos-*" | head -n1)
-                if [ -z "\$EXTRACTED" ]; then
-                    echo "Error: extracted folder not found"; rm -rf "\$TMP_DIR"; return 1
-                fi
-                rm -rf "\$TARGET_DIR"
-                mv "\$EXTRACTED" "\$TARGET_DIR"
-                rm -rf "\$TMP_DIR"
-                echo "✅ Channel updated to \$CHANNEL"
-                echo "💡 Ensure NIX_PATH is set: export NIX_PATH=nixpkgs=~/.nix-defexpr/channels/nixpkgs"
-            else
-                # Forward all other arguments to the real nix-channel
-                command nix-channel "\$@"
-            fi
-        }
-
-        # XoDos-ark environment
-        unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true
-        export WAYLAND_DISPLAY=wayland-xodos2
-        if [ -f /.x11 ]; then
-         export DISPLAY=:0
-         unset WAYLAND_DISPLAY
-        fi
-        export PULSE_SERVER=127.0.0.1        
-        export MOZ_FAKE_NO_SANDBOX=1
-        export DISTRO=nixos
-        source /etc/environment
-    """.trimIndent()
-
-    // The .bash_profile should simply source .bashrc if present
-    val bashProfileContent = """
-        if [ -f ~/.bashrc ]; then
-            . ~/.bashrc
-        fi
-    """.trimIndent()
+    val bashProfileContent = "if [ -f ~/.bashrc ]; then\n" +
+            "    . ~/.bashrc\n" +
+            "fi\n"
 
     try {
         bashrc.writeText(bashrcContent)
-        // owner read/write, no execute
         bashrc.setReadable(true, false)
         bashrc.setWritable(true, false)
         bashrc.setExecutable(false)
@@ -1017,6 +1010,7 @@ private fun applyNixOsFixes(context: Context, containerId: Int, distroType: Stri
         Log.e("NativeInstall", "Failed to write NixOS shell config", e)
     }
 }
+
 private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType: String) {
     Log.d("NativeInstall", "applyArchPacmanFixes called: container=$containerId, distro=$distroType")
 
