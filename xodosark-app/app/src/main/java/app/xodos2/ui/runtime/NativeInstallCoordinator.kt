@@ -927,42 +927,76 @@ private fun copyAssetToContainer(context: Context, containerId: Int, assetName: 
     }
 }
 
+
 private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType: String) {
-    if (distroType != "archlinux" && distroType != "archarm") return
+    Log.d("NativeInstall", "applyArchPacmanFixes called: container=$containerId, distro=$distroType")
+
+    if (!distroType.lowercase().contains("arch")) {
+        Log.d("NativeInstall", "Not an Arch distro, skipping")
+        return
+    }
 
     val rootfs = containerPath(context, containerId)
     val nativeLibDir = context.applicationInfo.nativeLibraryDir
     val prootBinary = File(nativeLibDir, "libproot.so")
     if (!prootBinary.exists()) {
-        Log.e("NativeInstall", "proot binary not found for pacman fix")
+        Log.e("NativeInstall", "proot binary not found at ${prootBinary.absolutePath}")
         return
     }
 
-    // 1. Write the known-good pacman.conf directly to the rootfs (no shell involved)
-    val pacmanConf = File(rootfs, "etc/pacman.conf")
+    // 1. Write known-good pacman.conf (only DisableSandbox) with correct permissions
     try {
+        val pacmanConf = File(rootfs, "etc/pacman.conf")
         pacmanConf.parentFile?.mkdirs()
         pacmanConf.writeText(ARCH_PACMAN_CONF)
-        Log.i("NativeInstall", "Written Arch pacman.conf for container $containerId")
+        pacmanConf.setReadable(true, false)   // owner readable
+        pacmanConf.setWritable(true, false)  // owner writable
+        pacmanConf.setExecutable(false)      // not executable
+        Log.i("NativeInstall", "Wrote pacman.conf with permissions for container $containerId")
     } catch (e: Exception) {
         Log.e("NativeInstall", "Failed to write pacman.conf", e)
         return
     }
 
-    // 2. Ensure /tmp exists for bind
-    File(rootfs, "tmp").mkdirs()
+    // 2. Create one-time startup script for keyring initialization (chmod 755)
+    val profileDir = File(rootfs, "etc/profile.d")
+    if (!profileDir.exists()) profileDir.mkdirs()
+    val startupScript = File(profileDir, "zz-fix-pacman.sh")
+    try {
+        startupScript.writeText("""
+            #!/bin/sh
+            # One-time pacman keyring initializer for XoDos-Ark
+            if [ -f /etc/pacman.d/gnupg/pubring.gpg ] || [ -f /etc/pacman.d/gnupg/pubring.kbx ]; then
+                mv /etc/profile.d/zz-fix-pacman.sh /etc/profile.d/zz-fix-pacman.sh.disabled
+                exit 0
+            fi
 
-    // 3. Run keyring init and hook disabling via PRoot (no shell variables)
-    val fixScript = """
-        mkdir -p /etc/pacman.d/gnupg
-        chmod 700 /etc/pacman.d/gnupg
-       # if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -f /etc/pacman.d/gnupg/pubring.kbx ]; then
+            echo "Initializing pacman keyring (one-time)..."
             pacman-key --init
             pacman-key --populate archlinuxarm 2>/dev/null || pacman-key --populate archlinux
-       # fi
-        find /usr/share/libalpm/hooks -name '*sysusers*.hook' -exec mv {} {}.disabled \; 2>/dev/null
-        find /usr/share/libalpm/hooks -name '*tmpfiles*.hook' -exec mv {} {}.disabled \; 2>/dev/null
-        true
+
+            mv /etc/profile.d/zz-fix-pacman.sh /etc/profile.d/zz-fix-pacman.sh.disabled
+        """.trimIndent())
+
+        // Set permissions: -rwxr-xr-x (755)
+        startupScript.setReadable(true, false)   // owner read
+        startupScript.setWritable(true, false)  // owner write
+        startupScript.setExecutable(true, false) // owner execute
+        startupScript.setReadable(true, true)    // group read
+        startupScript.setExecutable(true, true)  // group execute
+        startupScript.setReadable(true, true)    // others read
+        startupScript.setExecutable(true, true)  // others execute
+
+        Log.i("NativeInstall", "Wrote startup script with 755 permissions for container $containerId")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write startup script", e)
+        return
+    }
+
+    // 3. Run the script immediately via PRoot so keyring is ready now
+    File(rootfs, "tmp").mkdirs()
+    val fixScript = """
+        sh /etc/profile.d/zz-fix-pacman.sh
     """.trimIndent()
 
     val cmd = listOf(
@@ -989,14 +1023,15 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
         val output = process.inputStream.bufferedReader().use { it.readText() }
         val exitCode = process.waitFor()
         if (exitCode != 0) {
-            Log.w("NativeInstall", "Arch pacman fix exited with $exitCode: $output")
+            Log.w("NativeInstall", "Pacman keyring init exit $exitCode: $output")
         } else {
-            Log.i("NativeInstall", "Arch pacman fix applied for container $containerId")
+            Log.i("NativeInstall", "Pacman keyring initialized successfully for container $containerId")
         }
     } catch (e: Exception) {
-        Log.e("NativeInstall", "Failed to apply Arch pacman fix", e)
+        Log.e("NativeInstall", "Failed to run pacman fix", e)
     }
 }
+
 
     private fun migrateRendererPrefsIfNeeded(prefs: SharedPreferences) {
         val rawLegacy = prefs.getString("desktop_renderer_mode", "") ?: ""
