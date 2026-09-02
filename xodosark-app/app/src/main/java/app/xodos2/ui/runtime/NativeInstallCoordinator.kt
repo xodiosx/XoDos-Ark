@@ -942,9 +942,11 @@ private fun applyNixOsFixes(context: Context, containerId: Int, distroType: Stri
     val homeDir = File(rootfs, "root")
     if (!homeDir.exists()) homeDir.mkdirs()
 
+    val bashrc = File(homeDir, ".bashrc")
     val bashProfile = File(homeDir, ".bash_profile")
 
-    val content = """
+    // The main environment setup and nix-channel override
+    val bashrcContent = """
         echo ' Welcome to NixOS '
         # Override nix-channel to make --update safe
         nix-channel() {
@@ -991,18 +993,30 @@ private fun applyNixOsFixes(context: Context, containerId: Int, distroType: Stri
         source /etc/environment
     """.trimIndent()
 
+    // The .bash_profile should simply source .bashrc if present
+    val bashProfileContent = """
+        if [ -f ~/.bashrc ]; then
+            . ~/.bashrc
+        fi
+    """.trimIndent()
+
     try {
-        bashProfile.writeText(content)
-        // Set permissions: owner read/write only (600)
+        bashrc.writeText(bashrcContent)
+        // owner read/write, no execute
+        bashrc.setReadable(true, false)
+        bashrc.setWritable(true, false)
+        bashrc.setExecutable(false)
+
+        bashProfile.writeText(bashProfileContent)
         bashProfile.setReadable(true, false)
         bashProfile.setWritable(true, false)
         bashProfile.setExecutable(false)
-        Log.i("NativeInstall", "Wrote NixOS .bash_profile for container $containerId")
+
+        Log.i("NativeInstall", "Wrote NixOS .bashrc and .bash_profile for container $containerId")
     } catch (e: Exception) {
-        Log.e("NativeInstall", "Failed to write NixOS .bash_profile", e)
+        Log.e("NativeInstall", "Failed to write NixOS shell config", e)
     }
 }
-
 private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType: String) {
     Log.d("NativeInstall", "applyArchPacmanFixes called: container=$containerId, distro=$distroType")
 
