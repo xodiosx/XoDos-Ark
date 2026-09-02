@@ -956,10 +956,10 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
     val fixScript = """
         mkdir -p /etc/pacman.d/gnupg
         chmod 700 /etc/pacman.d/gnupg
-        if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -f /etc/pacman.d/gnupg/pubring.kbx ]; then
+       # if [ ! -f /etc/pacman.d/gnupg/pubring.gpg ] && [ ! -f /etc/pacman.d/gnupg/pubring.kbx ]; then
             pacman-key --init
             pacman-key --populate archlinuxarm 2>/dev/null || pacman-key --populate archlinux
-        fi
+       # fi
         find /usr/share/libalpm/hooks -name '*sysusers*.hook' -exec mv {} {}.disabled \; 2>/dev/null
         find /usr/share/libalpm/hooks -name '*tmpfiles*.hook' -exec mv {} {}.disabled \; 2>/dev/null
         true
