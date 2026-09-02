@@ -383,39 +383,40 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
     }
 
     suspend fun deleteContainerContents(context: Context, containerId: Int): Boolean =
-        withContext(Dispatchers.IO) {
-            val dir = containerPath(context, containerId)
-            if (!dir.isDirectory) {
-                Log.w("NativeInstall", "deleteContainer: not a directory $dir")
-                return@withContext false
-            }
+    withContext(Dispatchers.IO) {
+        val dir = containerPath(context, containerId)
+        if (!dir.isDirectory) {
+            Log.w("NativeInstall", "deleteContainer: not a directory $dir")
+            return@withContext false
+        }
 
-            try {
-                val pb = ProcessBuilder(
-                    "/system/bin/sh", 
-                    "-c", 
-                    "rm -rf \"\$1\"", 
-                    "_", 
-                    dir.absolutePath 
-                ).redirectErrorStream(true)
+        try {
+            // First make everything owner-writable/executable so rm -rf can delete it.
+            val pb = ProcessBuilder(
+                "/system/bin/sh",
+                "-c",
+                "chmod -R 755 \"\$1\" && rm -rf \"\$1\"",
+                "_",
+                dir.absolutePath
+            ).redirectErrorStream(true)
 
-                val process = pb.start()
-                val output = process.inputStream.bufferedReader().use { it.readText() }
-                val exitCode = process.waitFor()
+            val process = pb.start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            val exitCode = process.waitFor()
 
-                if (exitCode == 0) {
-                    Log.i("NativeInstall", "Container $containerId cleared via shell rm -rf")
-                    dir.mkdirs()
-                    true
-                } else {
-                    Log.e("NativeInstall", "Shell rm -rf failed with exit $exitCode. Output: $output")
-                    false
-                }
-            } catch (e: Exception) {
-                Log.e("NativeInstall", "Failed to delete container $containerId via shell", e)
+            if (exitCode == 0) {
+                Log.i("NativeInstall", "Container $containerId cleared via shell chmod + rm -rf")
+                dir.mkdirs()  // recreate empty container directory
+                true
+            } else {
+                Log.e("NativeInstall", "Shell chmod/rm -rf failed with exit $exitCode. Output: $output")
                 false
             }
+        } catch (e: Exception) {
+            Log.e("NativeInstall", "Failed to delete container $containerId via shell", e)
+            false
         }
+    }
     
     private fun configureDns(context: Context, containerId: Int) {
     try {
