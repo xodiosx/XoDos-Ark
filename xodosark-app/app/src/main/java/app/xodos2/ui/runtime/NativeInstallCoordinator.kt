@@ -708,6 +708,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
             applyProotBypasses(context, containerId, detected)
             saveContainerDistro(context, containerId, detected)
             applyArchPacmanFixes(context, containerId, detected)
+            applyNixOsFixes(context, containerId, detected)    
         }
         ok
     }
@@ -759,6 +760,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
             applyProotBypasses(context, containerId, detected)
             saveContainerDistro(context, containerId, detected)
             applyArchPacmanFixes(context, containerId, detected)
+            applyNixOsFixes(context, containerId, detected)    
         }
         ok
     }
@@ -927,6 +929,79 @@ private fun copyAssetToContainer(context: Context, containerId: Int, assetName: 
     }
 }
 
+
+private fun applyNixOsFixes(context: Context, containerId: Int, distroType: String) {
+    Log.d("NativeInstall", "applyNixOsFixes called: container=$containerId, distro=$distroType")
+
+    if (!distroType.lowercase().contains("nix")) {
+        Log.d("NativeInstall", "Not a NixOS distro, skipping")
+        return
+    }
+
+    val rootfs = containerPath(context, containerId)
+    val homeDir = File(rootfs, "root")
+    if (!homeDir.exists()) homeDir.mkdirs()
+
+    val bashProfile = File(homeDir, ".bash_profile")
+
+    val content = """
+        echo ' Welcome to NixOS '
+        # Override nix-channel to make --update safe
+        nix-channel() {
+        export NATIVE_LIB=/data/data/app.xodos2/files/usr
+            if [ "\$1" = "--update" ]; then
+                # Use the second argument as channel name, default to nixos-unstable
+                CHANNEL="\${2:-nixos-24.11}"
+                TARBALL_URL="https://channels.nixos.org/\$CHANNEL/nixexprs.tar.xz"
+                TARGET_DIR="\$HOME/.nix-defexpr/channels/nixpkgs"
+                TMP_DIR=\$(mktemp -d)
+
+                echo "🔄 Updating \$CHANNEL channel safely..."
+                curl -L "\$TARBALL_URL" -o "\$TMP_DIR/nixpkgs.tar.xz" || {
+                    echo "Download failed"; rm -rf "\$TMP_DIR"; return 1
+                }
+               PATH="\$NATIVE_LIB/bin:\$PATH" LD_LIBRARY_PATH="\$NATIVE_LIB/lib:\$LD_LIBRARY_PATH" tar -xJf "\$TMP_DIR/nixpkgs.tar.xz" -C "\$TMP_DIR" || {
+                    echo "Extraction failed"; rm -rf "\$TMP_DIR"; return 1
+                }
+                EXTRACTED=\$(find "\$TMP_DIR" -maxdepth 1 -type d -name "nixos-*" | head -n1)
+                if [ -z "\$EXTRACTED" ]; then
+                    echo "Error: extracted folder not found"; rm -rf "\$TMP_DIR"; return 1
+                fi
+                rm -rf "\$TARGET_DIR"
+                mv "\$EXTRACTED" "\$TARGET_DIR"
+                rm -rf "\$TMP_DIR"
+                echo "✅ Channel updated to \$CHANNEL"
+                echo "💡 Ensure NIX_PATH is set: export NIX_PATH=nixpkgs=~/.nix-defexpr/channels/nixpkgs"
+            else
+                # Forward all other arguments to the real nix-channel
+                command nix-channel "\$@"
+            fi
+        }
+
+        # XoDos-ark environment
+        unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true
+        export WAYLAND_DISPLAY=wayland-xodos2
+        if [ -f /.x11 ]; then
+         export DISPLAY=:0
+         unset WAYLAND_DISPLAY
+        fi
+        export PULSE_SERVER=127.0.0.1        
+        export MOZ_FAKE_NO_SANDBOX=1
+        export DISTRO=nixos
+        source /etc/environment
+    """.trimIndent()
+
+    try {
+        bashProfile.writeText(content)
+        // Set permissions: owner read/write only (600)
+        bashProfile.setReadable(true, false)
+        bashProfile.setWritable(true, false)
+        bashProfile.setExecutable(false)
+        Log.i("NativeInstall", "Wrote NixOS .bash_profile for container $containerId")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write NixOS .bash_profile", e)
+    }
+}
 
 private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType: String) {
     Log.d("NativeInstall", "applyArchPacmanFixes called: container=$containerId, distro=$distroType")
