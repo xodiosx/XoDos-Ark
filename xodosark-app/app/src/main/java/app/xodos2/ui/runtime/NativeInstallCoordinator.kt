@@ -966,10 +966,7 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
         startupScript.writeText("""
             #!/bin/sh
             # One-time pacman keyring initializer for XoDos-Ark
-            if [ -f /etc/pacman.d/gnupg/pubring.gpg ] || [ -f /etc/pacman.d/gnupg/pubring.kbx ]; then
-                mv /etc/profile.d/zz-fix-pacman.sh /etc/profile.d/zz-fix-pacman.sh.disabled
-                exit 0
-            fi
+         
 
             echo "Initializing pacman keyring (one-time)..."
             pacman-key --init
