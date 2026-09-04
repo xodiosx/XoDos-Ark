@@ -1,12 +1,21 @@
-name: Mirror termux/proot-distro v4.34.2 (Pre-release)
+name: Mirror GitHub Release (Pre-release)
 
 on:
   workflow_dispatch:
     inputs:
+      source_owner:
+        description: 'Upstream owner (e.g. termux)'
+        required: true
+      source_repo:
+        description: 'Upstream repository (e.g. proot-distro)'
+        required: true
+      source_tag:
+        description: 'Upstream release tag (e.g. v4.34.2)'
+        required: true
       target_tag:
         description: 'Release tag in this repo (leave empty to use upstream tag)'
         required: false
-        default: 'v4.34.2'
+        default: ''
       target_title:
         description: 'Release title in this repo (leave empty to use upstream title)'
         required: false
@@ -27,9 +36,9 @@ jobs:
 
       - name: Download upstream release assets and metadata
         env:
-          SOURCE_OWNER: termux
-          SOURCE_REPO: proot-distro
-          SOURCE_TAG: v4.34.2
+          SOURCE_OWNER: ${{ inputs.source_owner }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          SOURCE_TAG: ${{ inputs.source_tag }}
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -92,11 +101,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Use input tag if provided, otherwise fall back to source tag (v4.34.2)
+          # Use input tag if provided, otherwise fall back to source tag
           if [[ -n "$TARGET_TAG_INPUT" ]]; then
             FINAL_TAG="$TARGET_TAG_INPUT"
           else
-            FINAL_TAG="v4.34.2"
+            FINAL_TAG="${{ inputs.source_tag }}"
           fi
 
           # Use input title if provided, otherwise read upstream title from file
@@ -112,9 +121,9 @@ jobs:
       - name: Publish pre-release in this repository
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_OWNER: termux
-          SOURCE_REPO: proot-distro
-          SOURCE_TAG: v4.34.2
+          SOURCE_OWNER: ${{ inputs.source_owner }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          SOURCE_TAG: ${{ inputs.source_tag }}
           TARGET_TAG: ${{ steps.vars.outputs.tag }}
           TARGET_TITLE: ${{ steps.vars.outputs.title }}
         run: |
