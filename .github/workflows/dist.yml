@@ -1,4 +1,4 @@
-name: Mirror termux/proot-distro v4.29.0 (Pre-release)
+name: Mirror termux/proot-distro v4.34.2 (Pre-release)
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
       target_tag:
         description: 'Release tag in this repo (leave empty to use upstream tag)'
         required: false
-        default: 'v4.29.0'
+        default: 'v4.34.2'
       target_title:
         description: 'Release title in this repo (leave empty to use upstream title)'
         required: false
@@ -29,7 +29,7 @@ jobs:
         env:
           SOURCE_OWNER: termux
           SOURCE_REPO: proot-distro
-          SOURCE_TAG: v4.29.0
+          SOURCE_TAG: v4.34.2
         run: |
           set -euo pipefail
           mkdir -p release-assets
@@ -92,11 +92,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Use input tag if provided, otherwise fall back to source tag (v4.29.0)
+          # Use input tag if provided, otherwise fall back to source tag (v4.34.2)
           if [[ -n "$TARGET_TAG_INPUT" ]]; then
             FINAL_TAG="$TARGET_TAG_INPUT"
           else
-            FINAL_TAG="v4.29.0"
+            FINAL_TAG="v4.34.2"
           fi
 
           # Use input title if provided, otherwise read upstream title from file
@@ -114,7 +114,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SOURCE_OWNER: termux
           SOURCE_REPO: proot-distro
-          SOURCE_TAG: v4.29.0
+          SOURCE_TAG: v4.34.2
           TARGET_TAG: ${{ steps.vars.outputs.tag }}
           TARGET_TITLE: ${{ steps.vars.outputs.title }}
         run: |
