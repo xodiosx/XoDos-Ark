@@ -204,15 +204,19 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
     listOf(
         // Others 
         "https://github.com/xodiosx/XoDos-Ark/releases/download/v2.34.7/nixos-aarch64-pd-v2.34.7.tar.xz",
+       "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-arm64-rf/parrot-rootfs-arm64.tar.xz",
+       "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.37.0-kde/archlinux-kde-plasma.tar.xz",
       
         // All aarch64 distros from XoDos-Ark mirror-v4.17.3
-        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/alpine-aarch64-pd-v4.17.3.tar.xz",
-        "https://github.com/termux/proot-distro/releases/download/v4.18.0/ubuntu-noble-aarch64-pd-v4.18.0.tar.xz",
-        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/chimera-aarch64-pd-v4.17.3.tar.xz",
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/4.37.0/alpine-aarch64-pd-v4.37.0.tar.xz",
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/ubuntu-plucky-aarch64-pd-v4.29.0.tar.xz",
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/pardus-aarch64-pd-v4.29.0.tar.xz",
+         "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/deepin-aarch64-pd-v4.29.0.tar.xz,
         "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/debian-bookworm-aarch64-pd-v4.17.3.tar.xz",
-        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/fedora-aarch64-pd-v4.17.3.tar.xz",
-        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/archlinux-aarch64-pd-v4.17.3.tar.xz",
-        "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-arm64-rf/kali-rootfs-arm64.tar.xz"
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/debian-trixie-aarch64-pd-v4.29.0.tar.xz",
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.34.2/opensuse-aarch64-pd-v4.34.2.tar.xz",
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.34.2/manjaro-aarch64-pd-v4.34.2.tar.xz",
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.34.2/archlinux-aarch64-pd-v4.34.2.tar.xz"
     )
 }
 
