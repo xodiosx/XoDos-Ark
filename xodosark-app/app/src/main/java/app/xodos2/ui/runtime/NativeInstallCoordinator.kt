@@ -399,7 +399,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
                     "/system/bin/sh", 
                     "-c", 
                     // First try fast delete. If directory still exists, fix permissions and retry.
-                   "rm -rf \"$1\"; if [ -e \"$1\" ]; then chmod -R 755 \"$1\" && rm -rf \"$1\"; fi",
+                   "rm -rf \"\$1\"; if [ -e \"\$1\" ]; then chmod -R 755 \"\$1\" && rm -rf \"\$1\"; fi",
                     "_", 
                     dir.absolutePath 
                 ).redirectErrorStream(true)
