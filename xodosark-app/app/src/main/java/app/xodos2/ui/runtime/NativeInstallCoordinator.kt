@@ -211,7 +211,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
         "https://github.com/xodiosx/XoDos-Ark/releases/download/4.37.0/alpine-aarch64-pd-v4.37.0.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/ubuntu-plucky-aarch64-pd-v4.29.0.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/pardus-aarch64-pd-v4.29.0.tar.xz",
-        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/deepin-aarch64-pd-v4.29.0.tar.xz,,
+        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/deepin-aarch64-pd-v4.29.0.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/mirror-v4.17.3/debian-bookworm-aarch64-pd-v4.17.3.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.29.0/debian-trixie-aarch64-pd-v4.29.0.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.34.2/opensuse-aarch64-pd-v4.34.2.tar.xz",
