@@ -189,7 +189,10 @@ pub(super) fn build_exec_args(
     let mut env: Vec<CString> = Vec::new();
 
     if is_proot_compatible(rootfs) {
-        let (proot, _loader) = proot_and_loader_paths()?;
+       // let (proot, _loader) = proot_and_loader_paths()?;
+        let (proot, loader) = proot_and_loader_paths()?;
+        let proot_str = proot.to_string_lossy();
+        let loader_str = loader.to_string_lossy();
         argv.push(CString::new(proot.to_string_lossy().as_bytes())?);
 
         ensure_fake_sysdata(rootfs)?;
@@ -341,7 +344,9 @@ pub(super) fn build_exec_args(
             argv.push(CString::new(shell_binary).unwrap());
             argv.push(CString::new("-l").unwrap());
             argv.push(CString::new("-i").unwrap());
-        }
+        }let (proot, loader) = proot_and_loader_paths()?;
+let proot_str = proot.to_string_lossy();
+let loader_str = loader.to_string_lossy();   // <-- ADD THIS LINE
 
         // Environment (no PROOT_LOADER)
         env.extend(vec![
