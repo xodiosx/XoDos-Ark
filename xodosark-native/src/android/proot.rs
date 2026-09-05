@@ -189,22 +189,25 @@ pub(super) fn build_exec_args(
     let mut env: Vec<CString> = Vec::new();
 
     if is_proot_compatible(rootfs) {
-       // let (proot, _loader) = proot_and_loader_paths()?;
+        // ---------- full PRoot container ----------
         let (proot, loader) = proot_and_loader_paths()?;
         let proot_str = proot.to_string_lossy();
         let loader_str = loader.to_string_lossy();
-        argv.push(CString::new(proot.to_string_lossy().as_bytes())?);
 
+        argv.push(CString::new(proot_str.as_bytes()).context("proot path")?);
+
+        // 0. Write fake /proc & /sys content (outside rootfs)
         ensure_fake_sysdata(rootfs)?;
         let sysdata_dir = rootfs.parent().context("rootfs parent")?.join("sysdata");
 
+        // 1. Basic rootfs and options
         argv.push(CString::new("-r").unwrap());
-        argv.push(CString::new(rootfs.to_string_lossy().as_bytes())?);
+        argv.push(CString::new(rootfs.to_string_lossy().as_bytes()).context("rootfs path")?);
 
         let kernel_release = format!("{} {}", DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION);
         argv.push(CString::new(format!("--kernel-release={}", kernel_release)).unwrap());
-       argv.push(CString::new("-L").unwrap());
-       argv.push(CString::new(loader_str.as_bytes())?);
+
+        argv.push(CString::new("-L").unwrap());
         argv.push(CString::new("--link2symlink").unwrap());
         argv.push(CString::new("--sysvipc").unwrap());
         argv.push(CString::new("--kill-on-exit").unwrap());
@@ -350,8 +353,8 @@ let loader_str = loader.to_string_lossy();   // <-- ADD THIS LINE
 
         // Environment (no PROOT_LOADER)
         env.extend(vec![
-        CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap(),
-        CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap(),
+         CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap(),
+            CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap(),
             CString::new("HOME=/root").unwrap(),
             CString::new("TERM=xterm-256color").unwrap(),
             CString::new("LANG=C.UTF-8").unwrap(),
