@@ -1,20 +1,23 @@
-name: Build xodosark APK cl
+name: update xodosark APK and Release
 
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version string (e.g. 0.4.2)'
+      version_tag:
+        description: 'Version tag (e.g. 0.4.2)'
         required: false
         default: '0.6.0'
-  
+
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     env:
       ANDROID_API: 34
-      NDK_VERSION: 27.1.12297006               
+      NDK_VERSION: 27.1.12297006
 
     steps:
       - name: Checkout
@@ -50,7 +53,7 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Build libxodos2.so
-        working-directory: xodosark-native        
+        working-directory: xodosark-native
         run: |
           set -e
           export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}
@@ -81,10 +84,71 @@ jobs:
         working-directory: xodosark-app
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace
 
-      - name: Upload APK
+      - name: Rename APK & generate MD5
+        id: md5
+        run: |
+          APK_FILE=$(ls xodosark-app/app/build/outputs/apk/release/*.apk | head -1)
+          TAG="${{ github.event.inputs.version_tag }}"
+          RELEASE_NAME="xodosark-${TAG}-arm64-v8a.apk"
+          cp "$APK_FILE" "$RELEASE_NAME"
+          md5sum "$RELEASE_NAME" > md5.txt
+
+          echo "apk_file=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          {
+            echo "md5_list<<EOF"
+            cat md5.txt
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: xodosark-apk-${{ github.event.inputs.version || 'dev' }}
-          path: xodosark-app/app/build/outputs/apk/debug/*.apk
+          name: xodosark-apk-${{ github.event.inputs.version_tag || 'dev' }}
+          path: ${{ steps.md5.outputs.apk_file }}
+
+      # Check if a release with this tag already exists
+      - name: Check if release exists
+        id: check_release
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version_tag != 'dev'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ github.event.inputs.version_tag }}" &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      # Create a new release if it doesn't exist
+      - name: Create new Release
+        if: steps.check_release.outcome == 'success' && steps.check_release.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.version_tag }}
+          name: XoDosArk ${{ github.event.inputs.version_tag }}
+          files: ${{ steps.md5.outputs.apk_file }}
+          prerelease: true
+          body: |
+            📱 XoDosArk APK
+
+            Version: ${{ github.event.inputs.version_tag }}
+
+            MD5:
+            ```
+            ${{ env.md5_list }}
+            ```
+
+      # Update the existing release by uploading the new APK (overwrites same‑named asset)
+      - name: Update existing Release (upload APK)
+        if: steps.check_release.outcome == 'success' && steps.check_release.outputs.exists == 'true'
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.event.inputs.version_tag }}
+          files: ${{ steps.md5.outputs.apk_file }}
+          overwrite: true
