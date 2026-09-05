@@ -27,6 +27,9 @@ class RustPtySession(
     private var appliedPtyRows: Int = -1
     private var appliedPtyCols: Int = -1
 
+    // Flag to ensure we only export once
+    private var didExportAppVersion = false
+
     private fun syncPtyKernelWindowSize(rows: Int, cols: Int) {
         if (rows == appliedPtyRows && cols == appliedPtyCols) return
         appliedPtyRows = rows
@@ -41,10 +44,8 @@ class RustPtySession(
 
         if (!spawnAttempted) {
             spawnAttempted = true
-            
+
             val rootfsKind = TerminalSessionIds.rootfsKindForNativeId(sessionId)
-            
-            // Uses your existing NativeBridge integer mapping
             val spawnOk = NativeBridge.spawnSessionInRootfs(sessionId, rows, columns, rootfsKind)
 
             if (!spawnOk) {
@@ -52,7 +53,7 @@ class RustPtySession(
                 val errorMsg = "\u001b[31mFailed to start session. Check container installation.\u001b[0m\r\n"
                     .toByteArray(Charsets.UTF_8)
                 emulator?.append(errorMsg, errorMsg.size)
-                return // Stop execution if spawn failed
+                return
             } else {
                 Log.i(TAG, "spawnSession succeeded ($sessionId)")
             }
@@ -62,15 +63,33 @@ class RustPtySession(
             syncPtyKernelWindowSize(rows, columns)
             emulator?.resize(columns, rows)
 
+            // Export app version once
+            if (!didExportAppVersion) {
+                didExportAppVersion = true
+                val appVersion = getAppVersion()
+                NativeBridge.writeInput(
+                    sessionId,
+                    "export TERMUX_VERSION=$appVersion\n".toByteArray(Charsets.UTF_8)
+                )
+            }
+
             if (!didAppendWelcomeBanner) {
                 didAppendWelcomeBanner = true
                 val distroName = getDistroName()
-                val welcome = buildWelcomeLine(sessionId, distroName)
+                val welcome = buildWelcomeLine(sessionId, distroName, getAppVersion())
                 emulator?.append(welcome, welcome.size)
             }
         }
 
         PtyOutputRelay.bind(this, terminalView)
+    }
+
+    private fun getAppVersion(): String {
+        return try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "unknown"
+        } catch (e: Exception) {
+            "unknown"
+        }
     }
 
     private fun getDistroName(): String {
@@ -82,7 +101,6 @@ class RustPtySession(
         }
         var distroName = ""
         if (containerId > 0) {
-            // Checks directly inside containers/1/ or containers/2/
             val rootfsTypeFile = File(context.filesDir, "containers/$containerId/.rootfs_type")
             if (rootfsTypeFile.exists()) {
                 distroName = rootfsTypeFile.readText().trim()
@@ -166,7 +184,7 @@ class RustPtySession(
     private companion object {
         private const val TAG = "RustPtySession"
 
-        private fun buildWelcomeLine(sessionId: Int, distroName: String): ByteArray {
+        private fun buildWelcomeLine(sessionId: Int, distroName: String, appVersion: String): ByteArray {
             val rgb = when (distroName.lowercase()) {
                 "archlinux", "arch" -> intArrayOf(0x17, 0x93, 0xD1)
                 "debian"            -> intArrayOf(0x8A, 0x2B, 0xE2)
@@ -193,7 +211,7 @@ class RustPtySession(
             }
             val (r, g, b) = rgb
             val displayName = distroName.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-            val s = "\u001b[38;2;${r};${g};${b}mWelcome to XoDos-Ark # ${displayName}\u001b[0m\n\r"
+            val s = "\u001b[38;2;${r};${g};${b}mWelcome to XoDos-Ark-$appVersion # ${displayName}\u001b[0m\n\r"
             return s.toByteArray(Charsets.UTF_8)
         }
     }
