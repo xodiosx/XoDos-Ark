@@ -200,7 +200,8 @@ pub(super) fn build_exec_args(
 
         let kernel_release = format!("{} {}", DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION);
         argv.push(CString::new(format!("--kernel-release={}", kernel_release)).unwrap());
-
+       argv.push(CString::new("-L").unwrap());
+       argv.push(CString::new(loader_str.as_bytes())?);
         argv.push(CString::new("--link2symlink").unwrap());
         argv.push(CString::new("--sysvipc").unwrap());
         argv.push(CString::new("--kill-on-exit").unwrap());
@@ -344,6 +345,8 @@ pub(super) fn build_exec_args(
 
         // Environment (no PROOT_LOADER)
         env.extend(vec![
+        CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap(),
+        CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap(),
             CString::new("HOME=/root").unwrap(),
             CString::new("TERM=xterm-256color").unwrap(),
             CString::new("LANG=C.UTF-8").unwrap(),
