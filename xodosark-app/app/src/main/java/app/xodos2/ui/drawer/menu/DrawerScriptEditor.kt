@@ -51,8 +51,11 @@ fun DrawerScriptEditor(
             .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
     ) {
-        GlassButton(onClick = { text = initialText }) { Text("Reset", color = Color.White.copy(alpha = 0.8f)) }
-        GlassButton(onClick = { onSave(text.trimEnd()) }) { Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
+        GlassButton(onClick = { text = "" }) {  // ← Reset clears the field
+            Text("Reset", color = Color.White.copy(alpha = 0.8f))
+        }
+        GlassButton(onClick = { onSave(text.trimEnd()) }) {
+            Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+        }
     }
 }
-
