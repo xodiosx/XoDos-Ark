@@ -7,6 +7,9 @@ on:
         description: 'Version tag (e.g., 2.0.0)'
         required: true
         default: '1.0.0'
+      mega_url:
+        description: 'MEGA download link (direct link to file or folder)'
+        required: true
 
 permissions:
   contents: write
@@ -48,16 +51,12 @@ jobs:
           git tag "v${{ inputs.version_tag }}"
           git push origin "v${{ inputs.version_tag }}"
 
-      # Download files from MEGA (replace with your actual MEGA link or secret)
+      # Download files from MEGA using the provided URL
       - name: Download files from MEGA
-        env:
-          MEGA_URL: ${{ secrets.MEGA_URL }}   # Set this secret in your repo settings
         run: |
           mkdir -p mega-files
           cd mega-files
-          megatools dl "$MEGA_URL"
-          # If you prefer to hardcode the URL, use:
-          # megatools dl "https://mega.nz/file/yourfileid"
+          megatools dl "${{ inputs.mega_url }}"
 
       - name: Show downloaded files
         run: ls -lh mega-files/
