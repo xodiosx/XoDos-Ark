@@ -1074,7 +1074,7 @@ fun downloadFullDesktopGUIArchive() {
         try {
             withContext(Dispatchers.IO) {
                 // ★ REPLACE with the actual URL for the full desktop GUI archive
-                val url = URL("https://example.com/full-desktop-gui.tar.xz")
+                val url = URL("https://github.com/xodiosx/XoDos-Ark/releases/download/v0.6.3-full/ark.tar.xz")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 15_000
                 connection.readTimeout = 15_000
@@ -1088,7 +1088,7 @@ fun downloadFullDesktopGUIArchive() {
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
                 if (!downloadsDir.exists()) downloadsDir.mkdirs()
                 // Change the filename as needed
-                val outputFile = File(downloadsDir, "full-desktop-gui.tar.xz")
+                val outputFile = File(downloadsDir, "ark-desktop-gui.tar.xz")
 
                 inputStream.use { input ->
                     outputFile.outputStream().use { output ->
@@ -1110,7 +1110,7 @@ fun downloadFullDesktopGUIArchive() {
 
                 withContext(Dispatchers.Main) {
                     fullDesktopDownloadProgress = 100 to "Download complete"
-                    Toast.makeText(context, "Full desktop GUI archive saved to Downloads", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "xfce4 desktop GUI archive saved to Downloads", Toast.LENGTH_LONG).show()
                 }
             }
         } catch (e: Exception) {
@@ -1659,7 +1659,7 @@ if (fullDesktopDownloadInProgress) {
         onDismissRequest = { /* cannot dismiss while downloading */ },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Downloading full desktop GUI", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text("Downloading XFCE4 desktop GUI≈800mb", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (fullDesktopDownloadProgress.first >= 0) {
@@ -1991,7 +1991,7 @@ if (showContainerManager) {
                         )
                     )
                 ) {
-                    Text("Install Extra drivers packages", fontWeight = FontWeight.Bold)
+                    Text("Install Extra / GUI archives", fontWeight = FontWeight.Bold)
                 }
 
 
@@ -2043,7 +2043,7 @@ Button(
         )
     )
 ) {
-    Text("Download full desktop GUI", fontWeight = FontWeight.Bold)
+    Text("Download XFCE4 desktop GUI", fontWeight = FontWeight.Bold)
 }
                 
                         // ---Clean cache button ---
@@ -2130,7 +2130,7 @@ if (showNativeContainerPrompt != null) {
         modifier = Modifier.glassDialogStyle(),
         title = { Text("Use as native terminal?", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
-            Text("Container $containerId can be set up as a native Android terminal (using the Extra drivers packages).\n\nThis will mark the container as installed without downloading a distribution.\n\nDo you want to continue?", color = Color.White.copy(alpha = 0.85f))
+            Text("Container $containerId can be set up as a native Android terminal (using the Extra/GUI archives).\n\nThis will mark the container as installed without downloading a distribution.\n\nDo you want to continue?", color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
             GlassButton(onClick = {
