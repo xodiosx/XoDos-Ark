@@ -27,44 +27,47 @@ jobs:
           sudo apt update
           sudo apt install -y megatools
 
-      # 🔍 Check if a release for this tag already exists
+      # Check if a release for this tag already exists
       - name: Check if release exists
         id: check_release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if gh release view "v${{ github.event.inputs.version_tag }}" &>/dev/null; then
+          if gh release view "v${{ inputs.version_tag }}" &>/dev/null; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-      # 🏷️ Only create and push the tag for a new release
-      - name: Create Git Tag
+      # Only create and push the Git tag if the release does NOT exist
+      - name: Create Git Tag (if new release)
         if: steps.check_release.outputs.exists == 'false'
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git tag "v${{ github.event.inputs.version_tag }}"
-          git push origin "v${{ github.event.inputs.version_tag }}"
+          git tag "v${{ inputs.version_tag }}"
+          git push origin "v${{ inputs.version_tag }}"
 
-      # ☁️ Download MEGA files into a clean folder
+      # Download files from MEGA (replace with your actual MEGA link or secret)
       - name: Download files from MEGA
+        env:
+          MEGA_URL: ${{ secrets.MEGA_URL }}   # Set this secret in your repo settings
         run: |
-          mkdir mega-files
+          mkdir -p mega-files
           cd mega-files
-          megatools dl "https://mega.nz/file/"
+          megatools dl "$MEGA_URL"
+          # If you prefer to hardcode the URL, use:
+          # megatools dl "https://mega.nz/file/yourfileid"
+
       - name: Show downloaded files
         run: ls -lh mega-files/
 
-      # 🆕 New release → create with body & all files
+      # 🆕 New release → create with body, tag, and all files
       - name: Create new release
         if: steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: "v${{ github.event.inputs.version_tag }}"
+          tag_name: "v${{ inputs.version_tag }}"
           name: "apps-full"
           body: |
             🧩 **Native Apps for XoDos**
@@ -80,15 +83,16 @@ jobs:
             Discord: [discord.gg/d2ChVhPfnF](https://discord.gg/d2ChVhPfnF)
           files: |
             mega-files/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ♻️ Existing release → only add files, don’t touch body/assets
+      # ♻️ Existing release → only add files, keep body and tag unchanged
       - name: Add files to existing release
         if: steps.check_release.outputs.exists == 'true'
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: "v${{ github.event.inputs.version_tag }}"
+          tag_name: "v${{ inputs.version_tag }}"
           files: |
             mega-files/*
-          # No body/name → keeps existing release description untouched
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
