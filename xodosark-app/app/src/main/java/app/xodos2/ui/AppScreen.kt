@@ -281,6 +281,9 @@ var bootstrapError by remember { mutableStateOf<String?>(null) }
 var bootstrapDownloadInProgress by remember { mutableStateOf(false) }
 var bootstrapDownloadProgress by remember { mutableStateOf(0 to "") }
 var showNativeContainerPrompt by remember { mutableStateOf<Int?>(null) }  
+// --- Full Desktop GUI download ---
+var fullDesktopDownloadInProgress by remember { mutableStateOf(false) }
+var fullDesktopDownloadProgress by remember { mutableStateOf(0 to "") }
 
     fun refreshContainerState() {
         val mask = NativeBridge.getInstalledContainersMask()
@@ -1063,6 +1066,69 @@ fun downloadBootstrapArchive() {
     }
 }
 
+fun downloadFullDesktopGUIArchive() {
+    scope.launch {
+        fullDesktopDownloadInProgress = true
+        fullDesktopDownloadProgress = 0 to "Starting download…"
+
+        try {
+            withContext(Dispatchers.IO) {
+                // ★ REPLACE with the actual URL for the full desktop GUI archive
+                val url = URL("https://example.com/full-desktop-gui.tar.xz")
+                val connection = url.openConnection() as HttpURLConnection
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 15_000
+                connection.instanceFollowRedirects = true
+                connection.setRequestProperty("User-Agent", "XoDosArk/1.0")
+                connection.connect()
+
+                val totalSize = connection.contentLengthLong
+                val inputStream = connection.inputStream
+
+                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                if (!downloadsDir.exists()) downloadsDir.mkdirs()
+                // Change the filename as needed
+                val outputFile = File(downloadsDir, "full-desktop-gui.tar.xz")
+
+                inputStream.use { input ->
+                    outputFile.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var bytesCopied = 0L
+                        var read: Int
+                        while (input.read(buffer).also { read = it } != -1) {
+                            output.write(buffer, 0, read)
+                            bytesCopied += read
+                            if (totalSize > 0) {
+                                val pct = (bytesCopied * 100 / totalSize).toInt()
+                                withContext(Dispatchers.Main) {
+                                    fullDesktopDownloadProgress = pct to "Downloading… $pct%"
+                                }
+                            }
+                        }
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    fullDesktopDownloadProgress = 100 to "Download complete"
+                    Toast.makeText(context, "Full desktop GUI archive saved to Downloads", Toast.LENGTH_LONG).show()
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FullDesktopDownload", "Download failed", e)
+            withContext(Dispatchers.Main) {
+                fullDesktopDownloadProgress = -1 to "Download failed: ${e.message}"
+                Toast.makeText(context, "Full desktop GUI download failed", Toast.LENGTH_LONG).show()
+            }
+        } finally {
+            withContext(Dispatchers.Main) {
+                fullDesktopDownloadInProgress = false
+            }
+        }
+    }
+}
+
+
+
     // ----- native init and container check -----
     LaunchedEffect(Unit) {
         AppLogger.log("Starting native init and asset sync")
@@ -1587,6 +1653,44 @@ if (bootstrapDownloadInProgress) {
         }
     )
 }
+
+if (fullDesktopDownloadInProgress) {
+    AlertDialog(
+        onDismissRequest = { /* cannot dismiss while downloading */ },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Downloading full desktop GUI", fontWeight = FontWeight.Bold, color = Color.White) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (fullDesktopDownloadProgress.first >= 0) {
+                    LinearProgressIndicator(
+                        progress = { fullDesktopDownloadProgress.first / 100f },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Color(0xFFC3B6F9),
+                        trackColor = Color.White.copy(alpha = 0.1f)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        fullDesktopDownloadProgress.second,
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    Text(
+                        fullDesktopDownloadProgress.second,
+                        color = Color(0xFFFF6B6B)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            GlassButton(onClick = { fullDesktopDownloadInProgress = false }) {
+                Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
 // ── Restart dialog after installation ───────────────────────────
 if (installDone) {
     // Full‑screen surface to avoid the default window background
@@ -1916,6 +2020,31 @@ if (showContainerManager) {
                 ) {
                     Text("Download Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold)
                 }
+                
+                // --- Download full desktop GUI button ---
+Button(
+    onClick = {
+        showContainerManager = false
+        downloadFullDesktopGUIArchive()
+    },
+    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    colors = ButtonDefaults.buttonColors(
+        containerColor = Color.White.copy(alpha = 0.07f),
+        contentColor = Color.White
+    ),
+    shape = RoundedCornerShape(16.dp),
+    border = BorderStroke(
+        width = 1.dp,
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.22f),
+                Color.White.copy(alpha = 0.03f)
+            )
+        )
+    )
+) {
+    Text("Download full desktop GUI", fontWeight = FontWeight.Bold)
+}
                 
                         // ---Clean cache button ---
                 Button(
