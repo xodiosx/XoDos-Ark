@@ -98,11 +98,11 @@ object DesktopDetector {
      */
     private fun buildXfce4WrapperScript(hostBinaryPath: String): String {
         return """
-#!/bin/sh
+#!/bin/
 # Xfce4 session wrapper created by XoDos2
-# Calls host binary
 
-    exec xfce4-session 
+
+   xfce4-session 
 
 """.trimIndent()
     }
