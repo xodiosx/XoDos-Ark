@@ -477,7 +477,7 @@ val envfix = """
         export PULSE_SERVER=127.0.0.1        
         export MOZ_FAKE_NO_SANDBOX=1
         export DISTRO=$distroId
-        export PATH=/data/data/app.xodos2/files/usr/bin:\$PATH
+        export PATH=/data/data/app.xodos2/files/usr/bin:$PATH
         source /etc/environment
     """.trimIndent()
     
