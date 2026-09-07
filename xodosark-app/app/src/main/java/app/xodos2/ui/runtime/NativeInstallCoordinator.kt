@@ -466,11 +466,34 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
         source /etc/environment
     """.trimIndent()
 
+val envfix = """
+
+        # XoDos-ark environment
+        export WAYLAND_DISPLAY=wayland-xodos2
+        if [ -f /.x11 ]; then
+         export DISPLAY=:0
+         unset WAYLAND_DISPLAY
+        fi
+        export PULSE_SERVER=127.0.0.1        
+        export MOZ_FAKE_NO_SANDBOX=1
+        export DISTRO=$distroId
+        export PATH=/data/data/app.xodos2/files/usr/bin:\$PATH
+        source /etc/environment
+    """.trimIndent()
+    
+
+
     val stype = """
         |$distroId
     """.trimMargin()
 
     distFile.writeText(stype)
+    
+val profileD = File(rootfs, "etc/profile.d")
+profileD.mkdirs()
+val pathScript = File(profileD, "xodos2-native-path.sh")
+pathScript.writeText(envfix.trimStart())
+pathScript.setExecutable(true, false)
 
     // Only append the environment block if it's not already present
     val existing = if (bashrc.exists()) bashrc.readText() else ""

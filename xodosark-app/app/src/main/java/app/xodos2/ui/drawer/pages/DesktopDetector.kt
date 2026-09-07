@@ -26,20 +26,81 @@ object DesktopDetector {
      * environment whose starting binary exists in the container’s /usr/bin.
      */
     fun detectInstalled(context: Context, containerId: Int): List<Pair<String, String>> {
-    val rootfs = app.xodos2.ui.runtime.NativeInstallCoordinator
-        .containerPath(context, containerId)
-
-    // Collect all existing binary directories
+    val rootfs = NativeInstallCoordinator.containerPath(context, containerId)
     val binDirs = listOf("usr/bin", "bin").mapNotNull { subPath ->
         val dir = File(rootfs, subPath)
         if (dir.isDirectory) dir else null
     }
     if (binDirs.isEmpty()) return emptyList()
 
-    return knownBinaries.mapNotNull { (binary, name) ->
+    // First, try normal detection
+    val detected = knownBinaries.mapNotNull { (binary, name) ->
         val exists = binDirs.any { binDir -> File(binDir, binary).exists() }
         if (exists) name to binary else null
+    }.toMutableList()
+
+    // If XFCE not detected, try fallback: use host binaries from files/usr/bin
+    if (detected.none { it.second == "xfce4-session" }) {
+        val hostUsrBin = File(context.filesDir, "usr/bin")
+        val hostXfceSession = File(hostUsrBin, "xfce4-session")
+        val hostStartxfce4 = File(hostUsrBin, "startxfce4")
+
+        if (hostXfceSession.exists() || hostStartxfce4.exists()) {
+            // Determine which host binary to use
+            val hostBinaryPath = if (hostXfceSession.exists()) hostXfceSession.absolutePath
+                                  else hostStartxfce4.absolutePath
+
+            // Create wrapper script inside container's /usr/bin
+            val containerUsrBin = File(rootfs, "usr/bin")
+            if (!containerUsrBin.exists()) containerUsrBin.mkdirs()
+
+            val wrapperFile = File(containerUsrBin, "xfce4-session")
+            val wrapperScript = buildXfce4WrapperScript(hostBinaryPath)
+            try {
+                wrapperFile.writeText(wrapperScript)
+                wrapperFile.setExecutable(true, false)
+                Log.d("DesktopDetector", "Created wrapper at ${wrapperFile.absolutePath}")
+
+                // Re‑check and add XFCE entry
+                if (wrapperFile.exists()) {
+                    detected.add("XFCE Desktop" to "xfce4-session")
+                }
+            } catch (e: Exception) {
+                Log.e("DesktopDetector", "Failed to create wrapper", e)
+            }
+        }
     }
+
+    return detected
+}
+
+private fun buildXfce4WrapperScript(hostBinaryPath: String): String {
+    // Inside the proot container, /data is bind-mounted, so the host path is accessible
+    // We must call the host binary directly to avoid recursion.
+    return """
+#!/bin/sh
+# Xfce4 session wrapper created by XoDos2
+# Calls host binary: $hostBinaryPath
+export PATH='$PATH:/data/data/app.xodos2/files/usr/bin'
+HOST_BIN="$hostBinaryPath"
+
+if [ ! -x "$HOST_BIN" ]; then
+    echo "Host binary not found: $HOST_BIN" >&2
+    exit 1
+fi
+
+# Basic environment setup
+export XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+
+# If dbus-launch exists, use it; otherwise run directly
+if command -v dbus-launch >/dev/null 2>&1; then
+    exec dbus-launch "$HOST_BIN" "$@"
+else
+    exec "$HOST_BIN" "$@"
+fi
+""".trimIndent()
 }
 
     /**
