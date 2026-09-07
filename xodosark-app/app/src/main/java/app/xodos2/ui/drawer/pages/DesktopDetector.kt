@@ -23,11 +23,98 @@ object DesktopDetector {
         "enlightenment_start" to "Enlightenment"
     )
 
+    // Battery status script that works without termux-api
+    private val TERMUX_BATTERY_STATUS_SCRIPT = """
+#!/data/data/app.xodos2/files/usr/bin/sh
+set -e -u
+
+SCRIPTNAME=termux-battery-status
+show_usage () {
+    echo "Usage: ${'$'}SCRIPTNAME"
+    echo "Get the status of the device battery."
+    exit 0
+}
+
+while getopts :h option
+do
+    case "${'$'}option" in
+        h) show_usage;;
+        ?) echo "${'$'}SCRIPTNAME: illegal option -${'$'}OPTARG"; exit 1;;
+    esac
+done
+shift ${'$'}((OPTIND-1))
+
+if [ ${'$'}# != 0 ]; then echo "${'$'}SCRIPTNAME: too many arguments"; exit 1; fi
+
+# Try to find a battery directory in sysfs
+BATTERY_DIR=""
+for d in /sys/class/power_supply/battery /sys/class/power_supply/BAT0 /sys/class/power_supply/BAT1; do
+    if [ -d "${'$'}d" ]; then
+        BATTERY_DIR="${'$'}d"
+        break
+    fi
+done
+
+if [ -z "${'$'}BATTERY_DIR" ]; then
+    echo "No battery information available" >&2
+    exit 1
+fi
+
+# Read basic battery info
+STATUS=$(cat "${'$'}BATTERY_DIR/status" 2>/dev/null || echo "Unknown")
+CAPACITY=$(cat "${'$'}BATTERY_DIR/capacity" 2>/dev/null || echo "0")
+TEMP=$(cat "${'$'}BATTERY_DIR/temp" 2>/dev/null || echo "0")
+VOLTAGE=$(cat "${'$'}BATTERY_DIR/voltage_now" 2>/dev/null || echo "0")
+
+# Determine plugged state (default to unplugged)
+PLUGGED="UNPLUGGED"
+if [ -f /sys/class/power_supply/usb/online ]; then
+    USB_ONLINE=$(cat /sys/class/power_supply/usb/online 2>/dev/null)
+    if [ "${'$'}USB_ONLINE" = "1" ]; then PLUGGED="USB"; fi
+fi
+if [ -f /sys/class/power_supply/ac/online ]; then
+    AC_ONLINE=$(cat /sys/class/power_supply/ac/online 2>/dev/null)
+    if [ "${'$'}AC_ONLINE" = "1" ]; then PLUGGED="AC"; fi
+fi
+if [ "${'$'}PLUGGED" = "UNPLUGGED" ] && [ -f "${'$'}BATTERY_DIR/charge_type" ]; then
+    CHARGE_TYPE=$(cat "${'$'}BATTERY_DIR/charge_type" 2>/dev/null)
+    case "${'$'}CHARGE_TYPE" in
+        *USB*) PLUGGED="USB" ;;
+        *AC*) PLUGGED="AC" ;;
+        *Fast*|*Slow*|*Wireless*) PLUGGED="PLUGGED" ;;
+    esac
+fi
+
+# Determine health
+HEALTH="UNKNOWN"
+if [ -f "${'$'}BATTERY_DIR/health" ]; then
+    HEALTH=$(cat "${'$'}BATTERY_DIR/health" 2>/dev/null)
+    case "${'$'}HEALTH" in
+        Good|GOOD) HEALTH="GOOD" ;;
+        Overheat|OVERHEAT) HEALTH="OVERHEAT" ;;
+        Cold|COLD) HEALTH="COLD" ;;
+        Dead|DEAD) HEALTH="DEAD" ;;
+        Overvoltage|OVERVOLTAGE) HEALTH="OVERVOLTAGE" ;;
+        Unspecified|UNSPECIFIED) HEALTH="UNSPECIFIED" ;;
+    esac
+fi
+
+# Output JSON similar to termux-api
+printf '{\n'
+printf '  "health": "%s",\n' "${'$'}HEALTH"
+printf '  "percentage": %s,\n' "${'$'}CAPACITY"
+printf '  "plugged": "%s",\n' "${'$'}PLUGGED"
+printf '  "status": "%s",\n' "${'$'}STATUS"
+printf '  "temperature": %s,\n' "${'$'}TEMP"
+printf '  "voltage": %s\n' "${'$'}VOLTAGE"
+printf '}\n'
+""".trimIndent()
     /**
      * Returns a list of [displayName, binaryName] for every desktop
      * environment whose starting binary exists in the container’s /usr/bin.
      * If XFCE is not found but its binaries exist in the host files/usr/bin,
      * a wrapper script is created inside the container so it can be launched.
+     * Also writes a fixed battery status script if XFCE host binaries are detected.
      */
     fun detectInstalled(context: Context, containerId: Int): List<Pair<String, String>> {
         val rootfs = NativeInstallCoordinator.containerPath(context, containerId)
@@ -65,6 +152,9 @@ object DesktopDetector {
                 }
                 Log.d("DesktopDetector", "Host binary found: $hostBinaryPath")
 
+                // Write the fixed battery status script (overwrites any existing)
+                writeBatteryStatusScript(context)
+
                 // Create wrapper script inside container's /usr/bin
                 val containerUsrBin = File(rootfs, "usr/bin")
                 if (!containerUsrBin.exists()) {
@@ -93,17 +183,58 @@ object DesktopDetector {
     }
 
     /**
+     * Writes a fixed termux-battery-status script that reads battery info
+     * directly from sysfs, bypassing the missing termux-api binary.
+     * Deletes the old file if it exists, then writes the new script with
+     * executable permission.
+     */
+    private fun writeBatteryStatusScript(context: Context) {
+        val binDir = File(context.filesDir, "usr/bin")
+        if (!binDir.exists()) {
+            binDir.mkdirs()
+        }
+        val batteryScriptFile = File(binDir, "termux-battery-status")
+
+        // Delete old file if present
+        if (batteryScriptFile.exists()) {
+            batteryScriptFile.delete()
+        }
+
+        try {
+            batteryScriptFile.writeText(TERMUX_BATTERY_STATUS_SCRIPT)
+            batteryScriptFile.setExecutable(true, false)  // owner execute
+            batteryScriptFile.setReadable(true, false)    // owner readable
+            batteryScriptFile.setWritable(true, false)    // owner writable
+            Log.d("DesktopDetector", "Battery status script written to ${batteryScriptFile.absolutePath}")
+        } catch (e: Exception) {
+            Log.e("DesktopDetector", "Failed to write battery script", e)
+        }
+    }
+
+    /**
      * Builds a wrapper shell script that calls the host XFCE binary directly.
      * The host path is accessible inside the container because /data is bind-mounted.
      */
     private fun buildXfce4WrapperScript(hostBinaryPath: String): String {
         return """
-#!/bin/
+#!/system/bin/sh
 # Xfce4 session wrapper created by XoDos2
+# Calls host binary: $hostBinaryPath
 
+HOST_BIN="${'$'}{hostBinaryPath}"
 
-   xfce4-session 
+if [ ! -x "${'$'}HOST_BIN" ]; then
+    echo "Host binary not found: ${'$'}HOST_BIN" >&2
+    exit 1
+fi
 
+# Basic environment setup
+export XDG_RUNTIME_DIR="${'$'}{XDG_RUNTIME_DIR:-/tmp/runtime-root}"
+mkdir -p "${'$'}XDG_RUNTIME_DIR"
+chmod 700 "${'$'}XDG_RUNTIME_DIR"
+
+# Directly execute the host binary (no additional dbus wrapping)
+exec "${'$'}HOST_BIN" "${'$'}@"
 """.trimIndent()
     }
 
