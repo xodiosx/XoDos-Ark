@@ -356,6 +356,7 @@ let loader_str = loader.to_string_lossy();   // <-- ADD THIS LINE
          CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap(),
             CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap(),
             CString::new("HOME=/root").unwrap(),
+            CString::new(format!("SHELL={}", shell_path)).unwrap(),
             CString::new("TERM=xterm-256color").unwrap(),
             CString::new("LANG=C.UTF-8").unwrap(),
             CString::new("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/data/data/app.xodos2/files/usr/bin").unwrap(),
