@@ -110,7 +110,6 @@ if [ ! -x "$HOST_BIN" ]; then
 fi
 
 # Basic environment setup
-export XDG_RUNTIME_DIR="/tmp/runtime-root"
 mkdir -p "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 
