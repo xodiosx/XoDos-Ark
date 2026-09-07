@@ -23,7 +23,7 @@ object DesktopDetector {
         "enlightenment_start" to "Enlightenment"
     )
 
-    // Fixed battery status script (written when host XFCE binaries are found)
+    // Battery status script that works without termux-api
     private val TERMUX_BATTERY_STATUS_SCRIPT = """
 #!/data/data/app.xodos2/files/usr/bin/sh
 set -e -u
@@ -137,19 +137,13 @@ printf '}\n'
             if (exists) name to binary else null
         }.toMutableList()
 
-        // === NEW: Write battery status script if host XFCE binaries exist ===
-        val hostUsrBin = File(context.filesDir, "usr/bin")
-        val hostXfceSession = File(hostUsrBin, "xfce4-session")
-        val hostStartxfce4 = File(hostUsrBin, "startxfce4")
-        if (hostXfceSession.exists() || hostStartxfce4.exists()) {
-            Log.d("DesktopDetector", "Host XFCE binaries found, writing battery script")
-            writeBatteryStatusScript(context)
-        }
-        // ==============================================================
-
         // If XFCE not detected, try fallback using host binaries from files/usr/bin
         if (detected.none { it.second == "xfce4-session" }) {
             Log.d("DesktopDetector", "XFCE not found, checking host files/usr/bin")
+            val hostUsrBin = File(context.filesDir, "usr/bin")
+            val hostXfceSession = File(hostUsrBin, "xfce4-session")
+            val hostStartxfce4 = File(hostUsrBin, "startxfce4")
+
             if (hostXfceSession.exists() || hostStartxfce4.exists()) {
                 val hostBinaryPath = if (hostXfceSession.exists()) {
                     hostXfceSession.absolutePath
@@ -157,6 +151,10 @@ printf '}\n'
                     hostStartxfce4.absolutePath
                 }
                 Log.d("DesktopDetector", "Host binary found: $hostBinaryPath")
+
+                // ---------- WRITE BATTERY SCRIPT HERE ----------
+                writeBatteryStatusScript(context)
+                // ---------------------------------------------
 
                 // Create wrapper script inside container's /usr/bin
                 val containerUsrBin = File(rootfs, "usr/bin")
@@ -217,10 +215,7 @@ printf '}\n'
         return """
 #!/bin/
 # Xfce4 session wrapper created by XoDos2
-
-
-   xfce4-session 
-
+xfce4-session 
 """.trimIndent()
     }
 
