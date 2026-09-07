@@ -23,7 +23,7 @@ object DesktopDetector {
         "enlightenment_start" to "Enlightenment"
     )
 
-    // Battery status script that works without termux-api
+    // Fixed battery status script (written when host XFCE binaries are found)
     private val TERMUX_BATTERY_STATUS_SCRIPT = """
 #!/data/data/app.xodos2/files/usr/bin/sh
 set -e -u
@@ -109,12 +109,12 @@ printf '  "temperature": %s,\n' "${'$'}TEMP"
 printf '  "voltage": %s\n' "${'$'}VOLTAGE"
 printf '}\n'
 """.trimIndent()
+
     /**
      * Returns a list of [displayName, binaryName] for every desktop
      * environment whose starting binary exists in the container’s /usr/bin.
      * If XFCE is not found but its binaries exist in the host files/usr/bin,
      * a wrapper script is created inside the container so it can be launched.
-     * Also writes a fixed battery status script if XFCE host binaries are detected.
      */
     fun detectInstalled(context: Context, containerId: Int): List<Pair<String, String>> {
         val rootfs = NativeInstallCoordinator.containerPath(context, containerId)
@@ -137,13 +137,19 @@ printf '}\n'
             if (exists) name to binary else null
         }.toMutableList()
 
+        // === NEW: Write battery status script if host XFCE binaries exist ===
+        val hostUsrBin = File(context.filesDir, "usr/bin")
+        val hostXfceSession = File(hostUsrBin, "xfce4-session")
+        val hostStartxfce4 = File(hostUsrBin, "startxfce4")
+        if (hostXfceSession.exists() || hostStartxfce4.exists()) {
+            Log.d("DesktopDetector", "Host XFCE binaries found, writing battery script")
+            writeBatteryStatusScript(context)
+        }
+        // ==============================================================
+
         // If XFCE not detected, try fallback using host binaries from files/usr/bin
         if (detected.none { it.second == "xfce4-session" }) {
             Log.d("DesktopDetector", "XFCE not found, checking host files/usr/bin")
-            val hostUsrBin = File(context.filesDir, "usr/bin")
-            val hostXfceSession = File(hostUsrBin, "xfce4-session")
-            val hostStartxfce4 = File(hostUsrBin, "startxfce4")
-
             if (hostXfceSession.exists() || hostStartxfce4.exists()) {
                 val hostBinaryPath = if (hostXfceSession.exists()) {
                     hostXfceSession.absolutePath
@@ -151,9 +157,6 @@ printf '}\n'
                     hostStartxfce4.absolutePath
                 }
                 Log.d("DesktopDetector", "Host binary found: $hostBinaryPath")
-
-                // Write the fixed battery status script (overwrites any existing)
-                writeBatteryStatusScript(context)
 
                 // Create wrapper script inside container's /usr/bin
                 val containerUsrBin = File(rootfs, "usr/bin")
@@ -183,10 +186,8 @@ printf '}\n'
     }
 
     /**
-     * Writes a fixed termux-battery-status script that reads battery info
-     * directly from sysfs, bypassing the missing termux-api binary.
-     * Deletes the old file if it exists, then writes the new script with
-     * executable permission.
+     * Writes the fixed battery status script to files/usr/bin,
+     * deleting any existing file first.
      */
     private fun writeBatteryStatusScript(context: Context) {
         val binDir = File(context.filesDir, "usr/bin")
@@ -195,16 +196,13 @@ printf '}\n'
         }
         val batteryScriptFile = File(binDir, "termux-battery-status")
 
-        // Delete old file if present
         if (batteryScriptFile.exists()) {
             batteryScriptFile.delete()
         }
 
         try {
             batteryScriptFile.writeText(TERMUX_BATTERY_STATUS_SCRIPT)
-            batteryScriptFile.setExecutable(true, false)  // owner execute
-            batteryScriptFile.setReadable(true, false)    // owner readable
-            batteryScriptFile.setWritable(true, false)    // owner writable
+            batteryScriptFile.setExecutable(true, false)
             Log.d("DesktopDetector", "Battery status script written to ${batteryScriptFile.absolutePath}")
         } catch (e: Exception) {
             Log.e("DesktopDetector", "Failed to write battery script", e)
@@ -217,24 +215,12 @@ printf '}\n'
      */
     private fun buildXfce4WrapperScript(hostBinaryPath: String): String {
         return """
-#!/system/bin/sh
+#!/bin/
 # Xfce4 session wrapper created by XoDos2
-# Calls host binary: $hostBinaryPath
 
-HOST_BIN="${'$'}{hostBinaryPath}"
 
-if [ ! -x "${'$'}HOST_BIN" ]; then
-    echo "Host binary not found: ${'$'}HOST_BIN" >&2
-    exit 1
-fi
+   xfce4-session 
 
-# Basic environment setup
-export XDG_RUNTIME_DIR="${'$'}{XDG_RUNTIME_DIR:-/tmp/runtime-root}"
-mkdir -p "${'$'}XDG_RUNTIME_DIR"
-chmod 700 "${'$'}XDG_RUNTIME_DIR"
-
-# Directly execute the host binary (no additional dbus wrapping)
-exec "${'$'}HOST_BIN" "${'$'}@"
 """.trimIndent()
     }
 
