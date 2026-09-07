@@ -100,25 +100,10 @@ object DesktopDetector {
         return """
 #!/bin/sh
 # Xfce4 session wrapper created by XoDos2
-# Calls host binary: $hostBinaryPath
+# Calls host binary
 
-HOST_BIN="$hostBinaryPath"
+    exec xfce4-session 
 
-if [ ! -x "$HOST_BIN" ]; then
-    echo "Host binary not found: $HOST_BIN" >&2
-    exit 1
-fi
-
-# Basic environment setup
-mkdir -p "$XDG_RUNTIME_DIR"
-chmod 700 "$XDG_RUNTIME_DIR"
-
-# If dbus-launch exists, use it; otherwise run directly
-if command -v dbus-launch >/dev/null 2>&1; then
-    exec dbus-launch "$HOST_BIN" "$@"
-else
-    exec "$HOST_BIN" "$@"
-fi
 """.trimIndent()
     }
 
