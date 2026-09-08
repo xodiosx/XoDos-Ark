@@ -541,28 +541,31 @@ pathScript.setExecutable(true, false)
     }
 
     fun detectDistroFromRootfs(context: Context, containerId: Int): String? {
-        val rootfs = containerPath(context, containerId)
+    val rootfs = containerPath(context, containerId)
 
-        val etcRelease = File(rootfs, "etc/os-release")
-        if (etcRelease.exists() && etcRelease.isFile) {
-            return parseOsRelease(etcRelease.readText())
-        }
+    // Termux detection: look for the Termux installation directory
+    if (File(rootfs, "data/data/com.termux/files/usr").isDirectory) return "termux"
 
-        val usrLibRelease = File(rootfs, "usr/lib/os-release")
-        if (usrLibRelease.exists() && usrLibRelease.isFile) {
-            return parseOsRelease(usrLibRelease.readText())
-        }
-
-        if (File(rootfs, "etc/debian_version").exists()) return "debian"
-        if (File(rootfs, "etc/arch-release").exists())  return "archlinux"
-        if (File(rootfs, "etc/alpine-release").exists()) return "alpine"
-        if (File(rootfs, "etc/void-release").exists())   return "void"
-        if (File(rootfs, "etc/fedora-release").exists()) return "fedora"
-            // NixOS and Guix have store directories
-       if (File(rootfs, "nix/store").isDirectory) return "nixos"
-       if (File(rootfs, "gnu/store").isDirectory) return "guix"
-        return null
+    // ... existing checks follow ...
+    val etcRelease = File(rootfs, "etc/os-release")
+    if (etcRelease.exists() && etcRelease.isFile) {
+        return parseOsRelease(etcRelease.readText())
     }
+
+    val usrLibRelease = File(rootfs, "usr/lib/os-release")
+    if (usrLibRelease.exists() && usrLibRelease.isFile) {
+        return parseOsRelease(usrLibRelease.readText())
+    }
+
+    if (File(rootfs, "etc/debian_version").exists()) return "debian"
+    if (File(rootfs, "etc/arch-release").exists())  return "archlinux"
+    if (File(rootfs, "etc/alpine-release").exists()) return "alpine"
+    if (File(rootfs, "etc/void-release").exists())   return "void"
+    if (File(rootfs, "etc/fedora-release").exists()) return "fedora"
+    if (File(rootfs, "nix/store").isDirectory) return "nixos"
+    if (File(rootfs, "gnu/store").isDirectory) return "guix"
+    return null
+}
 
     private fun parseOsRelease(content: String): String? {
         val id = content.lines()

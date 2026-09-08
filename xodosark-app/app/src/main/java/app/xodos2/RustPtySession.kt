@@ -186,7 +186,7 @@ class RustPtySession(
 
         private fun buildWelcomeLine(sessionId: Int, distroName: String, appVersion: String): ByteArray {
             val rgb = when (distroName.lowercase()) {
-                "archlinux", "arch" -> intArrayOf(0x17, 0x93, 0xD1)
+                "archlinux", "arch", "termux" -> intArrayOf(0x17, 0x93, 0xD1)
                 "debian"            -> intArrayOf(0x8A, 0x2B, 0xE2)
                 "nixos"             -> intArrayOf(0x8A, 0x2B, 0xE2)
                 "ubuntu"            -> intArrayOf(0xE9, 0x54, 0x20)
