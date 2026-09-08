@@ -6,12 +6,11 @@
 //! * `sys/.empty` directory
 //! If any of them is missing, the container is treated as non‑proot and a
 //! lightweight Android shell is launched with `PREFIX` pointing to its `/usr`.
-
 use super::{get_application_context, has_rootfs};
 use super::{host_pulse_runtime_dir, guest_pulse_server_env, GUEST_PULSE_RUNTIME_MOUNT};
 use anyhow::{Context, Result};
 use nix::pty::{forkpty, ForkptyResult, Winsize};
-use nix::unistd::{dup, execve, Pid};
+use nix::unistd::{dup, execve, getuid, getgid, Pid};
 use std::ffi::CString;
 use std::fs::{self, File};
 use std::io::Write;
@@ -21,7 +20,7 @@ use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::{Path, PathBuf};
 
 // --------------------------------------------------------------------------
-// Constants (unchanged)
+// Constants
 // --------------------------------------------------------------------------
 
 const DEFAULT_FAKE_KERNEL_RELEASE: &str = "6.17.0-PRoot-Distro";
@@ -29,7 +28,7 @@ const DEFAULT_FAKE_KERNEL_VERSION: &str =
     "#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000";
 
 // --------------------------------------------------------------------------
-// Pulse / profile helpers (unchanged)
+// Pulse / profile helpers
 // --------------------------------------------------------------------------
 
 const PULSE_CLIENT_NO_SHM: &str = "\
@@ -117,8 +116,11 @@ fn has_termux_inside_container(rootfs: &Path) -> bool {
     exists
 }
 
+fn current_uid_gid() -> (u32, u32) {
+    (getuid().as_raw(), getgid().as_raw())
+}
+
 fn ensure_fake_sysdata(rootfs: &Path) -> Result<()> {
-    // unchanged
     let sysdata_dir = rootfs
         .parent()
         .context("rootfs parent directory")?
@@ -163,7 +165,6 @@ fn ensure_fake_sysdata(rootfs: &Path) -> Result<()> {
 }
 
 fn fake_proc_bindings(_rootfs: &Path, sysdata_dir: &Path) -> Result<Vec<CString>> {
-    // unchanged
     let mut binds = Vec::new();
     let pairs = [
         ("/proc/loadavg", "loadavg"),
@@ -206,6 +207,9 @@ pub(super) fn build_exec_args(
         let proot_str = proot.to_string_lossy();
         let loader_str = loader.to_string_lossy();
 
+        // Detect Termux inside the container rootfs early
+        let termux_detected = has_termux_inside_container(rootfs);
+
         argv.push(CString::new(proot_str.as_bytes()).context("proot path")?);
 
         // 0. Write fake /proc & /sys content (outside rootfs)
@@ -223,12 +227,19 @@ pub(super) fn build_exec_args(
         argv.push(CString::new("--link2symlink").unwrap());
         argv.push(CString::new("--sysvipc").unwrap());
         argv.push(CString::new("--kill-on-exit").unwrap());
-        argv.push(CString::new("--change-id=0:0").unwrap());
+
+        // Conditional UID/GID change
+        if termux_detected {
+            let (uid, gid) = current_uid_gid();
+            argv.push(CString::new(format!("--change-id={}:{}", uid, gid)).unwrap());
+        } else {
+            argv.push(CString::new("--change-id=0:0").unwrap());
+        }
 
         // Core binds – conditional /data handling
         argv.push(CString::new("--bind=/dev").unwrap());
 
-        if has_termux_inside_container(rootfs) {
+        if termux_detected {
             // Termux detected inside container:
             // - Do NOT bind host's /data partition.
             // - Bind host Termux home to container's /data/data/com.termux/files/home
@@ -346,7 +357,6 @@ pub(super) fn build_exec_args(
         }
 
         // Shell detection with Termux precedence
-        let termux_detected = has_termux_inside_container(rootfs);
         let mut shell_candidates: Vec<(&str, bool)> = Vec::new();
 
         if termux_detected {
@@ -410,12 +420,11 @@ pub(super) fn build_exec_args(
             argv.push(CString::new("-i").unwrap());
         }
 
-        // Environment
-        // PROOT_LOADER and PROOT_TMP_DIR
+        // Environment variables
         env.push(CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap());
         env.push(CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap());
 
-        // HOME and PATH depend on Termux detection
+        // HOME
         let home_dir = if termux_detected {
             "/data/data/com.termux/files/home"
         } else {
@@ -423,13 +432,23 @@ pub(super) fn build_exec_args(
         };
         env.push(CString::new(format!("HOME={}", home_dir)).unwrap());
 
+        // PATH
         let default_path = if termux_detected {
-            // Include Termux binaries first, then standard dirs
             "/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin"
         } else {
             "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/data/data/app.xodos2/files/usr/bin"
         };
         env.push(CString::new(format!("PATH={}", default_path)).unwrap());
+
+        // USER and LOGNAME
+        let (user_name, logname) = if termux_detected {
+            let current_user = std::env::var("USER").unwrap_or_else(|_| "termux".to_string());
+            (current_user.clone(), current_user)
+        } else {
+            ("root".to_string(), "root".to_string())
+        };
+        env.push(CString::new(format!("USER={}", user_name)).unwrap());
+        env.push(CString::new(format!("LOGNAME={}", logname)).unwrap());
 
         env.push(CString::new("TERM=xterm-256color").unwrap());
         env.push(CString::new("LANG=C.UTF-8").unwrap());
@@ -441,8 +460,6 @@ pub(super) fn build_exec_args(
         env.push(CString::new("QT_QPA_PLATFORM=wayland").unwrap());
         env.push(CString::new("QT_QUICK_BACKEND=software").unwrap());
         env.push(CString::new("VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock").unwrap());
-        env.push(CString::new("USER=root").unwrap());
-        env.push(CString::new("LOGNAME=root").unwrap());
         env.push(CString::new(format!("PULSE_SERVER={}", guest_pulse_server_env())).context("PULSE_SERVER")?);
 
         if rootfs.join("nix/store").is_dir() {
