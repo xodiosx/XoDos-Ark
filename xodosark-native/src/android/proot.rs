@@ -7,10 +7,6 @@
 //! If any of them is missing, the container is treated as non‑proot and a
 //! lightweight Android shell is launched with `PREFIX` pointing to its `/usr`.
 
-//! Proot argv and environment for the interactive shell, plus PTY‑spawn logic.
-
-//! Proot argv and environment for the interactive shell, plus PTY‑spawn logic.
-
 use super::{get_application_context, has_rootfs};
 use super::{host_pulse_runtime_dir, guest_pulse_server_env, GUEST_PULSE_RUNTIME_MOUNT};
 use anyhow::{Context, Result};
@@ -105,6 +101,16 @@ fn is_proot_compatible(rootfs: &Path) -> bool {
             || (rootfs.join("usr/bin").is_dir() && rootfs.join("root").is_dir()));
     log::info!("proot: rootfs {:?} proot_compatible={}", rootfs, compatible);
     compatible
+}
+
+/// Returns true if the rootfs is either:
+/// - located inside the Termux app data directory (`/data/data/com.termux/`), or
+/// - contains a `data/data/com.termux/files` directory (custom Termux‑style distro).
+fn is_termux_like_rootfs(rootfs: &Path) -> bool {
+    if rootfs.starts_with("/data/data/com.termux/") {
+        return true;
+    }
+    rootfs.join("data/data/com.termux/files").is_dir()
 }
 
 fn ensure_fake_sysdata(rootfs: &Path) -> Result<()> {
@@ -215,7 +221,26 @@ pub(super) fn build_exec_args(
 
         // Core binds
         argv.push(CString::new("--bind=/dev").unwrap());
-        argv.push(CString::new("--bind=/data").unwrap());
+
+        if is_termux_like_rootfs(rootfs) {
+            // Termux‑like distro: do NOT bind the whole /data partition.
+            // Instead, bind the host Termux home to the same path inside the container.
+            let host_home = Path::new("/data/data/com.termux/files/home");
+            if host_home.exists() {
+                // Ensure the target directory exists inside the rootfs.
+                let guest_home = rootfs.join("data/data/com.termux/files/home");
+                if let Err(e) = fs::create_dir_all(&guest_home) {
+                    log::warn!("proot: could not create guest home dir {}: {:?}", guest_home.display(), e);
+                }
+                argv.push(CString::new(format!("--bind={}:{}", host_home.display(), host_home.display())).unwrap());
+            } else {
+                log::warn!("proot: host Termux home {} does not exist; skipping bind", host_home.display());
+            }
+        } else {
+            // Standard distro: keep the original /data bind.
+            argv.push(CString::new("--bind=/data").unwrap());
+        }
+
         argv.push(CString::new("--bind=/proc").unwrap());
         argv.push(CString::new("--bind=/sys").unwrap());
         argv.push(CString::new("--bind=/system").unwrap());
@@ -347,15 +372,20 @@ pub(super) fn build_exec_args(
             argv.push(CString::new(shell_binary).unwrap());
             argv.push(CString::new("-l").unwrap());
             argv.push(CString::new("-i").unwrap());
-        }let (proot, loader) = proot_and_loader_paths()?;
-let proot_str = proot.to_string_lossy();
-let loader_str = loader.to_string_lossy();   // <-- ADD THIS LINE
+        }
 
-        // Environment (no PROOT_LOADER)
+        // Determine HOME for environment
+        let home_dir = if is_termux_like_rootfs(rootfs) {
+            "/data/data/com.termux/files/home"
+        } else {
+            "/root"
+        };
+
+        // Environment
         env.extend(vec![
-         CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap(),
+            CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap(),
             CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap(),
-            CString::new("HOME=/root").unwrap(),
+            CString::new(format!("HOME={}", home_dir)).unwrap(),
             CString::new("TERM=xterm-256color").unwrap(),
             CString::new("LANG=C.UTF-8").unwrap(),
             CString::new("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/data/data/app.xodos2/files/usr/bin").unwrap(),
