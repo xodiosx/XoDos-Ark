@@ -10,7 +10,7 @@ use super::{get_application_context, has_rootfs};
 use super::{host_pulse_runtime_dir, guest_pulse_server_env, GUEST_PULSE_RUNTIME_MOUNT};
 use anyhow::{Context, Result};
 use nix::pty::{forkpty, ForkptyResult, Winsize};
-use nix::unistd::{dup, execve, getuid, getgid, Pid};
+use nix::unistd::{dup, execve, Pid};
 use std::ffi::CString;
 use std::fs::{self, File};
 use std::io::Write;
@@ -117,7 +117,9 @@ fn has_termux_inside_container(rootfs: &Path) -> bool {
 }
 
 fn current_uid_gid() -> (u32, u32) {
-    (getuid().as_raw(), getgid().as_raw())
+    unsafe {
+        (nix::libc::getuid(), nix::libc::getgid())
+    }
 }
 
 fn ensure_fake_sysdata(rootfs: &Path) -> Result<()> {
