@@ -21,7 +21,7 @@ use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::{Path, PathBuf};
 
 // --------------------------------------------------------------------------
-// Constants
+// Constants (unchanged)
 // --------------------------------------------------------------------------
 
 const DEFAULT_FAKE_KERNEL_RELEASE: &str = "6.17.0-PRoot-Distro";
@@ -29,7 +29,7 @@ const DEFAULT_FAKE_KERNEL_VERSION: &str =
     "#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000";
 
 // --------------------------------------------------------------------------
-// Pulse / profile helpers
+// Pulse / profile helpers (unchanged)
 // --------------------------------------------------------------------------
 
 const PULSE_CLIENT_NO_SHM: &str = "\
@@ -103,17 +103,22 @@ fn is_proot_compatible(rootfs: &Path) -> bool {
     compatible
 }
 
-/// Returns true if the rootfs is either:
-/// - located inside the Termux app data directory (`/data/data/com.termux/`), or
-/// - contains a `data/data/com.termux/files` directory (custom Termux‑style distro).
-fn is_termux_like_rootfs(rootfs: &Path) -> bool {
-    if rootfs.starts_with("/data/data/com.termux/") {
-        return true;
-    }
-    rootfs.join("data/data/com.termux/files").is_dir()
+/// Returns true if the container rootfs contains a Termux installation
+/// under /data/data/com.termux/files/usr.
+fn has_termux_inside_container(rootfs: &Path) -> bool {
+    let termux_usr = rootfs.join("data/data/com.termux/files/usr");
+    let termux_bin = termux_usr.join("bin");
+    let exists = termux_usr.is_dir() && termux_bin.is_dir();
+    log::info!(
+        "proot: rootfs {:?} has_termux_inside_container={}",
+        rootfs,
+        exists
+    );
+    exists
 }
 
 fn ensure_fake_sysdata(rootfs: &Path) -> Result<()> {
+    // unchanged
     let sysdata_dir = rootfs
         .parent()
         .context("rootfs parent directory")?
@@ -158,6 +163,7 @@ fn ensure_fake_sysdata(rootfs: &Path) -> Result<()> {
 }
 
 fn fake_proc_bindings(_rootfs: &Path, sysdata_dir: &Path) -> Result<Vec<CString>> {
+    // unchanged
     let mut binds = Vec::new();
     let pairs = [
         ("/proc/loadavg", "loadavg"),
@@ -219,25 +225,23 @@ pub(super) fn build_exec_args(
         argv.push(CString::new("--kill-on-exit").unwrap());
         argv.push(CString::new("--change-id=0:0").unwrap());
 
-        // Core binds
+        // Core binds – conditional /data handling
         argv.push(CString::new("--bind=/dev").unwrap());
 
-        if is_termux_like_rootfs(rootfs) {
-            // Termux‑like distro: do NOT bind the whole /data partition.
-            // Instead, bind the host Termux home to the same path inside the container.
-            let host_home = Path::new("/data/data/com.termux/files/home");
-            if host_home.exists() {
-                // Ensure the target directory exists inside the rootfs.
-                let guest_home = rootfs.join("data/data/com.termux/files/home");
-                if let Err(e) = fs::create_dir_all(&guest_home) {
-                    log::warn!("proot: could not create guest home dir {}: {:?}", guest_home.display(), e);
-                }
-                argv.push(CString::new(format!("--bind={}:{}", host_home.display(), host_home.display())).unwrap());
+        if has_termux_inside_container(rootfs) {
+            // Termux detected inside container:
+            // - Do NOT bind host's /data partition.
+            // - Bind host Termux home to container's /data/data/com.termux/files/home
+            let host_xodos_home2 = Path::new("/data/data/app.xodos2/files/home");
+            if host_xodos_home2.exists() {
+                let guest_path = "/data/data/com.termux/files/home";
+                argv.push(CString::new(format!("--bind={}:{}", host_xodos_home2.display(), guest_path)).unwrap());
+                log::info!("proot: Termux inside container, bound host home {} to {}", host_xodos_home2.display(), guest_path);
             } else {
-                log::warn!("proot: host Termux home {} does not exist; skipping bind", host_home.display());
+                log::warn!("proot: host Termux home {} does not exist; skipping bind", host_xodos_home2.display());
             }
         } else {
-            // Standard distro: keep the original /data bind.
+            // Normal distro: keep original /data bind
             argv.push(CString::new("--bind=/data").unwrap());
         }
 
@@ -321,7 +325,7 @@ pub(super) fn build_exec_args(
             }
         }
 
-        // Ensure /etc/resolv.conf and /etc/hosts exist (non‑critical, don't abort on failure)
+        // Ensure /etc/resolv.conf and /etc/hosts exist
         let resolv_conf = rootfs.join("etc/resolv.conf");
         if !resolv_conf.exists() {
             if let Some(parent) = resolv_conf.parent() {
@@ -341,22 +345,54 @@ pub(super) fn build_exec_args(
             }
         }
 
-        // Shell detection with BusyBox fallback
-        let standard_shells = [
-            "/usr/bin/bash", "/bin/bash",
-            "/usr/bin/sh", "/bin/sh",
-            "/usr/bin/dash", "/bin/dash",
-            "/usr/bin/ash", "/bin/ash",
-        ];
+        // Shell detection with Termux precedence
+        let termux_detected = has_termux_inside_container(rootfs);
+        let mut shell_candidates: Vec<(&str, bool)> = Vec::new();
 
-        let shell_path = standard_shells.iter()
-            .find(|s| path_exists_in_rootfs(rootfs, s))
-            .map(|s| (*s, false))
+        if termux_detected {
+            // Termux layout: binaries under /data/data/com.termux/files/usr/bin
+            shell_candidates.extend([
+                ("/data/data/com.termux/files/usr/bin/bash", false),
+                ("/data/data/com.termux/files/usr/bin/sh", false),
+                ("/data/data/com.termux/files/usr/bin/dash", false),
+                ("/data/data/com.termux/files/usr/bin/ash", false),
+            ]);
+            // Also fall back to standard FHS paths just in case
+            shell_candidates.extend([
+                ("/usr/bin/bash", false),
+                ("/bin/bash", false),
+                ("/usr/bin/sh", false),
+                ("/bin/sh", false),
+                ("/usr/bin/dash", false),
+                ("/bin/dash", false),
+                ("/usr/bin/ash", false),
+                ("/bin/ash", false),
+            ]);
+        } else {
+            // Standard distro layout
+            shell_candidates.extend([
+                ("/usr/bin/bash", false),
+                ("/bin/bash", false),
+                ("/usr/bin/sh", false),
+                ("/bin/sh", false),
+                ("/usr/bin/dash", false),
+                ("/bin/dash", false),
+                ("/usr/bin/ash", false),
+                ("/bin/ash", false),
+            ]);
+        }
+
+        let shell_path = shell_candidates.iter()
+            .find(|(path, _)| path_exists_in_rootfs(rootfs, path))
+            .map(|(path, is_busybox)| (*path, *is_busybox))
             .or_else(|| {
+                // BusyBox fallback
                 if path_exists_in_rootfs(rootfs, "/usr/bin/busybox") {
                     Some(("/usr/bin/busybox", true))
                 } else if path_exists_in_rootfs(rootfs, "/bin/busybox") {
                     Some(("/bin/busybox", true))
+                } else if termux_detected && path_exists_in_rootfs(rootfs, "/data/data/com.termux/files/usr/bin/busybox") {
+                    Some(("/data/data/com.termux/files/usr/bin/busybox", true))
                 } else {
                     None
                 }
@@ -374,33 +410,40 @@ pub(super) fn build_exec_args(
             argv.push(CString::new("-i").unwrap());
         }
 
-        // Determine HOME for environment
-        let home_dir = if is_termux_like_rootfs(rootfs) {
+        // Environment
+        // PROOT_LOADER and PROOT_TMP_DIR
+        env.push(CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap());
+        env.push(CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap());
+
+        // HOME and PATH depend on Termux detection
+        let home_dir = if termux_detected {
             "/data/data/com.termux/files/home"
         } else {
             "/root"
         };
+        env.push(CString::new(format!("HOME={}", home_dir)).unwrap());
 
-        // Environment
-        env.extend(vec![
-            CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap(),
-            CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap(),
-            CString::new(format!("HOME={}", home_dir)).unwrap(),
-            CString::new("TERM=xterm-256color").unwrap(),
-            CString::new("LANG=C.UTF-8").unwrap(),
-            CString::new("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/data/data/app.xodos2/files/usr/bin").unwrap(),
-            CString::new(format!("SHELL={}", shell_binary)).unwrap(),
-            CString::new("TMPDIR=/tmp").unwrap(),
-            CString::new("XDG_RUNTIME_DIR=/run/user/0").unwrap(),
-            CString::new("WAYLAND_DISPLAY=wayland-xodos2").unwrap(),
-            CString::new("XDG_SESSION_TYPE=wayland").unwrap(),
-            CString::new("QT_QPA_PLATFORM=wayland").unwrap(),
-            CString::new("QT_QUICK_BACKEND=software").unwrap(),
-            CString::new("VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock").unwrap(),
-            CString::new("USER=root").unwrap(),
-            CString::new("LOGNAME=root").unwrap(),
-            CString::new(format!("PULSE_SERVER={}", guest_pulse_server_env())).context("PULSE_SERVER")?,
-        ]);
+        let default_path = if termux_detected {
+            // Include Termux binaries first, then standard dirs
+            "/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin"
+        } else {
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/data/data/app.xodos2/files/usr/bin"
+        };
+        env.push(CString::new(format!("PATH={}", default_path)).unwrap());
+
+        env.push(CString::new("TERM=xterm-256color").unwrap());
+        env.push(CString::new("LANG=C.UTF-8").unwrap());
+        env.push(CString::new(format!("SHELL={}", shell_binary)).unwrap());
+        env.push(CString::new("TMPDIR=/tmp").unwrap());
+        env.push(CString::new("XDG_RUNTIME_DIR=/run/user/0").unwrap());
+        env.push(CString::new("WAYLAND_DISPLAY=wayland-xodos2").unwrap());
+        env.push(CString::new("XDG_SESSION_TYPE=wayland").unwrap());
+        env.push(CString::new("QT_QPA_PLATFORM=wayland").unwrap());
+        env.push(CString::new("QT_QUICK_BACKEND=software").unwrap());
+        env.push(CString::new("VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock").unwrap());
+        env.push(CString::new("USER=root").unwrap());
+        env.push(CString::new("LOGNAME=root").unwrap());
+        env.push(CString::new(format!("PULSE_SERVER={}", guest_pulse_server_env())).context("PULSE_SERVER")?);
 
         if rootfs.join("nix/store").is_dir() {
             if let Some(pos) = env.iter().position(|s| s.to_str().map_or(false, |v| v.starts_with("PATH="))) {
@@ -411,7 +454,7 @@ pub(super) fn build_exec_args(
             env.push(CString::new("ENV=/root/.bashrc").unwrap());
         }
     } else {
-        // Fallback Bionic environment
+        // Fallback Bionic environment (unchanged)
         log::warn!("proot: rootfs {:?} is not proot-compatible, using fallback", rootfs);
         let prefix = ctx.data_dir.join("usr");
         let prefix_str = prefix.to_string_lossy().into_owned();
@@ -454,7 +497,6 @@ pub(super) fn build_exec_args(
         ]);
     }
 
-    // Log final argv/env at Debug level
     log::debug!("proot: final argv = {:?}", argv.iter().map(|s| s.to_string_lossy().into_owned()).collect::<Vec<_>>());
     log::debug!("proot: final env = {:?}", env.iter().map(|s| s.to_string_lossy().into_owned()).collect::<Vec<_>>());
 
