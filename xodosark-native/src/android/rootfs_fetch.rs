@@ -6,6 +6,14 @@
 //! # Extract
 //! Tar extract, placeholder proc/sys, structure checks, and hard-link bypass for unprivileged Android storage.
 
+//! Download tarball, extract to staging, write [`ROOTFS_READY_SENTINEL`], rename into place.
+//!
+//! # Download
+//! Stream download, rename into place. Checksum validation disabled for dynamic archives.
+//!
+//! # Extract
+//! Tar extract, placeholder proc/sys, structure checks, and hard-link bypass for unprivileged Android storage.
+
 use super::{
     get_application_context, has_rootfs, ROOTFS_READY_SENTINEL,
 };
@@ -111,7 +119,23 @@ where
 // extract helpers
 // ---------------------------------------------------------------------------
 
+/// Returns true if the given directory looks like a Termux rootfs (i.e. it
+/// contains the Termux prefix at `data/data/com.termux/files/usr`).
+fn is_termux_rootfs_dir(dir: &Path) -> bool {
+    dir.join("data/data/com.termux/files/usr").is_dir()
+}
+
 fn validate_rootfs_structure(rootfs_path: &Path) -> Result<()> {
+    // Accept Termux layout early
+    if is_termux_rootfs_dir(rootfs_path) {
+        anyhow::ensure!(
+            rootfs_path.join("data/data/com.termux/files/usr/bin").is_dir(),
+            "Termux rootfs missing data/data/com.termux/files/usr/bin"
+        );
+        // No further checks needed – the prefix is self‑contained.
+        return Ok(());
+    }
+
     let shell_candidates = [
         "bin/sh", "usr/bin/sh",
         "bin/bash", "usr/bin/bash",
@@ -357,7 +381,9 @@ fn extract_tarball(tarball_path: &Path, dest: &Path, temp_extract: &Path) -> Res
                 || dir.join("usr").is_dir()
                 || dir.join("var").is_dir()
                 || dir.join("root").is_dir()
-                || dir.join("etc").is_dir())
+                || dir.join("etc").is_dir()
+                // Accept Termux prefix layout
+                || is_termux_rootfs_dir(dir))
     };
 
     // ---------------------------------------------------------------

@@ -341,17 +341,103 @@ val payload = buildString {
         return sb.toString()
     }
 
-    fun updateContainersSystemEnvironment(context: Context, prefs: SharedPreferences) {
-        val envContent = buildSystemGraphicsEnv(prefs)
-        for (id in 1..3) {
-            val containerDir = NativeInstallCoordinator.containerPath(context, id)
-            if (!containerDir.isDirectory) continue
-            val etcDir = File(containerDir, "etc")
-            etcDir.mkdirs()
-            val envFile = File(etcDir, "environment")
-            envFile.writeText(envContent)
+/**
+ * Writes the current graphics environment settings to
+ * data/data/app.xodos2/files/usr/opt/drv
+ * with paths adapted for the native (non‑proot) environment.
+ */
+fun writeNativeGraphicsEnvironment(context: Context, prefs: SharedPreferences) {
+    val nativeEnv = buildNativeGraphicsEnv(context, prefs)
+    val drvFile = File(context.filesDir, "usr/opt/drv")
+    drvFile.parentFile?.mkdirs()
+    drvFile.writeText(nativeEnv)
+}
+
+/**
+ * Builds a graphics environment snippet for the native environment.
+ * All /usr/ paths are replaced with the app's native files directory.
+ */
+private fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): String {
+    val vulkan = prefs.getString("desktop_vulkan_mode", "LLVMPIPE") ?: "LLVMPIPE"
+    val openGL = prefs.getString("desktop_opengl_mode", "LLVMPIPE") ?: "LLVMPIPE"
+    val nativeUsr = File(context.filesDir, "usr").absolutePath
+
+    fun nativePath(prootPath: String): String {
+        // Replace /usr/ with native usr path
+        return prootPath.replace("/usr/", "$nativeUsr/")
+    }
+
+    val sb = StringBuilder()
+    sb.append("export DISPLAY=:0\n")
+
+    when (openGL) {
+        "VIRGL" -> {
+            sb.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
+            sb.append("export GALLIUM_DRIVER=virpipe\n")
+            sb.append("export MESA_LOADER_DRIVER_OVERRIDE=virpipe\n")
+            sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
+            sb.append("export VTEST_SOCKET_NAME=/data/data/app.xodos2/files/virgl-run/vtest.sock\n")
+            sb.append("export VTEST_RENDERER_SOCKET_NAME=/data/data/app.xodos2/files/virgl-run/vtest.sock\n")
+        }
+        "ZINK" -> {
+            sb.append("export VKD3D_FEATURE_LEVEL=12_0\n")
+            sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+            sb.append("export GALLIUM_DRIVER=zink\n")
+            sb.append("export MESA_LOADER_DRIVER_OVERRIDE=zink\n")
+            sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
+        }
+        "GL4ES" -> {
+            sb.append("export MESA_GL_VERSION_OVERRIDE=2.1 \n")
+            sb.append("export LIBGL_FB=3\n")
+            sb.append("export LIBGL_ALWAYS_SOFTWARE=0\n")
+            sb.append("export LD_LIBRARY_PATH=${nativePath("/usr/lib/aarch64-linux-gnu/gl4es")}:\$LD_LIBRARY_PATH\n")
+        }
+        else -> {
+            sb.append("unset MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG GALLIUM_DRIVER || true\n")
+            sb.append("export GALLIUM_DRIVER=llvmpipe\n")
+            sb.append("export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe\n")
+            sb.append("export LIBGL_ALWAYS_SOFTWARE=1\n")
         }
     }
+
+    when (vulkan) {
+        "VENUS" -> {
+            sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+            sb.append("export TU_DEBUG=noconform\n")
+            sb.append("export VK_ICD_FILENAMES=${nativePath("/usr/share/vulkan/icd.d/virtio_icd.json")}\n")
+            sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/virtio_icd.json")}\n")
+            sb.append("export VN_DEBUG=vtest\n")
+            sb.append("export VTEST_SOCKET_NAME=/data/data/app.xodos2/files/virgl-run/venus.sock\n")
+            sb.append("export VTEST_RENDERER_SOCKET_NAME=/data/data/app.xodos2/files/virgl-run/venus.sock\n")
+        }
+        "TURNIP" -> {
+            sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+            sb.append("export TU_DEBUG=noconform\n")
+            sb.append("export VK_ICD_FILENAMES=${nativePath("/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json")}\n")
+            sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json")}\n")
+            sb.append("export TU_DEBUG=noconform\n")
+        }
+        else -> {
+            sb.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
+        }
+    }
+    return sb.toString()
+}
+
+
+    fun updateContainersSystemEnvironment(context: Context, prefs: SharedPreferences) {
+    val envContent = buildSystemGraphicsEnv(prefs)
+    for (id in 1..3) {
+        val containerDir = NativeInstallCoordinator.containerPath(context, id)
+        if (!containerDir.isDirectory) continue
+        val etcDir = File(containerDir, "etc")
+        etcDir.mkdirs()
+        val envFile = File(etcDir, "environment")
+        envFile.writeText(envContent)
+    }
+    // Also update the native driver environment file
+    writeNativeGraphicsEnvironment(context, prefs)
+}
 
     // ─── Turnip driver helpers ──────────────────────────────────
 
