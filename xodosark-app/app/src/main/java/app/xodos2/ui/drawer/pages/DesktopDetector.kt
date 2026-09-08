@@ -249,6 +249,7 @@ xfce4-session
         """.trimIndent()
 
         // Per‑binary tweaks
+        // We use `exec dbus-run-session` to keep the shell blocking/alive
         val specific = when (binary) {
             "gnome-shell" -> """
                 # GNOME workarounds
@@ -283,7 +284,7 @@ xfce4-session
             "xfce4-session" -> """
                 killall -9 xfce4-session xfce4* 2>/dev/null
                 export XDG_CURRENT_DESKTOP=XFCE
-                exec dbus-run-session xfce4-session &
+                dbus-launch xfce4-session &
                 """.trimIndent()
 
             "lxqt-session" -> """
