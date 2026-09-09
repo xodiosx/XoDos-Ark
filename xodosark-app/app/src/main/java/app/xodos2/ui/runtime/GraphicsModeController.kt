@@ -72,32 +72,33 @@ object GraphicsModeController {
      * @return true if the mode actually changed compared to [previous].
      */
     fun applyAndMaybeToggleVirglHost(
-        prefs: SharedPreferences,
-        previous: Modes,
-        modes: Modes,
-    ): Boolean {
-        val changed = previous != modes
-        persist(prefs, modes)
+    prefs: SharedPreferences,
+    previous: Modes,
+    modes: Modes,
+): Boolean {
+    val changed = previous != modes
+    persist(prefs, modes)
 
-        try {
-            val useVenus = modes.vulkan == "VENUS"
-            val useAngle = modes.openGL == "VIRGL"
+    try {
+        // Treat WRAPPER like VENUS: both need the Venus server
+        val useVenus = modes.vulkan == "VENUS" || modes.vulkan == "WRAPPER"
+        val useAngle = modes.openGL == "VIRGL"
 
-            if (useVenus || useAngle) {
-                // Disable the problematic library before starting the host
-                disableLibAndroid()
-                val mask = (if (useVenus) 1 else 0) or (if (useAngle) 2 else 0)
-                NativeBridge.startVirglServers(mask)
-            } else {
-                NativeBridge.stopVirglHost()
-                // Do NOT restore here – restoration happens in loadFromPrefs.
-            }
-        } catch (t: Throwable) {
-            Log.e("GraphicsMode", "Error toggling virgl host", t)
+        if (useVenus || useAngle) {
+            // Disable the problematic library before starting the host
+            disableLibAndroid()
+            val mask = (if (useVenus) 1 else 0) or (if (useAngle) 2 else 0)
+            NativeBridge.startVirglServers(mask)
+        } else {
+            NativeBridge.stopVirglHost()
+            // Do NOT restore here – restoration happens in loadFromPrefs.
         }
-
-        return changed
+    } catch (t: Throwable) {
+        Log.e("GraphicsMode", "Error toggling virgl host", t)
     }
+
+    return changed
+}
 
     /**
      * Restore the library if it was previously renamed.
