@@ -2092,209 +2092,238 @@ if (pendingOverwriteSlot != null) {
         }
     )
 }
+
 if (showContainerManager) {
-    AlertDialog(
-        onDismissRequest = { showContainerManager = false },
-        containerColor = Color.Transparent,
-        modifier = Modifier
-            .then(glassBlurModifier())
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xE6131124), // deep frosted glass background
-                        Color(0xF20B0F19)
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Color.Transparent
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF07040E),
+                            Color(0xFF140D2F)
+                        )
                     )
-                ),
-                shape = RoundedCornerShape(24.dp)
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.28f),
-                        Color.White.copy(alpha = 0.05f)
-                    )
-                ),
-                shape = RoundedCornerShape(24.dp)
-            ),
-        title = { Text("Container Manager", fontWeight = FontWeight.Bold, color = Color.White) },
-        text = {
-            Column {
-                for (id in 1..3) {
-                    val occupied = when (id) {
-                        1 -> hasContainer1; 2 -> hasContainer2; 3 -> hasContainer3; else -> false
-                    }
+                )
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // ── Header with title and close button ──
+                item {
                     Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(4.dp)
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(
-                            "Container $id" + if (occupied) " (installed)" else " (empty)",
-                            color = Color.White,
-                            modifier = Modifier.weight(1f)
-                        )
-                        // Install button
-                        IconButton(onClick = {
-                            showContainerManager = false
-                            handleContainerInstallClick(id)
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.AddCircle,
-                                contentDescription = "Install to container $id",
-                                tint = Color(0xFFC3B6F9)
+                        Column {
+                            Text(
+                                text = "Container Manager",
+                                fontWeight = FontWeight.Black,
+                                color = Color.White,
+                                style = MaterialTheme.typography.headlineMedium.copy(fontSize = 32.sp)
+                            )
+                            Text(
+                                text = "Manage installed environments",
+                                color = Color(0xFF9F92EC),
+                                style = MaterialTheme.typography.bodyMedium
                             )
                         }
-                        if (occupied) {
-                            // Delete button – shows confirmation instead of immediate delete
-                            IconButton(onClick = {
-                                showDeleteConfirmation = id
-                            }) {
-                                Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF6B6B))
-                            }
-                            // Backup button
-                            IconButton(onClick = {
-                                pendingContainerForBackup = id
-                                backupFilePicker.launch("container${id}_backup.tar.xz")
-                            }) {
-                                Icon(Icons.Default.Save, "Backup", tint = Color(0xFFE9D5FF))
+                        IconButton(onClick = { showContainerManager = false }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+
+                // ── Container rows ──
+                for (id in 1..3) {
+                    item {
+                        val occupied = when (id) {
+                            1 -> hasContainer1
+                            2 -> hasContainer2
+                            3 -> hasContainer3
+                            else -> false
+                        }
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(glassBlurModifier()),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                            border = BorderStroke(
+                                width = 1.dp,
+                                brush = Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.22f),
+                                        Color.White.copy(alpha = 0.03f)
+                                    )
+                                )
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Container $id" + if (occupied) " (installed)" else " (empty)",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = {
+                                    showContainerManager = false
+                                    handleContainerInstallClick(id)
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.AddCircle,
+                                        contentDescription = "Install to container $id",
+                                        tint = Color(0xFFC3B6F9)
+                                    )
+                                }
+                                if (occupied) {
+                                    IconButton(onClick = { showDeleteConfirmation = id }) {
+                                        Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF6B6B))
+                                    }
+                                    IconButton(onClick = {
+                                        pendingContainerForBackup = id
+                                        backupFilePicker.launch("container${id}_backup.tar.xz")
+                                    }) {
+                                        Icon(Icons.Default.Save, "Backup", tint = Color(0xFFE9D5FF))
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = Color.White.copy(alpha = 0.15f))
 
-                // ---Install bootstrap packages button ---
-                Button(
-                    onClick = {
-                        showContainerManager = false
-                        pickBootstrapFile.launch(arrayOf("application/x-xz", "*/*"))
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White.copy(alpha = 0.07f),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.22f),
-                                Color.White.copy(alpha = 0.03f)
-                            )
-                        )
-                    )
-                ) {
-                    Text("Install Extra / GUI archives", fontWeight = FontWeight.Bold)
+                // ── Divider ──
+                item {
+                    HorizontalDivider(color = Color(0xFF2A1E4A), thickness = 1.dp)
                 }
 
-
-       
-                // ---Download bootstrap archive button ---
-                Button(
-                    onClick = {
-                        showContainerManager = false
-                        downloadBootstrapArchive()
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White.copy(alpha = 0.07f),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.22f),
-                                Color.White.copy(alpha = 0.03f)
+                // ── Action buttons ──
+                item {
+                    Button(
+                        onClick = {
+                            showContainerManager = false
+                            pickBootstrapFile.launch(arrayOf("application/x-xz", "*/*"))
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.07f),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))
                             )
                         )
-                    )
-                ) {
-                    Text("Download Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold)
+                    ) {
+                        Text("Install Extra / GUI archives", fontWeight = FontWeight.Bold)
+                    }
                 }
-                
-                // --- Download full desktop GUI button ---
-Button(
-    onClick = {
-        showContainerManager = false
-        downloadFullDesktopGUIArchive()
-    },
-    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    colors = ButtonDefaults.buttonColors(
-        containerColor = Color.White.copy(alpha = 0.07f),
-        contentColor = Color.White
-    ),
-    shape = RoundedCornerShape(16.dp),
-    border = BorderStroke(
-        width = 1.dp,
-        brush = Brush.verticalGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.22f),
-                Color.White.copy(alpha = 0.03f)
-            )
-        )
-    )
-) {
-    Text("Download XFCE4 desktop GUI", fontWeight = FontWeight.Bold)
-}
-                
-                        // ---Clean cache button ---
-                Button(
-                    onClick = {
-                        showCleanCacheConfirmation = true
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White.copy(alpha = 0.07f),
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.22f),
-                                Color.White.copy(alpha = 0.03f)
+
+                item {
+                    Button(
+                        onClick = {
+                            showContainerManager = false
+                            downloadBootstrapArchive()
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.07f),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))
                             )
                         )
-                    )
-                ) {
-                    Text("Clean cache tarballs (*.tar.xz)", fontWeight = FontWeight.Bold)
+                    ) {
+                        Text("Download Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold)
+                    }
                 }
 
+                item {
+                    Button(
+                        onClick = {
+                            showContainerManager = false
+                            downloadFullDesktopGUIArchive()
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.07f),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))
+                            )
+                        )
+                    ) {
+                        Text("Download XFCE4 desktop GUI", fontWeight = FontWeight.Bold)
+                    }
+                }
 
-                // --- Remove Native Environment button ---
-Button(
-    onClick = { showRemoveNativeEnvConfirmation = true },
-    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-    colors = ButtonDefaults.buttonColors(
-        containerColor = Color(0xFFFF6B6B).copy(alpha = 0.15f),
-        contentColor = Color(0xFFFF8B8B)
-    ),
-    shape = RoundedCornerShape(16.dp),
-    border = BorderStroke(
-        width = 1.dp,
-        brush = Brush.verticalGradient(
-            colors = listOf(
-                Color(0xFFFF6B6B).copy(alpha = 0.3f),
-                Color(0xFFFF6B6B).copy(alpha = 0.05f)
-            )
-        )
-    )
-) {
-    Text("Remove Native Environment", fontWeight = FontWeight.Bold)
-}
-                
+                item {
+                    Button(
+                        onClick = { showCleanCacheConfirmation = true },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White.copy(alpha = 0.07f),
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))
+                            )
+                        )
+                    ) {
+                        Text("Clean cache tarballs (*.tar.xz)", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                item {
+                    Button(
+                        onClick = { showRemoveNativeEnvConfirmation = true },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF6B6B).copy(alpha = 0.15f),
+                            contentColor = Color(0xFFFF8B8B)
+                        ),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color(0xFFFF6B6B).copy(alpha = 0.3f), Color(0xFFFF6B6B).copy(alpha = 0.05f))
+                            )
+                        )
+                    ) {
+                        Text("Remove Native Environment", fontWeight = FontWeight.Bold)
+                    }
+                }
             }
-        },
-        confirmButton = {
-            GlassButton(onClick = { showContainerManager = false }) { Text("Close", color = Color.White) }
         }
-    )
+    }
 }
-
 // ── Delete container confirmation dialog ──────────────────────────
 if (showDeleteConfirmation != null) {
     val containerId = showDeleteConfirmation!!
