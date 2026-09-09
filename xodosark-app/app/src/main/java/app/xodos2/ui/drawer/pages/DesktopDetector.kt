@@ -284,6 +284,7 @@ xfce4-session
             "xfce4-session" -> """
                 killall -9 xfce4-session xfce4* 2>/dev/null
                 export XDG_CURRENT_DESKTOP=XFCE
+                export XDG_SESSION_DESKTOP=xfce
                 dbus-launch xfce4-session &
                 """.trimIndent()
 
