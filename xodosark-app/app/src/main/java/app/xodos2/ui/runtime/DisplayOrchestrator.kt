@@ -404,8 +404,8 @@ private fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): 
         "VENUS" -> {
             sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
             sb.append("export TU_DEBUG=noconform\n")
-            sb.append("export VK_ICD_FILENAMES=${nativePath("/usr/share/vulkan/icd.d/virtio_icd.json")}\n")
-            sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/virtio_icd.json")}\n")
+            sb.append("export VK_ICD_FILENAMES=${nativePath("/usr/share/vulkan/icd.d/virtio_icd.aarch64.json")}\n")
+            sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/virtio_icd.aarch64.json")}\n")
             sb.append("export VN_DEBUG=vtest\n")
             sb.append("export VTEST_SOCKET_NAME=/data/data/app.xodos2/files/virgl-run/venus.sock\n")
             sb.append("export VTEST_RENDERER_SOCKET_NAME=/data/data/app.xodos2/files/virgl-run/venus.sock\n")
@@ -417,6 +417,14 @@ private fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): 
             sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json")}\n")
             sb.append("export TU_DEBUG=noconform\n")
         }
+        "WRAPPER" -> {
+        // Native‑only wrapper driver – does not affect proot environment
+        sb.append("export VK_ICD_FILENAMES=${nativePath("/usr/share/vulkan/icd.d/wrapper_icd.aarch64.json")}\n")
+        sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/wrapper_icd.aarch64.json")}\n")
+        sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+        sb.append("export TU_DEBUG=noconform\n")
+        sb.append("export TU_DEBUG=noconform\n")
+    }
         else -> {
             sb.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
         }

@@ -204,6 +204,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
     listOf(
         // Others 
         "https://github.com/xodiosx/XoDos-Ark/releases/download/v2.34.7/nixos-aarch64-pd-v2.34.7.tar.xz",
+         "https://github.com/xodiosx/XoDos-Ark/releases/download/rootfs2/termux.tar.xz",
        "https://github.com/xodiosx/XoDos-Ark/releases/download/rootfs2/parrot_7.2_rootfs.tar.xz",
         "https://github.com/xodiosx/XoDos-Ark/releases/download/rootfs2/kali_2026_2_rootfs.tar.xz",
        "https://github.com/xodiosx/XoDos-Ark/releases/download/v4.37.0-kde/archlinux-kde-plasma.tar.xz",

@@ -95,7 +95,7 @@ import android.view.WindowManager
 
 import app.xodos2.ui.glassDialogStyle
 
-private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP")
+private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")
 private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
 
 private const val X11_MODE_LABEL_NATIVE = "Native"
@@ -3110,8 +3110,5 @@ ShellScreen(
         )
     }
 }
-
-
-
 
 
