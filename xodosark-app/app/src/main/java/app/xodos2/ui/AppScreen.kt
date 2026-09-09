@@ -182,7 +182,22 @@ fun cleanVirglPayloadDirs(context: Context) {
     }
 }
 
+var showRemoveNativeEnvConfirmation by remember { mutableStateOf(false) }
 
+fun removeNativeEnvironment() {
+    scope.launch(Dispatchers.IO) {
+        val usrDir = File(context.filesDir, "usr")
+        val message = if (usrDir.exists()) {
+            if (usrDir.deleteRecursively()) "Native environment removed"
+            else "Failed to remove native environment"
+        } else {
+            "Native environment not found"
+        }
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+}
 
 // ---------------------------------------------------------------
 // AppLogger (unchanged) moved to another class 
@@ -2248,7 +2263,27 @@ Button(
                 }
 
 
-                
+                // --- Remove Native Environment button ---
+Button(
+    onClick = { showRemoveNativeEnvConfirmation = true },
+    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+    colors = ButtonDefaults.buttonColors(
+        containerColor = Color(0xFFFF6B6B).copy(alpha = 0.15f),
+        contentColor = Color(0xFFFF8B8B)
+    ),
+    shape = RoundedCornerShape(16.dp),
+    border = BorderStroke(
+        width = 1.dp,
+        brush = Brush.verticalGradient(
+            colors = listOf(
+                Color(0xFFFF6B6B).copy(alpha = 0.3f),
+                Color(0xFFFF6B6B).copy(alpha = 0.05f)
+            )
+        )
+    )
+) {
+    Text("Remove Native Environment", fontWeight = FontWeight.Bold)
+}
                 
             }
         },
@@ -2350,6 +2385,34 @@ if (showCleanCacheConfirmation) {
         },
         dismissButton = {
             GlassButton(onClick = { showCleanCacheConfirmation = false }) {
+                Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+            }
+        }
+    )
+}
+
+if (showRemoveNativeEnvConfirmation) {
+    AlertDialog(
+        onDismissRequest = { showRemoveNativeEnvConfirmation = false },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("Remove Native Environment?", fontWeight = FontWeight.Bold, color = Color.White) },
+        text = {
+            Text(
+                "This will delete the /data/data/app.xodos2/files/usr directory and all its contents. This action cannot be undone.\n\nAre you sure?",
+                color = Color.White.copy(alpha = 0.85f)
+            )
+        },
+        confirmButton = {
+            GlassButton(onClick = {
+                showRemoveNativeEnvConfirmation = false
+                removeNativeEnvironment()
+            }) {
+                Text("Remove", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            GlassButton(onClick = { showRemoveNativeEnvConfirmation = false }) {
                 Text("Cancel", color = Color.White.copy(alpha = 0.8f))
             }
         }
@@ -3004,6 +3067,7 @@ if (showDistroSelection) {
     val isAnyDialogVisible = showContainerManager || 
                              showDeleteConfirmation != null || 
                              showCleanCacheConfirmation || 
+                             showRemoveNativeEnvConfirmation ||
                              showNativeContainerPrompt != null || 
                              showSlotPicker || 
                              showTurnipDriverDialog || 

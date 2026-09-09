@@ -696,22 +696,34 @@ pathScript.setExecutable(true, false)
     }
 
     suspend fun cleanCacheTarballs(context: Context): Boolean =
-        withContext(Dispatchers.IO) {
-            val cacheDir = context.cacheDir
-            var allOk = true
-            cacheDir.listFiles { f -> 
-                f.name.endsWith(".tar.xz") || f.name.endsWith(".tar.gz") 
-            }?.forEach {
-                if (!it.delete()) {
-                    allOk = false
-                    Log.e("NativeInstall", "Failed to delete ${it.name}")
-                }
-            }
-            if (allOk) Log.i("NativeInstall", "Cache tarballs cleaned")
-            else Log.e("NativeInstall", "Some cache tarballs could not be deleted")
-            allOk
+    withContext(Dispatchers.IO) {
+        val cacheDir = context.cacheDir
+        var allOk = true
+
+        // List all entries (files and folders) inside the cache directory
+        val entries = cacheDir.listFiles()
+        if (entries == null) {
+            Log.e("NativeInstall", "Cache directory cannot be listed")
+            return@withContext false
         }
 
+        for (entry in entries) {
+            try {
+                // deleteRecursively() works for both files and directories
+                if (!entry.deleteRecursively()) {
+                    allOk = false
+                    Log.e("NativeInstall", "Failed to delete ${entry.name}")
+                }
+            } catch (e: Exception) {
+                allOk = false
+                Log.e("NativeInstall", "Failed to delete ${entry.name}: ${e.message}")
+            }
+        }
+
+        if (allOk) Log.i("NativeInstall", "Cache cleared completely")
+        else Log.e("NativeInstall", "Some cache entries could not be deleted")
+        allOk
+    }
     // ---------- installation ----------
     suspend fun installDistroToContainer(
         context: Context,
