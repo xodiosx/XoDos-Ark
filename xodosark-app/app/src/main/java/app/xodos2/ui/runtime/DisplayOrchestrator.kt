@@ -250,7 +250,7 @@ val payload = buildString {
             }
         }
         when (vulkanMode) {
-            "VENUS" -> {
+            "VENUS", "WRAPPER" -> {
                 
                 b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
                 b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/virtio_icd.json\n")
@@ -322,7 +322,7 @@ val payload = buildString {
             }
         }
         when (vulkan) {
-            "VENUS" -> {
+            "VENUS", "WRAPPER" -> {
                 sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
                 sb.append("export TU_DEBUG=noconform\n")
                // sb.append("export GALLIUM_DRIVER=zink\n")
