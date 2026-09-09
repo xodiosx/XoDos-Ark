@@ -267,6 +267,13 @@ val payload = buildString {
                 b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
                 b.append("export TU_DEBUG=noconform\n")
             }
+            "PANVK" -> {
+                b.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
+                b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")             
+                b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/panfrost_icd.json\n")
+                b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/panfrost_icd.json\n")
+                b.append("export TU_DEBUG=noconform\n")
+            }
             else -> {
                 b.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG MESA_GL_VERSION_OVERRIDE LIBGL_FB VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")           
                 
@@ -331,6 +338,13 @@ val payload = buildString {
               //  sb.append("export GALLIUM_DRIVER=zink\n")
                 sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
                 sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json\n")
+                sb.append("export TU_DEBUG=noconform\n")
+            }
+             "PANVK" -> {
+                sb.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
+                sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")             
+                sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/panfrost_icd.json\n")
+                sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/panfrost_icd.json\n")
                 sb.append("export TU_DEBUG=noconform\n")
             }
             else -> {
@@ -445,6 +459,88 @@ private fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): 
     }
     // Also update the native driver environment file
     writeNativeGraphicsEnvironment(context, prefs)
+}
+
+// ─── PANVK driver helpers ──────────────────────────────────
+
+fun panvkAssetPattern(distroType: String): String {
+    // Normalise distro type (same mapping as Turnip for now; adjust if PANVK uses different asset suffixes)
+    val t = distroType.lowercase()
+    return when {
+        t == "archlinux" -> "debian_trixie"
+        t == "artix"     -> "debian_trixie"
+        t == "manjaro"   -> "debian_trixie"
+
+        t == "debian"       -> "debian_trixie"
+        t == "ubuntu"       -> "debian_trixie"
+        t == "trisquel"     -> "debian_trixie"
+        t == "deepin"       -> "debian_trixie"
+        t == "kali"         -> "debian_trixie"
+        t == "raspbian"     -> "debian_trixie"
+
+        t == "fedora"       -> "fedora_43"
+        t == "almalinux"    -> "fedora_43"
+        t == "rocky"        -> "fedora_43"
+
+        t == "alpine"       -> "debian_trixie"
+        t == "void"         -> "void"
+
+        else -> "debian_trixie"
+    }
+}
+
+fun hasPanvkTarball(context: Context): Boolean {
+    val driversDir = File(context.filesDir, "drivers")
+    if (!driversDir.exists()) return false
+    val file = File(driversDir, "panvk.tar.xz")
+    return file.exists() && file.length() > 0
+}
+
+/**
+ * Extracts a PANVK driver tarball into the container rootfs.
+ * Same extraction method as Turnip, but with PANVK marker.
+ */
+suspend fun extractPanvkDriver(context: Context, containerId: Int): Boolean =
+    withContext(Dispatchers.IO) {
+        val driversDir = File(context.filesDir, "drivers")
+        val tarball = File(driversDir, "panvk.tar.xz")
+        if (!tarball.exists()) return@withContext false
+
+        val rootfs = NativeInstallCoordinator.containerPath(context, containerId)
+        if (!rootfs.isDirectory) return@withContext false
+
+        val env = mutableMapOf<String, String>()
+        env["PATH"] = "/data/data/app.xodos2/files/usr/bin:${System.getenv("PATH") ?: "/system/bin"}"
+        env["LD_LIBRARY_PATH"] = "/data/data/app.xodos2/files/usr/lib:${System.getenv("LD_LIBRARY_PATH") ?: ""}"
+
+        val tarExe = File(context.filesDir, "usr/bin/tar")
+        val cmd = arrayOf(
+            tarExe.absolutePath,
+            "-xJf", tarball.absolutePath,       // -J for .tar.xz
+            "-C", rootfs.absolutePath,
+            "--exclude=system", "--exclude=apex", "--exclude=data",
+            "--exclude=sdcard", "--exclude=storage"
+        )
+        val pb = ProcessBuilder(*cmd)
+            .directory(rootfs)
+            .redirectErrorStream(true)
+        pb.environment().putAll(env)
+
+        val process = pb.start()
+        val exitCode = process.waitFor()
+
+        if (exitCode == 0) {
+            val marker = File(rootfs, "etc/.xodos2_panvk_driver_installed")
+            marker.parentFile?.mkdirs()
+            marker.createNewFile()
+            true
+        } else false
+    }
+
+fun isPanvkDriverInstalled(context: Context, containerId: Int): Boolean {
+    val rootfs = NativeInstallCoordinator.containerPath(context, containerId)
+    val marker = File(rootfs, "etc/.xodos2_panvk_driver_installed")
+    return marker.exists()
 }
 
     // ─── Turnip driver helpers ──────────────────────────────────

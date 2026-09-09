@@ -450,7 +450,10 @@ var wineWaylandScriptEditorOpen by remember { mutableStateOf(false) }
 var turnipMissingContainers by remember { mutableStateOf<List<Int>>(emptyList()) }
 var turnipDownloadProgress by remember { mutableStateOf(0 to "") }
 var turnipDownloadInProgress by remember { mutableStateOf(false) }
-
+var showPanvkDriverDialog by remember { mutableStateOf(false) }
+var panvkMissingContainers by remember { mutableStateOf<List<Int>>(emptyList()) }
+var panvkDownloadProgress by remember { mutableStateOf(0 to "") }
+var panvkDownloadInProgress by remember { mutableStateOf(false) }
     // ── Distro installation helpers ──────────────────────────────
 fun installIntoSlot(distro: DistroDescriptor, containerId: Int) {
     scope.launch {
@@ -1390,6 +1393,114 @@ val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
 }
 
     // ----- graphics helpers -----
+    fun checkAndPromptPanvkDrivers() {
+    val missing = mutableListOf<Int>()
+    for (id in 1..3) {
+        val installed = when (id) {
+            1 -> hasContainer1
+            2 -> hasContainer2
+            3 -> hasContainer3
+            else -> false
+        }
+        if (!installed) continue
+
+        // Skip containers that already have the PANVK driver marker
+        if (DisplayOrchestrator.isPanvkDriverInstalled(context, id)) {
+            Log.d("Panvk", "Container $id already has PANVK driver")
+            continue
+        }
+
+        var distro = DisplayOrchestrator.getContainerDistroType(context, id)
+        if (distro == null) {
+            distro = NativeInstallCoordinator.detectDistroFromRootfs(context, id)
+            if (distro != null) {
+                NativeInstallCoordinator.saveContainerDistro(context, id, distro)
+                NativeInstallCoordinator.writeContainerEnvironment(context, id, distro)
+            }
+        }
+        if (distro == null) {
+            Log.w("Panvk", "Skipping container $id – cannot determine distro type")
+            continue
+        }
+
+        missing.add(id)
+    }
+
+    if (missing.isNotEmpty()) {
+        Log.d("Panvk", "Missing PANVK drivers for: $missing")
+        panvkMissingContainers = missing
+        showPanvkDriverDialog = true
+    } else {
+        Log.d("Panvk", "All containers have PANVK driver.")
+    }
+}
+
+suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContext(Dispatchers.IO) {
+    val baseUrl = "https://github.com/xodiosx/mesa-for-android-container/releases/download/mirror-turnip-26.2.0-devel-20260511"
+    val driversDir = File(context.filesDir, "drivers")
+    driversDir.mkdirs()
+
+    val panvkName = "panvk.tar.xz"
+    val panvkFile = File(driversDir, panvkName)
+    val panvkTmpFile = File(driversDir, "$panvkName.tmp")
+
+    // Download once if not already present
+    if (!panvkFile.exists() || panvkFile.length() == 0L) {
+        withContext(Dispatchers.Main) {
+            panvkDownloadProgress = 0 to "Downloading PANVK driver…"
+        }
+        panvkTmpFile.delete()
+        try {
+            val url = URL("$baseUrl/$panvkName")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.connect()
+            val totalSize = connection.contentLengthLong
+            connection.inputStream.use { input ->
+                panvkTmpFile.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var bytesCopied = 0L
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                        bytesCopied += read
+                        val pct = if (totalSize > 0) (bytesCopied * 100 / totalSize).toInt() else 0
+                        withContext(Dispatchers.Main) {
+                            panvkDownloadProgress = pct to "Downloading PANVK… $pct%"
+                        }
+                    }
+                }
+            }
+            if (panvkTmpFile.length() == 0L) throw Exception("PANVK download empty")
+            if (!panvkTmpFile.renameTo(panvkFile)) throw Exception("Failed to rename PANVK archive")
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                panvkDownloadProgress = -1 to "PANVK download failed: ${e.message}"
+            }
+            return@withContext
+        }
+    }
+
+    // Extract into each container
+    for (id in containerIds) {
+        withContext(Dispatchers.Main) {
+            panvkDownloadProgress = 80 to "Extracting PANVK into container $id…"
+        }
+        val ok = DisplayOrchestrator.extractPanvkDriver(context, id)
+        if (!ok) {
+            withContext(Dispatchers.Main) {
+                panvkDownloadProgress = -1 to "PANVK extraction failed for container $id"
+            }
+            return@withContext
+        }
+    }
+
+    withContext(Dispatchers.Main) {
+        panvkDownloadProgress = 100 to "Done"
+        DisplayOrchestrator.updateContainersSystemEnvironment(context, prefs)
+    }
+}
+
+
 fun checkAndPromptTurnipDrivers() {
     val missing = mutableListOf<Int>()
     for (id in 1..3) {
@@ -1493,6 +1604,9 @@ fun setDesktopVulkanMode(mode: String) {
     if (next.vulkan == "TURNIP") {
         checkAndPromptTurnipDrivers()
     }
+    if (next.vulkan == "PANVK") {
+    checkAndPromptPanvkDrivers()
+}
 
     AppLogger.log("Vulkan mode set to $mode (OpenGL forced to LLVMPIPE if Venus)")
 }
@@ -1705,6 +1819,69 @@ if (installDone) {
     return
 }
 
+if (showPanvkDriverDialog) {
+    val isDownloading = panvkDownloadInProgress
+
+    AlertDialog(
+        onDismissRequest = {
+            if (!isDownloading) showPanvkDriverDialog = false
+        },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = { Text("PANVK drivers needed", fontWeight = FontWeight.Bold, color = Color.White) },
+        text = {
+            Column {
+                if (!isDownloading) {
+                    Text("PANVK Vulkan driver not found for containers:", color = Color.White.copy(alpha = 0.85f))
+                    Spacer(Modifier.height(8.dp))
+                    panvkMissingContainers.forEach { id ->
+                        val distro = DisplayOrchestrator.getContainerDistroType(context, id) ?: "unknown"
+                        Text("• Container $id ($distro)", color = Color.White.copy(alpha = 0.85f))
+                    }
+                    Text("\nDo you want to download and install them now?", color = Color.White.copy(alpha = 0.85f))
+                } else {
+                    // Download progress UI
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(modifier = Modifier.size(48.dp), color = Color(0xFFC3B6F9))
+                        Spacer(Modifier.height(16.dp))
+                        Text(panvkDownloadProgress.second, color = Color.White.copy(alpha = 0.85f))
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            progress = { panvkDownloadProgress.first / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFFC3B6F9),
+                            trackColor = Color.White.copy(alpha = 0.1f)
+                        )
+                        Text("${panvkDownloadProgress.first}%", color = Color.White.copy(alpha = 0.65f))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (isDownloading) {
+                GlassButton(onClick = {}) { Text("Downloading…", color = Color.White.copy(alpha = 0.5f)) }
+            } else {
+                GlassButton(onClick = {
+                    panvkDownloadInProgress = true
+                    scope.launch {
+                        downloadAndExtractPanvkDrivers(panvkMissingContainers)
+                        panvkDownloadInProgress = false
+                        showPanvkDriverDialog = false
+                    }
+                }) {
+                    Text("Download & Install", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            if (!isDownloading) {
+                GlassButton(onClick = { showPanvkDriverDialog = false }) {
+                    Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    )
+}
 
 if (showTurnipDriverDialog) {
     val isDownloading = turnipDownloadInProgress
