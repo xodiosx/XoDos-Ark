@@ -182,22 +182,6 @@ fun cleanVirglPayloadDirs(context: Context) {
     }
 }
 
-var showRemoveNativeEnvConfirmation by remember { mutableStateOf(false) }
-
-fun removeNativeEnvironment() {
-    scope.launch(Dispatchers.IO) {
-        val usrDir = File(context.filesDir, "usr")
-        val message = if (usrDir.exists()) {
-            if (usrDir.deleteRecursively()) "Native environment removed"
-            else "Failed to remove native environment"
-        } else {
-            "Native environment not found"
-        }
-        withContext(Dispatchers.Main) {
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-        }
-    }
-}
 
 // ---------------------------------------------------------------
 // AppLogger (unchanged) moved to another class 
@@ -299,6 +283,24 @@ var showNativeContainerPrompt by remember { mutableStateOf<Int?>(null) }
 // --- Full Desktop GUI download ---
 var fullDesktopDownloadInProgress by remember { mutableStateOf(false) }
 var fullDesktopDownloadProgress by remember { mutableStateOf(0 to "") }
+var showRemoveNativeEnvConfirmation by remember { mutableStateOf(false) }
+
+
+
+fun removeNativeEnvironment() {
+    scope.launch(Dispatchers.IO) {
+        val usrDir = File(context.filesDir, "usr")
+        val message = if (usrDir.exists()) {
+            if (usrDir.deleteRecursively()) "Native environment removed"
+            else "Failed to remove native environment"
+        } else {
+            "Native environment not found"
+        }
+        withContext(Dispatchers.Main) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+}
 
     fun refreshContainerState() {
         val mask = NativeBridge.getInstalledContainersMask()
