@@ -1,6 +1,7 @@
 package app.xodos2.ui
 
 import app.xodos2.ui.glass.GlassButton
+import androidx.compose.material.icons.filled.Close
 import android.Manifest
 import android.content.ActivityNotFoundException
 import androidx.activity.result.contract.ActivityResultContracts.CreateDocument
