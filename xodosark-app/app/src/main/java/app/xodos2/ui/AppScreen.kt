@@ -2324,7 +2324,10 @@ if (showContainerManager) {
             }
         }
     }
+    
+    return 
 }
+
 // ── Delete container confirmation dialog ──────────────────────────
 if (showDeleteConfirmation != null) {
     val containerId = showDeleteConfirmation!!
