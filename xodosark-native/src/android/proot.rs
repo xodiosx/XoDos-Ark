@@ -256,10 +256,10 @@ pub(super) fn build_exec_args(
         } else {
     // Normal distro: bind app home to /root
     let host_app_home = Path::new("/data/data/app.xodos2/files/home");
-    if host_app_home.exists() {
+  //  if host_app_home.exists() {
         argv.push(CString::new(format!("--bind={}:/root", host_app_home.display())).unwrap());
         log::info!("proot: bound host app home {} to /root", host_app_home.display());
-    } else {
+   // } else {
         log::warn!("proot: host app home {} does not exist; falling back to /data bind", host_app_home.display());
         // Fallback: mount entire /data if home is missing
         argv.push(CString::new("--bind=/data").unwrap());
