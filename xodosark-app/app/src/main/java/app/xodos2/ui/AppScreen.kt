@@ -267,6 +267,7 @@ var confirmOverwriteContinuation by remember { mutableStateOf<CancellableContinu
 var showDeleteConfirmation by remember { mutableStateOf<Int?>(null) }   // container id to delete
 var showCleanCacheConfirmation by remember { mutableStateOf(false) }
 var deleteInProgress by remember { mutableStateOf(false) }
+var removingNativeEnvInProgress by remember { mutableStateOf(false) } 
 
 var pendingContainerForBackup by remember { mutableStateOf<Int?>(null) }
 var backupInProgress by remember { mutableStateOf(false) }
@@ -289,16 +290,30 @@ var showRemoveNativeEnvConfirmation by remember { mutableStateOf(false) }
 
 
 fun removeNativeEnvironment() {
-    scope.launch(Dispatchers.IO) {
-        val usrDir = File(context.filesDir, "usr")
-        val message = if (usrDir.exists()) {
-            if (usrDir.deleteRecursively()) "Native environment removed"
-            else "Failed to remove native environment"
-        } else {
-            "Native environment not found"
+    scope.launch {
+        removingNativeEnvInProgress = true
+
+        val success = withContext(Dispatchers.IO) {
+            val usrDir = File(context.filesDir, "usr")
+            usrDir.exists() && usrDir.deleteRecursively()
         }
-        withContext(Dispatchers.Main) {
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+
+        if (success) {
+            // Small pause so the user sees the overlay, then restart
+            delay(400)
+            val intent = context.packageManager
+                .getLaunchIntentForPackage(context.packageName)
+                ?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK) }
+            if (intent != null) context.startActivity(intent)
+            (context as? Activity)?.finishAffinity()
+            System.exit(0)
+        } else {
+            removingNativeEnvInProgress = false
+            Toast.makeText(
+                context,
+                "Native environment not found or failed to remove",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 }
@@ -1740,7 +1755,7 @@ fun setDesktopVulkanMode(mode: String) {
         return
     }
 
-if (deleteInProgress) {
+if (deleteInProgress || removingNativeEnvInProgress) {
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = Color(0xFF07040E)
@@ -1752,7 +1767,12 @@ if (deleteInProgress) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(modifier = Modifier.size(48.dp), color = Color(0xFFC3B6F9))
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Deleting container…", style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                Text(
+                    if (removingNativeEnvInProgress) "Removing native environment…"
+                    else "Deleting container…",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White
+                )
             }
         }
     }
