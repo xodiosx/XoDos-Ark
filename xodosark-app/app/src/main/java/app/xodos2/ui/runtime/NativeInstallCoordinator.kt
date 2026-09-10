@@ -136,7 +136,7 @@ Include = /etc/pacman.d/mirrorlist
 
 
 // $PREFIX/bin/nt — native wrapper, written on every distro install
-private val NATIVE_WRAPPER = """
+private val NATIVE_WRAPPER_SCRIPT = """
 #!/data/data/app.xodos2/files/usr/bin/sh
 
 export PREFIX="/data/data/app.xodos2/files/usr"
@@ -154,6 +154,7 @@ export DISPLAY="${'$'}{DISPLAY:-:0}"
 . ${'$'}PREFIX/opt/drv
 
 exec "${'$'}@"
+
 """.trimIndent()
 
 
