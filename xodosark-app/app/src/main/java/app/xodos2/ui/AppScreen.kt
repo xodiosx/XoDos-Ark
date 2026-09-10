@@ -2192,7 +2192,9 @@ if (showContainerManager) {
                                     )
                                 }
                                 if (occupied) {
-                                    IconButton(onClick = { showDeleteConfirmation = id }) {
+                                    IconButton(onClick = { 
+                                    showContainerManager = false
+                                    showDeleteConfirmation = id }) {
                                         Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF6B6B))
                                     }
                                     IconButton(onClick = {
@@ -2284,7 +2286,9 @@ if (showContainerManager) {
 
                 item {
                     Button(
-                        onClick = { showCleanCacheConfirmation = true },
+                        onClick = { 
+                        showContainerManager = false
+                        showCleanCacheConfirmation = true },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color.White.copy(alpha = 0.07f),
@@ -2304,7 +2308,9 @@ if (showContainerManager) {
 
                 item {
                     Button(
-                        onClick = { showRemoveNativeEnvConfirmation = true },
+                        onClick = { 
+                        showContainerManager = false
+                        showRemoveNativeEnvConfirmation = true },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Color(0xFFFF6B6B).copy(alpha = 0.15f),
