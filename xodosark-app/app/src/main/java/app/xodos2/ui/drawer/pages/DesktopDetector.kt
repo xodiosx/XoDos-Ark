@@ -283,6 +283,10 @@ xfce4-session
 
             "xfce4-session" -> """
                 killall -9 xfce4-session xfce4* 2>/dev/null
+                if [ -f /data/data/app.xodos2/files/usr/bin/xfce4-session ]; then
+                 export XDG_DATA_DIRS="/usr/local/share:/usr/share:/data/data/app.xodos2/files/usr/local/share:/data/data/app.xodos2/files/usr/share"
+                 export XDG_CONFIG_DIRS='/etc/xdg:/data/data/app.xodos2/files/usr/etc/xdg'
+                 fi
                 export XDG_CURRENT_DESKTOP=XFCE
                 export XDG_SESSION_DESKTOP=xfce
                 dbus-launch xfce4-session &
