@@ -1458,11 +1458,44 @@ suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContex
     val driversDir = File(context.filesDir, "drivers")
     driversDir.mkdirs()
 
+    // ---- Shared gl4es driver (download once) ----
+    val gl4esName = "xodos-gl4es-driver.tar.xz"
+    val gl4esFile = File(driversDir, gl4esName)
+    val gl4esTmpFile = File(driversDir, "$gl4esName.tmp")
+
+    if (!gl4esFile.exists() || gl4esFile.length() == 0L) {
+        withContext(Dispatchers.Main) {
+            panvkDownloadProgress = 0 to "Downloading gl4es driver…"
+        }
+        gl4esTmpFile.delete()
+        try {
+            val url = URL("$baseUrl/$gl4esName")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.connect()
+            connection.inputStream.use { input ->
+                gl4esTmpFile.outputStream().use { output ->
+                    val buffer = ByteArray(64 * 1024)
+                    var read: Int
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+            if (gl4esTmpFile.length() == 0L) throw Exception("gl4es download empty")
+            if (!gl4esTmpFile.renameTo(gl4esFile)) throw Exception("Failed to rename gl4es archive")
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                panvkDownloadProgress = -1 to "gl4es download failed: ${e.message}"
+            }
+            return@withContext
+        }
+    }
+
+    // ---- Shared PANVK driver (download once) ----
     val panvkName = "panvk.tar.xz"
     val panvkFile = File(driversDir, panvkName)
     val panvkTmpFile = File(driversDir, "$panvkName.tmp")
 
-    // Download once if not already present
     if (!panvkFile.exists() || panvkFile.length() == 0L) {
         withContext(Dispatchers.Main) {
             panvkDownloadProgress = 0 to "Downloading PANVK driver…"
@@ -1498,18 +1531,24 @@ suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContex
         }
     }
 
-    // Extract into each container
+    // ---- Extract PANVK + gl4es into each container ----
     for (id in containerIds) {
         withContext(Dispatchers.Main) {
             panvkDownloadProgress = 80 to "Extracting PANVK into container $id…"
         }
-        val ok = DisplayOrchestrator.extractPanvkDriver(context, id)
-        if (!ok) {
+        val panvkOk = DisplayOrchestrator.extractPanvkDriver(context, id)
+        if (!panvkOk) {
             withContext(Dispatchers.Main) {
                 panvkDownloadProgress = -1 to "PANVK extraction failed for container $id"
             }
             return@withContext
         }
+
+        // Extract the shared gl4es archive into the same container
+        withContext(Dispatchers.Main) {
+            panvkDownloadProgress = 90 to "Extracting gl4es into container $id…"
+        }
+        DisplayOrchestrator.extractDriverTarball(context, id, gl4esFile)
     }
 
     withContext(Dispatchers.Main) {
@@ -2302,7 +2341,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Clean cache tarballs (*.tar.xz)", fontWeight = FontWeight.Bold)
+                        Text("Clean cache and downloaded drivers", fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -2412,7 +2451,7 @@ if (showCleanCacheConfirmation) {
         modifier = Modifier.glassDialogStyle(),
         title = { Text("⚠️ Clean downloaded archives?", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
-            Text("All distribution tarballs (*.tar.xz) stored in the app’s cache will be deleted. If you want to install a distro again later, you’ll have to re‑download it.\n\nDo you want to continue?", color = Color.White.copy(alpha = 0.85f))
+            Text("All distribution tarballs (*.tar.xz) stored in the app’s cache will be deleted. also downloaded drivers if they are corrupted, you’ll have to re‑download them again.\n\nDo you want to continue?", color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
             GlassButton(onClick = {
@@ -2440,7 +2479,7 @@ if (showRemoveNativeEnvConfirmation) {
         title = { Text("Remove Native Environment?", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Text(
-                "This will delete the /data/data/app.xodos2/files/usr directory and all its contents. This action cannot be undone.\n\nAre you sure?",
+                "This will delete the installed extra drivers / native xfce4 and all native contents. This action cannot be undone.\n\nAre you sure?",
                 color = Color.White.copy(alpha = 0.85f)
             )
         },

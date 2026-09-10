@@ -463,31 +463,6 @@ private fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): 
 
 // ─── PANVK driver helpers ──────────────────────────────────
 
-fun panvkAssetPattern(distroType: String): String {
-    // Normalise distro type (same mapping as Turnip for now; adjust if PANVK uses different asset suffixes)
-    val t = distroType.lowercase()
-    return when {
-        t == "archlinux" -> "debian_trixie"
-        t == "artix"     -> "debian_trixie"
-        t == "manjaro"   -> "debian_trixie"
-
-        t == "debian"       -> "debian_trixie"
-        t == "ubuntu"       -> "debian_trixie"
-        t == "trisquel"     -> "debian_trixie"
-        t == "deepin"       -> "debian_trixie"
-        t == "kali"         -> "debian_trixie"
-        t == "raspbian"     -> "debian_trixie"
-
-        t == "fedora"       -> "fedora_43"
-        t == "almalinux"    -> "fedora_43"
-        t == "rocky"        -> "fedora_43"
-
-        t == "alpine"       -> "debian_trixie"
-        t == "void"         -> "void"
-
-        else -> "debian_trixie"
-    }
-}
 
 fun hasPanvkTarball(context: Context): Boolean {
     val driversDir = File(context.filesDir, "drivers")
@@ -540,7 +515,9 @@ suspend fun extractPanvkDriver(context: Context, containerId: Int): Boolean =
 fun isPanvkDriverInstalled(context: Context, containerId: Int): Boolean {
     val rootfs = NativeInstallCoordinator.containerPath(context, containerId)
     val marker = File(rootfs, "etc/.xodos2_panvk_driver_installed")
-    return marker.exists()
+   // return marker.exists()
+   marker.exists()          
+    return false    
 }
 
     // ─── Turnip driver helpers ──────────────────────────────────
@@ -690,7 +667,8 @@ fun extractDriverTarball(context: Context, containerId: Int, tarball: File) {
     fun isTurnipDriverInstalled(context: Context, containerId: Int): Boolean {
         val rootfs = NativeInstallCoordinator.containerPath(context, containerId)
         val marker = File(rootfs, "etc/.xodos2_turnip_driver_installed")
-        return marker.exists()
+        marker.exists()          
+    return false    
     }
 
     fun runArchWaylandStartupScriptIfNeeded(

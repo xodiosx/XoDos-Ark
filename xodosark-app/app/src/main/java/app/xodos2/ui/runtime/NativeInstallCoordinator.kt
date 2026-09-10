@@ -740,35 +740,49 @@ private fun writeNativeWrapper(context: Context) {
         }
     }
 
-    suspend fun cleanCacheTarballs(context: Context): Boolean =
+suspend fun cleanCacheTarballs(context: Context): Boolean =
     withContext(Dispatchers.IO) {
-        val cacheDir = context.cacheDir
         var allOk = true
 
-        // List all entries (files and folders) inside the cache directory
-        val entries = cacheDir.listFiles()
-        if (entries == null) {
+        // 1. Clear everything inside the cache directory
+        val cacheDir = context.cacheDir
+        val cacheEntries = cacheDir.listFiles()
+        if (cacheEntries == null) {
             Log.e("NativeInstall", "Cache directory cannot be listed")
-            return@withContext false
-        }
-
-        for (entry in entries) {
-            try {
-                // deleteRecursively() works for both files and directories
-                if (!entry.deleteRecursively()) {
+            allOk = false
+        } else {
+            for (entry in cacheEntries) {
+                try {
+                    if (!entry.deleteRecursively()) {
+                        allOk = false
+                        Log.e("NativeInstall", "Failed to delete cache entry ${entry.name}")
+                    }
+                } catch (e: Exception) {
                     allOk = false
-                    Log.e("NativeInstall", "Failed to delete ${entry.name}")
+                    Log.e("NativeInstall", "Failed to delete cache entry ${entry.name}: ${e.message}")
                 }
-            } catch (e: Exception) {
-                allOk = false
-                Log.e("NativeInstall", "Failed to delete ${entry.name}: ${e.message}")
             }
         }
 
-        if (allOk) Log.i("NativeInstall", "Cache cleared completely")
-        else Log.e("NativeInstall", "Some cache entries could not be deleted")
+        // 2. Delete the drivers folder (and all its contents)
+        val driversDir = File(context.filesDir, "drivers")
+        if (driversDir.exists()) {
+            try {
+                if (!driversDir.deleteRecursively()) {
+                    allOk = false
+                    Log.e("NativeInstall", "Failed to delete drivers folder")
+                }
+            } catch (e: Exception) {
+                allOk = false
+                Log.e("NativeInstall", "Failed to delete drivers folder: ${e.message}")
+            }
+        }
+
+        if (allOk) Log.i("NativeInstall", "Cache and drivers cleared completely")
+        else Log.e("NativeInstall", "Some entries could not be deleted")
         allOk
     }
+
     // ---------- installation ----------
     suspend fun installDistroToContainer(
         context: Context,
