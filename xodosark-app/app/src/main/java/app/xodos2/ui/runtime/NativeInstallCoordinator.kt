@@ -134,6 +134,29 @@ Include = /etc/pacman.d/mirrorlist
 #Server = file:///home/custompkgs
 """.trimIndent()
 
+
+// $PREFIX/bin/nt — native wrapper, written on every distro install
+private val NATIVE_WRAPPER = """
+#!/data/data/app.xodos2/files/usr/bin/sh
+
+export PREFIX="/data/data/app.xodos2/files/usr"
+export HOME="/data/data/app.xodos2/files/home"
+export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
+export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
+#export LD_PRELOAD="${'$'}PREFIX/lib/libtermux-exec-ld-preload.so"
+export SHELL=/data/data/app.xodos2/files/usr/bin/bash
+export PATH="${'$'}PREFIX/bin"
+export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
+#export LD_PRELOAD=${'$'}PREFIX/lib/libtermux-exec-ld-preload.so
+
+export DISPLAY="${'$'}{DISPLAY:-:0}"
+
+. ${'$'}PREFIX/opt/drv
+
+exec "${'$'}@"
+""".trimIndent()
+
+
     private suspend fun getFileSizeFromUrl(urlString: String): String = withContext(Dispatchers.IO) {
         try {
             val url = URL(urlString)
@@ -481,12 +504,11 @@ val envfix = """
         export PULSE_SERVER=127.0.0.1        
         export MOZ_FAKE_NO_SANDBOX=1
         export DISTRO=$distroId
-        
+        export PREFIX="/data/data/app.xodos2/files/usr"
         export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin
         source /etc/environment
     """.trimIndent()
     
-
 
     val stype = """
         |$distroId
@@ -519,6 +541,29 @@ pathScript.setExecutable(true, false)
 }
 
     private const val PREF_CONTAINER_DISTRO = "container_distro_"
+
+
+/**
+ * Writes the native wrapper script to $PREFIX/bin/nt and marks it executable.
+ * Safe to call after every distro install — it just overwrites.
+ */
+private fun writeNativeWrapper(context: Context) {
+    try {
+        val usrBin = File(context.filesDir, "usr/bin").apply { mkdirs() }
+        val ntFile = File(usrBin, "nt")
+
+        ntFile.writeText(NATIVE_WRAPPER_SCRIPT)
+
+        // chmod 0755
+        ntFile.setReadable(true, false)   // owner + all
+        ntFile.setWritable(true, false)   // owner only
+        ntFile.setExecutable(true, false) // owner + all
+
+        Log.i("NativeInstall", "Wrote native wrapper → ${ntFile.absolutePath}")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write native wrapper", e)
+    }
+}
 
     fun saveContainerDistro(context: Context, containerId: Int, distroId: String) {
         context.getSharedPreferences("xodos2_containers", Context.MODE_PRIVATE)
@@ -757,6 +802,7 @@ pathScript.setExecutable(true, false)
             saveContainerDistro(context, containerId, detected)
             applyArchPacmanFixes(context, containerId, detected)
             applyNixOsFixes(context, containerId, detected)    
+            writeNativeWrapper(context)
         }
         ok
     }
@@ -809,6 +855,7 @@ pathScript.setExecutable(true, false)
             saveContainerDistro(context, containerId, detected)
             applyArchPacmanFixes(context, containerId, detected)
             applyNixOsFixes(context, containerId, detected)    
+            writeNativeWrapper(context)
         }
         ok
     }
