@@ -491,7 +491,12 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
         export PULSE_SERVER=127.0.0.1        
         export MOZ_FAKE_NO_SANDBOX=1
         export DISTRO=$distroId
-        source /etc/environment
+        sed -i 's|^ex.*|export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin|' ~/.bashrc
+        sed -i '/^ny/d' ~/.bashrc
+        sed -i '/^gpus/d' ~/.bashrc
+        export PREFIX="/data/data/app.xodos2/files/usr"
+        export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin
+        . /etc/environment
     """.trimIndent()
 
 val envfix = """
@@ -505,9 +510,12 @@ val envfix = """
         export PULSE_SERVER=127.0.0.1        
         export MOZ_FAKE_NO_SANDBOX=1
         export DISTRO=$distroId
+        sed -i 's|^ex.*|export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin|' ~/.bashrc
+        sed -i '/^ny/d' ~/.bashrc
+        sed -i '/^gpus/d' ~/.bashrc
         export PREFIX="/data/data/app.xodos2/files/usr"
         export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin
-        source /etc/environment
+        . /etc/environment
     """.trimIndent()
     
 
@@ -1052,7 +1060,7 @@ private fun applyNixOsFixes(context: Context, containerId: Int, distroType: Stri
     val homeDir = File(rootfs, "root")
     if (!homeDir.exists()) homeDir.mkdirs()
 
-    val bashrc = File(homeDir, ".bashrc2")
+    val bashrc = File(homeDir, ".bashrc")
     val bashProfile = File(homeDir, ".bash_profile")
 
     val bashrcContent = "echo ' Welcome to NixOS '\n" +
