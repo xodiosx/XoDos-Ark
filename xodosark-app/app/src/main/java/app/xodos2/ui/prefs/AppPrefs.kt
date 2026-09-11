@@ -138,6 +138,6 @@ object AppPrefs {
         |source /etc/profile.d/*.sh
         |#unset WAYLAND_DISPLAY 2>/dev/null || true
         |export XDG_SESSION_TYPE=x11
-        |
+        |export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin
         """.trimMargin()
 }
