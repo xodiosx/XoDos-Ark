@@ -491,7 +491,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
         export PULSE_SERVER=127.0.0.1        
         export MOZ_FAKE_NO_SANDBOX=1
         export DISTRO=$distroId
-        sed -i 's|^ex.*|export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin|' ~/.bashrc
+        sed -i 's|^ex .*|export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin|' ~/.bashrc
         sed -i '/^ny/d' ~/.bashrc
         sed -i '/^gpus/d' ~/.bashrc
         export PREFIX="/data/data/app.xodos2/files/usr"
@@ -510,7 +510,7 @@ val envfix = """
         export PULSE_SERVER=127.0.0.1        
         export MOZ_FAKE_NO_SANDBOX=1
         export DISTRO=$distroId
-        sed -i 's|^ex.*|export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin|' ~/.bashrc
+        sed -i 's|^ex .*|export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin|' ~/.bashrc
         sed -i '/^ny/d' ~/.bashrc
         sed -i '/^gpus/d' ~/.bashrc
         export PREFIX="/data/data/app.xodos2/files/usr"
