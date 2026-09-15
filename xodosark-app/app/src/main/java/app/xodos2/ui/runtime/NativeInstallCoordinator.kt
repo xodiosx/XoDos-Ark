@@ -143,7 +143,7 @@ export PREFIX="/data/data/app.xodos2/files/usr"
 export HOME="/data/data/app.xodos2/files/home"
 export WINE_DISABLE_KERNEL_WRITEWATCH=1 
 export WINEPREFIX="${'$'}HOME/.wine"
-sed -i 's|^export LD_DEBUG=none${'$'}|export DXVK_ASYNC=1|' "${'$'}PREFIX/bin/xfex
+sed -i 's|^export LD_DEBUG=none${'$'}|export DXVK_ASYNC=1|' "${'$'}PREFIX/bin/xfex"
 #export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
 #export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
 #export LD_PRELOAD="${'$'}PREFIX/lib/libtermux-exec-ld-preload.so"
