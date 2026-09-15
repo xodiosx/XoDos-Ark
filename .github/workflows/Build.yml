@@ -18,6 +18,7 @@ jobs:
     env:
       ANDROID_API: 34
       NDK_VERSION: 27.1.12297006
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout
@@ -33,19 +34,20 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v4
+      - name: Configure Android SDK
+        run: |
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools"           >> $GITHUB_PATH
 
       - name: Install SDK packages
         run: |
-          sdkmanager "platform-tools" \
-                     "platforms;android-${ANDROID_API}" \
-                     "build-tools;34.0.0" \
-                     "ndk;${NDK_VERSION}" \
-                     "cmake;3.22.1"
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-${ANDROID_API}" \
+            "build-tools;34.0.0" \
+            "ndk;${NDK_VERSION}" \
+            "cmake;3.22.1"
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -108,7 +110,6 @@ jobs:
           name: xodosark-apk-${{ github.event.inputs.version_tag || 'dev' }}
           path: ${{ steps.md5.outputs.apk_file }}
 
-      # Check if a release with this tag already exists
       - name: Check if release exists
         id: check_release
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version_tag != 'dev'
@@ -121,7 +122,6 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-      # Create a new release if it doesn't exist
       - name: Create new Release
         if: steps.check_release.outcome == 'success' && steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
@@ -142,7 +142,6 @@ jobs:
             ${{ env.md5_list }}
             ```
 
-      # Update the existing release by uploading the new APK (overwrites same‑named asset)
       - name: Update existing Release (upload APK)
         if: steps.check_release.outcome == 'success' && steps.check_release.outputs.exists == 'true'
         uses: softprops/action-gh-release@v2
