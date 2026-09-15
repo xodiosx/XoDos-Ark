@@ -922,6 +922,7 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
             ) return@withContext false
 
             setupNativeEnvironment(context)
+            refreshNativeBinariesAndAssets(context)
 
             NativeBridge.stopVirglHost()
             PulseAssets.syncFromAssetsIfNeeded(context)
@@ -944,6 +945,31 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
             desktopModes = desktopModes,
         )
     }
+    
+    private const val NUM_CONTAINERS = 3      // 3 containers
+
+/**
+ * Runs on every app launch.
+ * - Rewrites `$filesDir/usr/bin/nt` unconditionally, so any edit to
+ *   NATIVE_WRAPPER_SCRIPT takes effect without reinstalling a distro.
+ * - Re-pushes the APK's assets/<dir> into every container that has a rootfs,
+ *   so bundled helper scripts are refreshed on launch too.
+ */
+private fun refreshNativeBinariesAndAssets(context: Context) {
+    // 1. Native wrapper – always rewrite.
+    writeNativeWrapper(context)
+
+    // 2. Refresh assets into every container that already has a rootfs.
+    val assetDirsToRefresh = listOf("usr/bin")   // extend if you bundle more
+    for (containerId in 1..NUM_CONTAINERS) {
+        if (!containerIsOccupied(context, containerId)) continue
+        for (assetDir in assetDirsToRefresh) {
+            copyAssetFolderToContainer(context, containerId, assetDir)
+        }
+    }
+    Log.i("NativeInstall", "Refreshed native wrapper + container assets")
+}
+    
 
     private fun setupNativeEnvironment(context: Context) {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
