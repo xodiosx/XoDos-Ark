@@ -143,14 +143,12 @@ export PREFIX="/data/data/app.xodos2/files/usr"
 export HOME="/data/data/app.xodos2/files/home"
 export WINE_DISABLE_KERNEL_WRITEWATCH=1 
 export WINEPREFIX="${'$'}HOME/.wine"
-export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
-export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
+#export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
+#export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
 #export LD_PRELOAD="${'$'}PREFIX/lib/libtermux-exec-ld-preload.so"
-export SHELL=/data/data/app.xodos2/files/usr/bin/bash
+#export SHELL=/data/data/app.xodos2/files/usr/bin/bash
 . ${'$'}PREFIX/opt/drv
 HUDD="${'$'}PREFIX/opt/hud"
-export PATH="${'$'}PREFIX/bin"
-export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
 #export LD_PRELOAD=${'$'}PREFIX/lib/libtermux-exec-ld-preload.so
 export DISPLAY="${'$'}{DISPLAY:-:0}"
 
