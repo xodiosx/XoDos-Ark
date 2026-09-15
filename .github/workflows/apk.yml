@@ -3,13 +3,13 @@ name: Build xodosark APK and Release
 on:
   workflow_dispatch:
     inputs:
-      version_tag:                          # ← renamed to match XoDos script
+      version_tag:
         description: 'Version tag (e.g. 0.4.2)'
         required: false
         default: '0.6.0'
-  
+
 permissions:
-  contents: write                           # ← required to create releases
+  contents: write
 
 jobs:
   build:
@@ -18,6 +18,7 @@ jobs:
     env:
       ANDROID_API: 34
       NDK_VERSION: 27.1.12297006
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout
@@ -33,8 +34,14 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # ─── Android SDK: use the preinstalled one, no setup-android action ───
+      - name: Configure Android SDK
+        run: |
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools"           >> $GITHUB_PATH
+
+      - name: Accept SDK licenses
+        run: yes | sdkmanager --licenses >/dev/null || true
 
       - name: Install SDK packages
         run: |
@@ -43,9 +50,6 @@ jobs:
                      "build-tools;34.0.0" \
                      "ndk;${NDK_VERSION}" \
                      "cmake;3.22.1"
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -80,22 +84,15 @@ jobs:
           mkdir -p "$JNI_LIBS_DIR"
           cp -f target/aarch64-linux-android/release/libxodos2.so "$JNI_LIBS_DIR/"
 
-      # -----------------------------------------------
-      # Build RELEASE APK (instead of debug)
-      # -----------------------------------------------
       - name: Build APK
         working-directory: xodosark-app
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace    # ← changed to assembleRelease
+          ./gradlew assembleRelease --stacktrace
 
-      # -----------------------------------------------
-      # Rename APK and compute MD5
-      # -----------------------------------------------
       - name: Rename APK & generate MD5
         id: md5
         run: |
-          # Locate the built release APK (unsigned, unless signing keys are provided)
           APK_FILE=$(ls xodosark-app/app/build/outputs/apk/release/*.apk | head -1)
           TAG="${{ github.event.inputs.version_tag }}"
           RELEASE_NAME="xodosark-${TAG}-arm64-v8a.apk"
@@ -103,26 +100,18 @@ jobs:
           md5sum "$RELEASE_NAME" > md5.txt
 
           echo "apk_file=$RELEASE_NAME" >> $GITHUB_OUTPUT
-          # store the whole md5 listing for the release body
           {
             echo "md5_list<<EOF"
             cat md5.txt
             echo "EOF"
           } >> $GITHUB_ENV
 
-      # -----------------------------------------------
-      # Upload artifact (the renamed APK) – always
-      # -----------------------------------------------
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: xodosark-apk-${{ github.event.inputs.version_tag || 'dev' }}
           path: ${{ steps.md5.outputs.apk_file }}
 
-      # -----------------------------------------------
-      # Release steps – only on manual dispatch and if
-      # the version_tag is not 'dev'
-      # -----------------------------------------------
       - name: Check if release exists
         id: check_release
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version_tag != 'dev'
@@ -163,4 +152,4 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.version_tag }}
           files: ${{ steps.md5.outputs.apk_file }}
-          overwrite: true   # replaces the previous APK asset with the same name
+          overwrite: true
