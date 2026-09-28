@@ -371,7 +371,7 @@ fun writeNativeGraphicsEnvironment(context: Context, prefs: SharedPreferences) {
  * Builds a graphics environment snippet for the native environment.
  * All /usr/ paths are replaced with the app's native files directory.
  */
-private fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): String {
+fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): String {
     val vulkan = prefs.getString("desktop_vulkan_mode", "LLVMPIPE") ?: "LLVMPIPE"
     val openGL = prefs.getString("desktop_opengl_mode", "LLVMPIPE") ?: "LLVMPIPE"
     val nativeUsr = File(context.filesDir, "usr").absolutePath
