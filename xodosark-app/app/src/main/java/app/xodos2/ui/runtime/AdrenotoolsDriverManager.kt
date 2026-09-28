@@ -1,6 +1,7 @@
 package app.xodos2.ui.runtime
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +12,25 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 
+/**
+ * Manages Adrenotools-style GPU driver packages and is the ONLY writer of
+ * <filesDir>/usr/opt/drv.
+ *
+ * drv file structure (written in this order):
+ *   1) Adrenotools block — ADRENOTOOLS_* exports and wrapper VK ICD, or unset block
+ *      for the system driver.
+ *   2) Graphics block   — pulled from DisplayOrchestrator.buildNativeGraphicsEnv(),
+ *      which reflects the user's current OpenGL/Vulkan selection.
+ *
+ * Storage layout (native side):
+ *   <filesDir>/usr/drivers/<name>.zip          – original user-picked ZIP
+ *   <filesDir>/usr/opt/adrenotools/            – extracted contents of the active driver
+ *   <filesDir>/usr/opt/drv                     – merged env file sourced by nt / xrun
+ *
+ * List & state live in SharedPreferences("adrenotools"):
+ *   "installed_drivers_json" – JSON array of {name, ..., zipPath}
+ *   "active_driver_name"     – absent = system driver
+ */
 object AdrenotoolsDriverManager {
 
     private const val TAG = "AdrenotoolsMgr"
@@ -18,8 +38,10 @@ object AdrenotoolsDriverManager {
     private const val PREF_LIST = "installed_drivers_json"
     private const val PREF_ACTIVE = "active_driver_name"
 
-    /** What the guest shell sees as $PREFIX. */
+    /** Host-side prefix (matches PREFIX inside the guest wrapper). */
     const val PREFIX_HOST = "/data/user/0/app.xodos2/files/usr"
+
+    /** Path that the drawer sources in the terminal. */
     const val DRV_PATH_IN_CONTAINER = "$PREFIX_HOST/opt/drv"
 
     data class DriverMeta(
@@ -60,7 +82,10 @@ object AdrenotoolsDriverManager {
 
     // ─────────── List (read + prune) ───────────
 
-    /** Reads prefs, drops any entry whose ZIP is gone, rewrites prefs if stale. */
+    /**
+     * Reads the JSON list from SharedPreferences, drops entries whose ZIP has
+     * been deleted out from under us, and rewrites the XML if anything was stale.
+     */
     fun refreshAndList(context: Context): List<InstalledDriver> {
         val raw = prefs(context).getString(PREF_LIST, null) ?: return emptyList()
         val arr = try { JSONArray(raw) } catch (_: Exception) { return emptyList() }
@@ -113,6 +138,11 @@ object AdrenotoolsDriverManager {
 
     // ─────────── Install (copy zip + peek meta) ───────────
 
+    /**
+     * Copies the picked ZIP into app-private storage and reads meta.json from
+     * inside the archive (without extracting to disk). No drv write here —
+     * installation never changes what's active.
+     */
     suspend fun installFromUri(
         context: Context,
         uri: Uri,
@@ -161,26 +191,42 @@ object AdrenotoolsDriverManager {
 
     // ─────────── Uninstall ───────────
 
-    fun uninstall(context: Context, name: String): Boolean {
+    /**
+     * Removes the ZIP, drops the list entry, and — if the removed driver was
+     * active — reverts to the system driver and rewrites usr/opt/drv with the
+     * merged (system + graphics) content.
+     *
+     * Pass [prefs] so the graphics half of the drv file can be rebuilt.
+     */
+    fun uninstall(context: Context, prefs: SharedPreferences, name: String): Boolean {
         val list = refreshAndList(context).toMutableList()
         val entry = list.firstOrNull { it.meta.name == name } ?: return false
         runCatching { File(entry.zipPath).takeIf { it.exists() }?.delete() }
         list.removeAll { it.meta.name == name }
         saveList(context, list)
-        if (activeName(context) == name) activateSystem(context)
-        Log.i(TAG, "Uninstalled $name")
+
+        val wasActive = activeName(context) == name
+        if (wasActive) {
+            val target = adrenotoolsDir(context)
+            if (target.exists()) target.deleteRecursively()
+            setActiveName(context, null)
+            // Rewrite drv so it flips back to the system block, keeping graphics.
+            writeDrvFile(context, prefs)
+        }
+        Log.i(TAG, "Uninstalled $name (wasActive=$wasActive)")
         return true
     }
 
     // ─────────── Activate custom driver ───────────
 
     /**
-     * Wipes usr/opt/adrenotools, extracts the ZIP, reads meta.json from the
-     * extracted folder to get the library name, writes usr/opt/drv.
-     * Does NOT touch any terminal — caller sources the file.
+     * Wipes usr/opt/adrenotools, extracts the ZIP, re-reads meta.json from the
+     * extracted folder, persists the active name, and rewrites usr/opt/drv with
+     * the merged (driver + graphics) content.
      */
     suspend fun activate(
         context: Context,
+        prefs: SharedPreferences,
         name: String,
         onProgress: (Int, String) -> Unit = { _, _ -> }
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -191,7 +237,7 @@ object AdrenotoolsDriverManager {
             if (!zip.isFile)
                 return@withContext Result.failure(Exception("ZIP missing: ${entry.zipPath}"))
 
-            // 1. Clean adrenotools folder
+            // 1. Clean the target folder (critical: adrenotools loads from here)
             val target = adrenotoolsDir(context)
             onProgress(10, "Cleaning adrenotools folder…")
             if (target.exists()) target.deleteRecursively()
@@ -201,16 +247,18 @@ object AdrenotoolsDriverManager {
             onProgress(35, "Extracting $name…")
             unzip(zip, target)
 
-            // 3. Read meta.json from the extracted folder (authoritative source)
+            // 3. Re-read meta.json from the extracted folder (authoritative)
             val metaFile = File(target, "meta.json")
             if (!metaFile.isFile)
                 return@withContext Result.failure(Exception("meta.json missing after extract"))
             val meta = parseMeta(metaFile.readText())
+            if (meta.name.isBlank() || meta.libraryName.isBlank())
+                return@withContext Result.failure(Exception("meta.json missing name/libraryName"))
 
-            // 4. Write env
-            onProgress(85, "Writing env…")
-            writeDriverEnv(context, meta)
+            // 4. Persist selection + write merged drv (adreno block + graphics block)
             setActiveName(context, meta.name)
+            onProgress(80, "Writing usr/opt/drv…")
+            writeDrvFile(context, prefs)
 
             onProgress(100, "Activated ${meta.name}")
             Result.success(Unit)
@@ -222,11 +270,15 @@ object AdrenotoolsDriverManager {
 
     // ─────────── Activate system driver ───────────
 
-    fun activateSystem(context: Context): Boolean = try {
+    /**
+     * Wipes usr/opt/adrenotools, clears the active name, and rewrites
+     * usr/opt/drv with the system block followed by the graphics block.
+     */
+    fun activateSystem(context: Context, prefs: SharedPreferences): Boolean = try {
         val target = adrenotoolsDir(context)
         if (target.exists()) target.deleteRecursively()
-        writeSystemEnv(context)
         setActiveName(context, null)
+        writeDrvFile(context, prefs)
         Log.i(TAG, "System driver activated")
         true
     } catch (e: Exception) {
@@ -234,51 +286,70 @@ object AdrenotoolsDriverManager {
         false
     }
 
-    // ─────────── Env file writers ───────────
+    // ─────────── The single writer ───────────
 
-    private fun writeDriverEnv(context: Context, meta: DriverMeta) {
-        val contents = buildString {
-            appendLine("# XoDos-Ark Adrenotools driver: ${meta.name}")
-            appendLine("# Generated by AdrenotoolsDriverManager — do not edit")
-            appendLine("export ADRENOTOOLS_DRIVER_PATH=\"$PREFIX_HOST/opt/adrenotools/\"")
-            appendLine("export ADRENOTOOLS_DRIVER_NAME=\"${meta.libraryName}\"")
-            appendLine("export ADRENOTOOLS_HOOKS_PATH=\"$PREFIX_HOST/lib/\"")
-            appendLine()
-            appendLine("export VK_ICD_FILENAMES=$PREFIX_HOST/share/vulkan/icd.d/wrapper_icd.aarch64.json")
-            appendLine("export VK_DRIVER_FILES=$PREFIX_HOST/share/vulkan/icd.d/wrapper_icd.aarch64.json")
-            appendLine()
-            appendLine("# Performance / compatibility tweaks")
-            appendLine("export MESA_VK_WSI_PRESENT_MODE=mailbox")
-            appendLine("export TU_DEBUG=noconform")
-            appendLine("export vblank_mode=0")
+    /**
+     * Composes and writes usr/opt/drv:
+     *   [adreno block]              ← from active driver (or unset for system)
+     *   <blank line>
+     *   [graphics / OpenGL block]   ← from DisplayOrchestrator.buildNativeGraphicsEnv()
+     *
+     * This is the ONLY method that writes the drv file.
+     */
+    fun writeDrvFile(context: Context, prefs: SharedPreferences) {
+        val adrenoBlock = buildAdrenoEnvBlock(context)
+        val graphicsBlock = DisplayOrchestrator.buildNativeGraphicsEnv(context, prefs)
+
+        val merged = buildString {
+            append(adrenoBlock.trimEnd())
+            append("\n\n")
+            append(graphicsBlock.trimEnd())
+            append("\n")
         }
-        writeDrv(context, contents)
+
+        try {
+            val f = drvFile(context)
+            f.parentFile?.mkdirs()
+            f.writeText(merged)
+            f.setReadable(true, false)
+            f.setWritable(true, false)
+            f.setExecutable(false)
+            Log.i(TAG, "Wrote merged drv file (adreno + graphics) -> ${f.absolutePath}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write ${drvFile(context).absolutePath}", e)
+        }
     }
 
-    private fun writeSystemEnv(context: Context) {
-        val contents = buildString {
-            appendLine("# XoDos-Ark Adrenotools: system driver")
-            appendLine("# Generated by AdrenotoolsDriverManager — do not edit")
-            appendLine("unset ADRENOTOOLS_DRIVER_PATH")
-            appendLine("unset ADRENOTOOLS_DRIVER_NAME")
-            appendLine("unset ADRENOTOOLS_HOOKS_PATH")
-            appendLine()
-            appendLine("export VK_ICD_FILENAMES=$PREFIX_HOST/share/vulkan/icd.d/wrapper_icd.aarch64.json")
-            appendLine("export VK_DRIVER_FILES=$PREFIX_HOST/share/vulkan/icd.d/wrapper_icd.aarch64.json")
-            appendLine("export MESA_VK_WSI_PRESENT_MODE=mailbox")
-            appendLine("export TU_DEBUG=noconform")
-        }
-        writeDrv(context, contents)
+    // ─────────── Adreno block builders ───────────
+
+    private fun buildAdrenoEnvBlock(context: Context): String {
+        val active = activeName(context)
+        if (active.isNullOrBlank()) return buildSystemBlock()
+
+        val entry = refreshAndList(context).firstOrNull { it.meta.name == active }
+        return if (entry != null) buildDriverBlock(entry.meta) else buildSystemBlock()
     }
 
-    private fun writeDrv(context: Context, contents: String) {
-        val f = drvFile(context)
-        f.parentFile?.mkdirs()
-        f.writeText(contents)
-        f.setReadable(true, false)
-        f.setWritable(true, false)
-        f.setExecutable(false)
-        Log.i(TAG, "Wrote ${f.absolutePath}")
+    private fun buildDriverBlock(meta: DriverMeta): String = buildString {
+        appendLine("# ── Adrenotools: custom driver (${meta.name}) ──")
+        appendLine("export ADRENOTOOLS_DRIVER_PATH=\"$PREFIX_HOST/opt/adrenotools/\"")
+        appendLine("export ADRENOTOOLS_DRIVER_NAME=\"${meta.libraryName}\"")
+        appendLine("export ADRENOTOOLS_HOOKS_PATH=\"$PREFIX_HOST/lib/\"")
+        appendLine("export VK_ICD_FILENAMES=$PREFIX_HOST/share/vulkan/icd.d/wrapper_icd.aarch64.json")
+        appendLine("export VK_DRIVER_FILES=$PREFIX_HOST/share/vulkan/icd.d/wrapper_icd.aarch64.json")
+        appendLine("export MESA_VK_WSI_PRESENT_MODE=mailbox")
+        appendLine("export TU_DEBUG=noconform")
+    }
+
+    private fun buildSystemBlock(): String = buildString {
+        appendLine("# ── Adrenotools: system driver ──")
+        appendLine("unset ADRENOTOOLS_DRIVER_PATH")
+        appendLine("unset ADRENOTOOLS_DRIVER_NAME")
+        appendLine("unset ADRENOTOOLS_HOOKS_PATH")
+        appendLine("export VK_ICD_FILENAMES=$PREFIX_HOST/share/vulkan/icd.d/wrapper_icd.aarch64.json")
+        appendLine("export VK_DRIVER_FILES=$PREFIX_HOST/share/vulkan/icd.d/wrapper_icd.aarch64.json")
+        appendLine("export MESA_VK_WSI_PRESENT_MODE=mailbox")
+        appendLine("export TU_DEBUG=noconform")
     }
 
     // ─────────── ZIP helpers ───────────

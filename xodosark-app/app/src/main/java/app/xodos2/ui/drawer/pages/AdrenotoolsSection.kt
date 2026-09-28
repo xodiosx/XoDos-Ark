@@ -1,5 +1,6 @@
 package app.xodos2.ui.drawer.pages
 
+import android.content.SharedPreferences
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,14 +27,9 @@ import app.xodos2.ui.runtime.AdrenotoolsDriverManager
 import kotlinx.coroutines.launch
 import java.io.File
 
-/**
- * Flat drawer entry. Opens the Adrenotools dialog on click.
- *
- * Guards on <filesDir>/usr/etc/bash.bashrc — if missing, shows a snackbar
- * via [snackbarHostState] (or silently does nothing if it's null).
- */
 @Composable
 fun AdrenotoolsDrawerButton(
+    prefs: SharedPreferences,
     onExecuteCommand: (String) -> Unit,
     snackbarHostState: SnackbarHostState? = null
 ) {
@@ -66,6 +62,7 @@ fun AdrenotoolsDrawerButton(
 
     if (showDialog) {
         AdrenotoolsDialog(
+            prefs = prefs,
             onDismiss = { showDialog = false },
             onExecuteCommand = onExecuteCommand
         )
@@ -74,6 +71,7 @@ fun AdrenotoolsDrawerButton(
 
 @Composable
 private fun AdrenotoolsDialog(
+    prefs: SharedPreferences,
     onDismiss: () -> Unit,
     onExecuteCommand: (String) -> Unit
 ) {
@@ -91,6 +89,7 @@ private fun AdrenotoolsDialog(
         activeName = AdrenotoolsDriverManager.activeName(context)
     }
 
+    /** Sources the freshly-written drv file in the current terminal session. */
     fun sourceDrvInTerminal() {
         onExecuteCommand("source ${AdrenotoolsDriverManager.DRV_PATH_IN_CONTAINER}")
     }
@@ -117,39 +116,24 @@ private fun AdrenotoolsDialog(
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
         title = {
-            Text(
-                "Adrenotools GPU Drivers",
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            Text("Adrenotools GPU Drivers", fontWeight = FontWeight.Bold, color = Color.White)
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
 
-                // ── Install button ──
-                GlassButton(
-                    onClick = {
-                        picker.launch(
-                            arrayOf("application/zip", "application/octet-stream", "*/*")
-                        )
-                    }
-                ) {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = Color(0xFFC3B6F9)
-                    )
+                GlassButton(onClick = {
+                    picker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                }) {
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp), tint = Color(0xFFC3B6F9))
                     Spacer(Modifier.width(4.dp))
                     Text("Add driver ZIP", color = Color(0xFFC3B6F9))
                 }
 
                 Spacer(Modifier.height(10.dp))
 
-                // ── List ──
                 LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
 
-                    // System driver — always on top
+                    // ── System driver row ──
                     item {
                         DriverRow(
                             title = "Android system driver",
@@ -161,7 +145,7 @@ private fun AdrenotoolsDialog(
                                 scope.launch {
                                     busy = true
                                     status = "Activating system driver…"
-                                    val ok = AdrenotoolsDriverManager.activateSystem(context)
+                                    val ok = AdrenotoolsDriverManager.activateSystem(context, prefs)
                                     busy = false
                                     status = if (ok) "System driver activated" else "Failed"
                                     reload()
@@ -206,8 +190,11 @@ private fun AdrenotoolsDialog(
                                         busy = true
                                         status = "Activating ${entry.meta.name}…"
                                         val res = AdrenotoolsDriverManager.activate(
-                                            context, entry.meta.name
-                                        ) { _, msg -> status = msg }
+                                            context = context,
+                                            prefs = prefs,
+                                            name = entry.meta.name,
+                                            onProgress = { _, msg -> status = msg }
+                                        )
                                         busy = false
                                         status = res.fold(
                                             onSuccess = { "Activated ${entry.meta.name}" },
@@ -247,11 +234,7 @@ private fun AdrenotoolsDialog(
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
             title = {
-                Text(
-                    "Delete ${entry.meta.name}?",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
+                Text("Delete ${entry.meta.name}?", color = Color.White, fontWeight = FontWeight.Bold)
             },
             text = {
                 Text(
@@ -261,12 +244,13 @@ private fun AdrenotoolsDialog(
             },
             confirmButton = {
                 GlassButton(onClick = {
-                    AdrenotoolsDriverManager.uninstall(context, entry.meta.name)
+                    val wasActive = AdrenotoolsDriverManager.activeName(context) == entry.meta.name
+                    AdrenotoolsDriverManager.uninstall(context, prefs, entry.meta.name)
                     pendingDelete = null
                     reload()
-                    // If the active driver got deleted, manager auto-falls-back to system.
-                    // Push the new env into the current terminal session.
-                    sourceDrvInTerminal()
+                    // Manager already rewrote the drv file if it had to fall back
+                    // to system — just source it into the current terminal.
+                    if (wasActive) sourceDrvInTerminal()
                 }) {
                     Text("Delete", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
                 }
@@ -330,21 +314,13 @@ private fun DriverRow(
             )
         } else {
             IconButton(onClick = onActivate, enabled = enabled) {
-                Icon(
-                    Icons.Default.PlayArrow,
-                    contentDescription = "Activate",
-                    tint = Color(0xFFC3B6F9)
-                )
+                Icon(Icons.Default.PlayArrow, "Activate", tint = Color(0xFFC3B6F9))
             }
         }
 
         if (onDelete != null) {
             IconButton(onClick = onDelete, enabled = enabled) {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = Color(0xFFFF6B6B)
-                )
+                Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF6B6B))
             }
         }
     }

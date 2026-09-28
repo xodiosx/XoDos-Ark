@@ -256,6 +256,7 @@ pub(super) fn build_exec_args(
         } else {
     // Normal distro: bind app home to /root
     let host_app_home = Path::new("/data/data/app.xodos2/files/home");
+    let _ = fs::create_dir_all(host_app_home);
 //    if host_app_home.exists() {
         argv.push(CString::new(format!("--bind={}:/root", host_app_home.display())).unwrap());
         log::info!("proot: bound host app home {} to /root", host_app_home.display());

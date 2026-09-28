@@ -38,6 +38,11 @@ object NativeInstallCoordinator {
         val extractDirName: String = ""     
     )
 
+private const val XODOS_VER_FILENAME   = "XoDos-ver"
+private const val XODOS_ENV_FILENAME   = "XoDos-env.sh"
+
+/** Path the container's bash.bashrc uses to source our env script. */
+private const val XODOS_ENV_HOST_PATH  = "/data/data/app.xodos2/files/XoDos-env.sh"
     // Cached distros mapped by their source to allow independent, selective fetching
     private var cachedDistros = mutableMapOf<DistroSource, List<DistroDescriptor>>()
 
@@ -508,6 +513,7 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
         if [ -f ${'$'}PREFIX/bin/xfex ]; then
         sed -i 's|^export LD_DEBUG=none${'$'}|#export LD_DEBUG=-all|' "${'$'}PREFIX/bin/xfex"
         fi
+        [ -r "$XODOS_ENV_HOST_PATH" ] && . "$XODOS_ENV_HOST_PATH"
         . /etc/environment
     """.trimIndent()
 
@@ -532,6 +538,7 @@ val envfix = """
         if [ -f ${'$'}PREFIX/bin/xfex ]; then
         sed -i 's|^export LD_DEBUG=none${'$'}|#export LD_DEBUG=-all|' "${'$'}PREFIX/bin/xfex"
         fi
+        [ -r "$XODOS_ENV_HOST_PATH" ] && . "$XODOS_ENV_HOST_PATH"
         . /etc/environment
     """.trimIndent()
     
@@ -567,6 +574,72 @@ pathScript.setExecutable(true, false)
 }
 
     private const val PREF_CONTAINER_DISTRO = "container_distro_"
+
+
+/**
+ * Writes <filesDir>/XoDos-env.sh — a user-editable shell snippet sourced by
+ * every container at shell startup.
+ *
+ * Regenerated ONLY if it doesn't exist, so edits survive across launches.
+ * Version is read live from <filesDir>/XoDos-ver, so it updates automatically.
+ */
+private fun writeXodosEnvScript(context: Context) {
+    try {
+        val scriptFile = File(context.filesDir, XODOS_ENV_FILENAME)
+        if (scriptFile.exists()) {
+            // Preserve the user's edits. Nothing to do.
+            Log.d("NativeInstall", "XoDos-env.sh exists, leaving untouched")
+            return
+        }
+
+        val contents = """
+            #!/data/data/app.xodos2/files/usr/bin/sh
+            # XoDos-Ark environment — safe to edit.
+            # This file is regenerated only if missing. Add your own exports below.
+
+            XODOS_VER_FILE="/data/data/app.xodos2/files/$XODOS_VER_FILENAME"
+            if [ -r "${'$'}XODOS_VER_FILE" ]; then
+                export TERMUX_VERSION="$(cat "${'$'}XODOS_VER_FILE" 2>/dev/null)"
+            else
+                export TERMUX_VERSION="unknown"
+            fi
+
+            # ── User additions ─────────────────────────────────────────
+            # Add exports, aliases, or `source` other scripts here. Examples:
+            #
+            #   export FOO=bar
+            #   [ -f /data/data/app.xodos2/files/my-extra.sh ] && . /data/data/app.xodos2/files/my-extra.sh
+            #
+            # Everything you put here is sourced by every container shell.
+        """.trimIndent() + "\n"
+
+        scriptFile.writeText(contents)
+        scriptFile.setReadable(true, false)
+        scriptFile.setWritable(true, false)
+        scriptFile.setExecutable(false)
+
+        Log.i("NativeInstall", "Wrote ${scriptFile.absolutePath}")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write XoDos-env.sh", e)
+    }
+}
+
+/** Ensures XoDos-ver exists with the current app version. */
+private fun writeXodosVerFile(context: Context) {
+    try {
+        val version = context.packageManager
+            .getPackageInfo(context.packageName, 0)
+            .versionName ?: "unknown"
+        val f = File(context.filesDir, XODOS_VER_FILENAME)
+        f.writeText(version)
+        f.setReadable(true, false)
+        f.setWritable(true, false)
+        f.setExecutable(false)
+        Log.i("NativeInstall", "Wrote ${f.absolutePath} = $version")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write XoDos-ver", e)
+    }
+}
 
 
 /**
@@ -838,6 +911,8 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
         if (ok) {
             configureDns(context, containerId)      
             copyAssetFolderToContainer(context, containerId, "usr/bin")
+            writeXodosVerFile(context)
+            writeXodosEnvScript(context) 
             val detected = detectDistroFromRootfs(context, containerId) ?: distro.distroType
             writeContainerEnvironment(context, containerId, detected)
             applyProotBypasses(context, containerId, detected)
@@ -845,6 +920,7 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
             applyArchPacmanFixes(context, containerId, detected)
             applyNixOsFixes(context, containerId, detected)    
             writeNativeWrapper(context)
+               
         }
         ok
     }
@@ -891,6 +967,8 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
         if (ok) {
             configureDns(context, containerId)
             copyAssetFolderToContainer(context, containerId, "usr/bin")
+            writeXodosVerFile(context)
+            writeXodosEnvScript(context) 
             val detected = detectDistroFromRootfs(context, containerId) ?: "linux"
             writeContainerEnvironment(context, containerId, detected)
             applyProotBypasses(context, containerId, detected)
@@ -898,6 +976,7 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
             applyArchPacmanFixes(context, containerId, detected)
             applyNixOsFixes(context, containerId, detected)    
             writeNativeWrapper(context)
+               
         }
         ok
     }
@@ -969,6 +1048,8 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
 private fun refreshNativeBinariesAndAssets(context: Context) {
     // 1. Native wrapper – always rewrite.
     writeNativeWrapper(context)
+     writeXodosVerFile(context)
+    writeXodosEnvScript(context) 
 
     // 2. Refresh assets + env into every container that already has a rootfs.
     val assetDirsToRefresh = listOf("usr/bin")

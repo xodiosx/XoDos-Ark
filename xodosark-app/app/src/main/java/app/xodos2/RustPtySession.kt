@@ -27,14 +27,33 @@ class RustPtySession(
     private var appliedPtyRows: Int = -1
     private var appliedPtyCols: Int = -1
 
-    // Flag to ensure we only export once
-    private var didExportAppVersion = false
+    // New: we no longer inject TERMUX_VERSION into the PTY — we write it to a file
+    // that the container's XoDos-env.sh sources.
+    private var didWriteVersionFile: Boolean = false
 
     private fun syncPtyKernelWindowSize(rows: Int, cols: Int) {
         if (rows == appliedPtyRows && cols == appliedPtyCols) return
         appliedPtyRows = rows
         appliedPtyCols = cols
         NativeBridge.setPtyWindowSize(sessionId, rows, cols)
+    }
+
+    /**
+     * Writes the app version into <filesDir>/XoDos-ver (plain text, one line).
+     * The container-side env script reads this on shell start and exports
+     * TERMUX_VERSION from it. No terminal output, no visible commands.
+     */
+    private fun writeXodosVersionFile() {
+        try {
+            val versionFile = File(context.filesDir, XODOS_VER_FILENAME)
+            versionFile.writeText(getAppVersion())
+            versionFile.setReadable(true, false)
+            versionFile.setWritable(true, false)
+            versionFile.setExecutable(false)
+            Log.i(TAG, "Wrote ${versionFile.absolutePath} = ${getAppVersion()}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write $XODOS_VER_FILENAME", e)
+        }
     }
 
     override fun updateSize(columns: Int, rows: Int) {
@@ -57,21 +76,17 @@ class RustPtySession(
             } else {
                 Log.i(TAG, "spawnSession succeeded ($sessionId)")
             }
+
+            // Write the version file once per session; container env script reads it.
+            if (!didWriteVersionFile) {
+                didWriteVersionFile = true
+                writeXodosVersionFile()
+            }
         }
 
         if (NativeBridge.isSessionAlive(sessionId)) {
             syncPtyKernelWindowSize(rows, columns)
             emulator?.resize(columns, rows)
-
-            // Export app version once
-            if (!didExportAppVersion) {
-                didExportAppVersion = true
-                val appVersion = getAppVersion()
-                NativeBridge.writeInput(
-                    sessionId,
-                    "export TERMUX_VERSION=$appVersion\n".toByteArray(Charsets.UTF_8)
-                )
-            }
 
             if (!didAppendWelcomeBanner) {
                 didAppendWelcomeBanner = true
@@ -183,6 +198,7 @@ class RustPtySession(
 
     private companion object {
         private const val TAG = "RustPtySession"
+        private const val XODOS_VER_FILENAME = "XoDos-ver"
 
         private fun buildWelcomeLine(sessionId: Int, distroName: String, appVersion: String): ByteArray {
             val rgb = when (distroName.lowercase()) {
