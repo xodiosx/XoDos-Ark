@@ -970,19 +970,26 @@ private fun refreshNativeBinariesAndAssets(context: Context) {
     // 1. Native wrapper – always rewrite.
     writeNativeWrapper(context)
 
-    // 2. Refresh assets into every container that already has a rootfs.
-    val assetDirsToRefresh = listOf("usr/bin")   // extend if you bundle more
+    // 2. Refresh assets + env into every container that already has a rootfs.
+    val assetDirsToRefresh = listOf("usr/bin")
     for (containerId in 1..NUM_CONTAINERS) {
         if (!containerIsOccupied(context, containerId)) continue
+
+        // Prefer the persisted distro id; fall back to detection then to "linux".
+        val detected = getContainerDistro(context, containerId)
+            ?: detectDistroFromRootfs(context, containerId)
+            ?: "linux"
+
         for (assetDir in assetDirsToRefresh) {
             copyAssetFolderToContainer(context, containerId, assetDir)
-            writeContainerEnvironment(context, containerId, detected)
-            saveContainerDistro(context, containerId, detected)
         }
+
+        writeContainerEnvironment(context, containerId, detected)
+        saveContainerDistro(context, containerId, detected)
     }
+
     Log.i("NativeInstall", "Refreshed native wrapper + container assets")
 }
-    
 
     private fun setupNativeEnvironment(context: Context) {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
