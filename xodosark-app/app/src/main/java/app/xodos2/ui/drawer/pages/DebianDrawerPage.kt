@@ -1,5 +1,6 @@
 package app.xodos2.ui.drawer.pages
 
+import app.xodos2.ui.drawer.pages.AdrenotoolsDrawerButton
 import app.xodos2.ui.drawer.pages.DxvkSelectorSection
 import app.xodos2.ui.drawer.pages.HudSelectorSection
 import android.content.SharedPreferences
@@ -253,7 +254,11 @@ DxvkSelectorSection(
     HudSelectorSection(
         title = "HUD"
     )
-            DrawerExpandableSection(title = "Install Desktop", defaultExpanded = false) {
+      
+      AdrenotoolsDrawerButton(
+    onExecuteCommand = onExecuteCommand  
+)
+                 DrawerExpandableSection(title = "Install Desktop", defaultExpanded = false) {
                 desktopEnvNames.forEach { name ->
                     val prefKey = "custom_install_script_${distroId}_${name.replace(" ", "_")}"
                     Row(
