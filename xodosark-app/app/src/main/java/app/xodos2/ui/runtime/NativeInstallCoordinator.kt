@@ -143,7 +143,7 @@ export PREFIX="/data/data/app.xodos2/files/usr"
 export HOME="/data/data/app.xodos2/files/home"
 export WINE_DISABLE_KERNEL_WRITEWATCH=1 
 export WINEPREFIX="${'$'}HOME/.wine"
-sed -i 's|^export LD_DEBUG=none${'$'}|#export LD_DEBUG=-all|' "${'$'}PREFIX/bin/xfex"
+#sed -i 's|^export LD_DEBUG=none${'$'}|#export LD_DEBUG=-all|' "${'$'}PREFIX/bin/xfex"
 #export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
 #export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
 #export LD_PRELOAD="${'$'}PREFIX/lib/libtermux-exec-ld-preload.so"
@@ -498,11 +498,16 @@ suspend fun fetchDistroInfoFromUrl(url: String): DistroDescriptor = withContext(
         export PULSE_SERVER=127.0.0.1        
         export MOZ_FAKE_NO_SANDBOX=1
         export DISTRO=$distroId
+        if [ -f  ~/.bashrc ]; then
         sed -i 's|^ex$|export PATH=${'$'}PATH|' ~/.bashrc
         sed -i '/^ny/d' ~/.bashrc
         sed -i '/^gpus/d' ~/.bashrc
+        fi
         export PREFIX="/data/data/app.xodos2/files/usr"
         export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin
+        if [ -f ${'$'}PREFIX/bin/xfex ]; then
+        sed -i 's|^export LD_DEBUG=none${'$'}|#export LD_DEBUG=-all|' "${'$'}PREFIX/bin/xfex"
+        fi
         . /etc/environment
     """.trimIndent()
 
@@ -517,11 +522,16 @@ val envfix = """
         export PULSE_SERVER=127.0.0.1        
         export MOZ_FAKE_NO_SANDBOX=1
         export DISTRO=$distroId
+        if [ -f  ~/.bashrc ]; then
         sed -i 's|^ex$|export PATH=${'$'}PATH|' ~/.bashrc
         sed -i '/^ny/d' ~/.bashrc
         sed -i '/^gpus/d' ~/.bashrc
+        fi
         export PREFIX="/data/data/app.xodos2/files/usr"
         export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin
+        if [ -f ${'$'}PREFIX/bin/xfex ]; then
+        sed -i 's|^export LD_DEBUG=none${'$'}|#export LD_DEBUG=-all|' "${'$'}PREFIX/bin/xfex"
+        fi
         . /etc/environment
     """.trimIndent()
     
@@ -966,6 +976,8 @@ private fun refreshNativeBinariesAndAssets(context: Context) {
         if (!containerIsOccupied(context, containerId)) continue
         for (assetDir in assetDirsToRefresh) {
             copyAssetFolderToContainer(context, containerId, assetDir)
+            writeContainerEnvironment(context, containerId, detected)
+            saveContainerDistro(context, containerId, detected)
         }
     }
     Log.i("NativeInstall", "Refreshed native wrapper + container assets")
