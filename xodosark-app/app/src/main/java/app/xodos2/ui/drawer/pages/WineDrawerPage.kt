@@ -254,7 +254,7 @@ DesktopLaunchersSection(
 AdrenotoolsDrawerButton(
     prefs = prefs,
     onExecuteCommand = onExecuteCommand,
-    snackbarHostState = drawerSnackbarHost   
+    
 )
             DrawerExpandableSection(title = "Install Desktop", defaultExpanded = false) {
                 desktopEnvNames.forEach { name ->
