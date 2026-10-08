@@ -37,7 +37,7 @@ kotlinOptions {
         // versionName: user-visible, align with git tag / Release (e.g. v0.1.0 → "0.1.0").
         // versionCode: positive integer, must increase for every new APK you ship (Play / sideload).
         versionCode = 64
-        versionName = "0.6.4"
+        versionName = "0.6.4.2"
     }
 
     signingConfigs {
