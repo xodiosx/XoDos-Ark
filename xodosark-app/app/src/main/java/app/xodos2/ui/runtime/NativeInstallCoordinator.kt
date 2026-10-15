@@ -990,12 +990,13 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
         val desktopModes: GraphicsModeController.Modes,
     )
 
-    suspend fun initNativeAndSyncAssets(
-        context: Context,
-        prefs: SharedPreferences,
-        allowedVulkan: List<String>,
-        allowedOpenGL: List<String>,
-    ): InitResult {
+   suspend fun initNativeAndSyncAssets(
+    context: Context,
+    prefs: SharedPreferences,
+    allowedVulkan: List<String>,
+    allowedOpenGL: List<String>,
+    onBootstrapProgress: (suspend (Int, String) -> Unit)? = null,   // ⬅️ NEW
+): InitResult {
         migrateRendererPrefsIfNeeded(prefs)
         val desktopModes = GraphicsModeController.loadFromPrefs(
             prefs = prefs,
@@ -1012,7 +1013,18 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
             ) return@withContext false
 
             setupNativeEnvironment(context)
-            refreshNativeBinariesAndAssets(context)
+
+// ── Extract bootstrap if usr/bin/pkg is missing ──
+if (!File(context.filesDir, "usr/bin/pkg").exists()) {
+    if (onBootstrapProgress == null) {
+        Log.e("NativeInstall", "Bootstrap missing but no progress callback supplied")
+        return@withContext false
+    }
+    val bootOk = extractBootstrapFromAssets(context, onBootstrapProgress)
+    if (!bootOk) return@withContext false
+}
+
+refreshNativeBinariesAndAssets(context)
 
             NativeBridge.stopVirglHost()
             PulseAssets.syncFromAssetsIfNeeded(context)
@@ -1474,5 +1486,90 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
             Log.e("NativeInstall", "Failed to apply PRoot bypasses", e)
         }
     }
+    
+    
+/**
+ * Extracts assets/bootstrap.tar.xz into filesDir/ using the app's own
+ * usr/bin/xz | pv | tar pipeline (same as the old picker flow).
+ * Returns true on success.
+ */
+ 
+ 
+suspend fun extractBootstrapFromAssets(
+    context: Context,
+    onProgress: suspend (Int, String) -> Unit
+): Boolean = withContext(Dispatchers.IO) {
+    val dataDir    = context.filesDir
+    val usrDir     = File(dataDir, "usr")
+    val cacheDir   = context.cacheDir
+    val tmpArchive = File(cacheDir, "bootstrap_auto.tar.xz")
+
+    try {
+        context.assets.open("bootstrap.tar.xz").use { input ->
+            tmpArchive.outputStream().use { output -> input.copyTo(output) }
+        }
+
+        val xzBinary  = File(usrDir, "bin/xz").absolutePath
+        val pvBinary  = File(usrDir, "bin/pv").absolutePath
+        val tarBinary = File(usrDir, "bin/tar").absolutePath
+        val libDir    = File(usrDir, "lib").absolutePath
+
+        for (p in listOf(xzBinary, pvBinary, tarBinary)) {
+            val f = File(p)
+            if (!f.exists()) throw Exception("Missing binary: $p")
+            f.setExecutable(true, false)
+        }
+
+        val env = mapOf(
+            "PATH"            to "${File(usrDir, "bin").absolutePath}:/system/bin:/sbin:/bin",
+            "LD_LIBRARY_PATH" to "$libDir:/system/lib64:/lib",
+            "TMPDIR"          to cacheDir.absolutePath
+        )
+
+        val totalSize = 80L * 1024 * 1024
+
+        val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
+                "$xzBinary -dc ${tmpArchive.absolutePath} | " +
+                "$pvBinary -n -s $totalSize | " +
+                "$tarBinary -xf - -C ${dataDir.absolutePath}"
+
+        val cmd = arrayOf("/system/bin/sh", "-c", shellCmd)
+
+        val process = ProcessBuilder(*cmd)
+            .directory(cacheDir)
+            .apply { environment().putAll(env) }
+            .redirectErrorStream(false)
+            .start()
+
+        val stderrLines = mutableListOf<String>()
+        process.errorStream.bufferedReader().use { reader ->
+            var line = reader.readLine()
+            while (line != null) {
+                stderrLines.add(line)
+                line.toIntOrNull()?.let { pct ->
+                    if (pct in 0..100) onProgress(pct, "Installing bootstrap… $pct%")
+                }
+                line = reader.readLine()
+            }
+        }
+
+        val exit = process.waitFor()
+        tmpArchive.delete()
+
+        if (exit != 0) throw Exception("tar exited $exit: ${stderrLines.joinToString("\n")}")
+
+        File(usrDir, "bin").listFiles()?.forEach { it.setExecutable(true, false) }
+
+        onProgress(100, "Bootstrap installed")
+        true
+    } catch (e: Exception) {
+        Log.e("Bootstrap", "Auto-install failed", e)
+        tmpArchive.delete()
+        onProgress(-1, "Bootstrap failed: ${e.message}")
+        false
+    }
+}
+    
+    
         
 }

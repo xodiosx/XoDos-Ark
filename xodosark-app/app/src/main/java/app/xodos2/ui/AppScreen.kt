@@ -274,17 +274,12 @@ var backupInProgress by remember { mutableStateOf(false) }
 var backupProgress by remember { mutableStateOf(0 to "") }  // (pct, msg)
 
 // --- Bootstrap package installation ---
-var bootstrapUri by remember { mutableStateOf<Uri?>(null) }
 var bootstrapInProgress by remember { mutableStateOf(false) }
 var bootstrapProgress by remember { mutableStateOf(0 to "") }   // (pct, msg)
 var bootstrapError by remember { mutableStateOf<String?>(null) }
-// --- Bootstrap download ---
-var bootstrapDownloadInProgress by remember { mutableStateOf(false) }
-var bootstrapDownloadProgress by remember { mutableStateOf(0 to "") }
+
 var showNativeContainerPrompt by remember { mutableStateOf<Int?>(null) }  
-// --- Full Desktop GUI download ---
-var fullDesktopDownloadInProgress by remember { mutableStateOf(false) }
-var fullDesktopDownloadProgress by remember { mutableStateOf(0 to "") }
+
 var showRemoveNativeEnvConfirmation by remember { mutableStateOf(false) }
 
 
@@ -360,26 +355,7 @@ val backupFilePicker = rememberLauncherForActivityResult(
         }
     }
 }
-// ----- File picker for bootstrap archive -----
-val pickBootstrapFile = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.OpenDocument()
-) { uri: Uri? ->
-    if (uri != null) {
-        val exists = try {
-            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                cursor.moveToFirst()
-                cursor.getLong(cursor.getColumnIndexOrThrow(OpenableColumns.SIZE)) > -1
-            } ?: false
-        } catch (e: Exception) { false }
-
-        if (exists) {
-            bootstrapUri = uri
-        } else {
-            Toast.makeText(context, "Selected file no longer exists.", Toast.LENGTH_LONG).show()
-        }
-    }
-}
-
+// ----- 
 
     // ----- distro selection state -----
     var availableDistros by remember { mutableStateOf<List<DistroDescriptor>>(emptyList()) }
@@ -1043,144 +1019,42 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
     }
 }
 
-fun downloadBootstrapArchive() {
-    scope.launch {
-        bootstrapDownloadInProgress = true
-        bootstrapDownloadProgress = 0 to "Starting download…"
-
-        try {
-            withContext(Dispatchers.IO) {
-                val url = URL("https://github.com/xodiosx/XoDos-Ark/releases/download/extra-0.1/extra-2.tar.xz")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.connectTimeout = 15_000
-                connection.readTimeout = 15_000
-                connection.instanceFollowRedirects = true
-                connection.setRequestProperty("User-Agent", "XoDosArk/1.0")
-                connection.connect()
-
-                val totalSize = connection.contentLengthLong
-                val inputStream = connection.inputStream
-
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                if (!downloadsDir.exists()) downloadsDir.mkdirs()
-                val outputFile = File(downloadsDir, "extra-2.tar.xz")
-
-                inputStream.use { input ->
-                    outputFile.outputStream().use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        var bytesCopied = 0L
-                        var read: Int
-                        while (input.read(buffer).also { read = it } != -1) {
-                            output.write(buffer, 0, read)
-                            bytesCopied += read
-                            if (totalSize > 0) {
-                                val pct = (bytesCopied * 100 / totalSize).toInt()
-                                withContext(Dispatchers.Main) {
-                                    bootstrapDownloadProgress = pct to "Downloading… $pct%"
-                                }
-                            }
-                        }
-                    }
-                }
-
-                withContext(Dispatchers.Main) {
-                    bootstrapDownloadProgress = 100 to "Download complete"
-                    Toast.makeText(context, "Extra drivers archive saved to Downloads", Toast.LENGTH_LONG).show()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("BootstrapDownload", "Download failed", e)   // for debugging
-            withContext(Dispatchers.Main) {
-                bootstrapDownloadProgress = -1 to "Download failed: ${e.message}"
-                Toast.makeText(context, "Extra drivers download failed", Toast.LENGTH_LONG).show()
-            }
-        } finally {
-            withContext(Dispatchers.Main) {
-                bootstrapDownloadInProgress = false
-            }
-        }
-    }
-}
-
-fun downloadFullDesktopGUIArchive() {
-    scope.launch {
-        fullDesktopDownloadInProgress = true
-        fullDesktopDownloadProgress = 0 to "Starting download…"
-
-        try {
-            withContext(Dispatchers.IO) {
-                // ★ REPLACE with the actual URL for the full desktop GUI archive
-                val url = URL("https://github.com/xodiosx/XoDos-Ark/releases/download/v0.6.3-full/ark2.tar.xz")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.connectTimeout = 15_000
-                connection.readTimeout = 15_000
-                connection.instanceFollowRedirects = true
-                connection.setRequestProperty("User-Agent", "XoDosArk/1.0")
-                connection.connect()
-
-                val totalSize = connection.contentLengthLong
-                val inputStream = connection.inputStream
-
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                if (!downloadsDir.exists()) downloadsDir.mkdirs()
-                // Change the filename as needed
-                val outputFile = File(downloadsDir, "ark-desktop-gui.tar.xz")
-
-                inputStream.use { input ->
-                    outputFile.outputStream().use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        var bytesCopied = 0L
-                        var read: Int
-                        while (input.read(buffer).also { read = it } != -1) {
-                            output.write(buffer, 0, read)
-                            bytesCopied += read
-                            if (totalSize > 0) {
-                                val pct = (bytesCopied * 100 / totalSize).toInt()
-                                withContext(Dispatchers.Main) {
-                                    fullDesktopDownloadProgress = pct to "Downloading… $pct%"
-                                }
-                            }
-                        }
-                    }
-                }
-
-                withContext(Dispatchers.Main) {
-                    fullDesktopDownloadProgress = 100 to "Download complete"
-                    Toast.makeText(context, "xfce4 desktop GUI archive saved to Downloads", Toast.LENGTH_LONG).show()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("FullDesktopDownload", "Download failed", e)
-            withContext(Dispatchers.Main) {
-                fullDesktopDownloadProgress = -1 to "Download failed: ${e.message}"
-                Toast.makeText(context, "Full desktop GUI download failed", Toast.LENGTH_LONG).show()
-            }
-        } finally {
-            withContext(Dispatchers.Main) {
-                fullDesktopDownloadInProgress = false
-            }
-        }
-    }
-}
-
 
 
     // ----- native init and container check -----
-    LaunchedEffect(Unit) {
-        AppLogger.log("Starting native init and asset sync")
-        val r = NativeInstallCoordinator.initNativeAndSyncAssets(
-            context = context,
-            prefs = prefs,
-            allowedVulkan = VULKAN_MODES,
-            allowedOpenGL = OPENGL_MODES,
-        )
-        if (!r.ok) {
+   LaunchedEffect(Unit) {
+    AppLogger.log("Starting native init and asset sync")
+
+    val r = NativeInstallCoordinator.initNativeAndSyncAssets(
+        context = context,
+        prefs = prefs,
+        allowedVulkan = VULKAN_MODES,
+        allowedOpenGL = OPENGL_MODES,
+        onBootstrapProgress = { pct, msg ->
+            withContext(Dispatchers.Main) {
+                bootstrapInProgress = true
+                bootstrapProgress = pct to msg
+            }
+        },
+    )
+
+    // Hide the overlay now that init + bootstrap are done
+    bootstrapInProgress = false
+
+    if (!r.ok) {
+        // Distinguish bootstrap failure from native-init failure
+        val pkg = File(context.filesDir, "usr/bin/pkg")
+        if (!pkg.exists()) {
+            bootstrapError = bootstrapProgress.second
+        } else {
             errorMsg = "Failed to initialize native layer"
             AppLogger.log("Native init FAILED")
-            return@LaunchedEffect
         }
+        return@LaunchedEffect
+    }
 
-        initialized = true
+    initialized = true
+
         refreshContainerState()
         refreshLegacyFlags()
         // Automatically detect and save the distro type for every installed container
@@ -1311,119 +1185,7 @@ LaunchedEffect(terminalSessionState.activeSessionId) {
     prefs.edit().putInt("active_terminal_session_id", terminalSessionState.activeSessionId).apply()
 }
 
-// Bootstrap extraction effect
-LaunchedEffect(bootstrapUri) {
-    val uri = bootstrapUri ?: return@LaunchedEffect
-    // Prevent starting a new extraction if one is already running
-    if (bootstrapInProgress) return@LaunchedEffect
-
-    bootstrapInProgress = true
-    bootstrapProgress = 0 to "Copying archive…"
-
-    val dataDir = context.filesDir          // /data/data/app.xodos2/files
-    val usrDir = File(dataDir, "usr")       // /data/data/app.xodos2/files/usr
-    val cacheDir = context.cacheDir
-    val tempArchive = File(cacheDir, "bootstrap_${System.currentTimeMillis()}.tar.xz")
-
-    try {
-        // 1. Copy selected file to cache
-        withContext(Dispatchers.IO) {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                tempArchive.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            }
-        }
-
-        // 2. Total uncompressed size for pv (209 MB – adjust if needed)
-        val totalSize = 209L * 1024 * 1024
-
-        // 3. Binary paths
-        val xzBinary  = File(usrDir, "bin/xz").absolutePath
-        val pvBinary  = File(usrDir, "bin/pv").absolutePath
-        val tarBinary = File(usrDir, "bin/tar").absolutePath
-        val libDir    = File(usrDir, "lib").absolutePath
-
-        // Check that all binaries exist
-        for (path in listOf(xzBinary, pvBinary, tarBinary)) {
-            if (!File(path).exists()) throw Exception("Missing binary: $path")
-            File(path).setExecutable(true)
-        }
-
-        val env = mapOf(
-            "PATH"            to "${File(usrDir, "bin").absolutePath}:/system/bin:/sbin:/bin",
-            "LD_LIBRARY_PATH" to "$libDir:/system/lib64:/lib",
-            "TMPDIR"          to cacheDir.absolutePath
-        )
-
-        // Command: xz -dc archive | pv -n -s totalsize | tar -xf - -C dataDir
-        // Remove conflicting directory before extraction
-val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
-               "$xzBinary -dc ${tempArchive.absolutePath} | " +
-               "$pvBinary -n -s $totalSize | " +
-               "$tarBinary -xf - -C ${dataDir.absolutePath}"
-        Log.d("BootstrapExtract", "Running: $shellCmd")
-
-        val cmd = arrayOf("/system/bin/sh", "-c", shellCmd)
-
-        // 4. Run extraction and read progress
-        withContext(Dispatchers.IO) {
-            val process = ProcessBuilder(*cmd)
-                .directory(cacheDir)
-                .apply { environment().putAll(env) }
-                .redirectErrorStream(false)   // pv writes numeric progress to stderr
-                .start()
-
-            // Read stderr (pv progress) and collect error output
-            val stderrLines = mutableListOf<String>()
-            val progressJob = launch {
-                process.errorStream.bufferedReader().use { reader ->
-                    var line = reader.readLine()
-                    while (line != null) {
-                        stderrLines.add(line)
-                        val percent = line.toIntOrNull()
-                        if (percent != null && percent in 0..100) {
-                            withContext(Dispatchers.Main) {
-                                bootstrapProgress = percent to "Extracting… $percent%"
-                            }
-                        }
-                        line = reader.readLine()
-                    }
-                }
-            }
-
-            val exitCode = process.waitFor()
-            progressJob.join()   // wait for all progress lines to be processed
-            tempArchive.delete()
-
-            val stderrLog = stderrLines.joinToString("\n")
-            Log.d("BootstrapExtract", "Exit code: $exitCode, stderr:\n$stderrLog")
-
-            withContext(Dispatchers.Main) {
-                if (exitCode == 0) {
-                    bootstrapProgress = 100 to "Extra drivers installed"
-                    Toast.makeText(context, "Extra drivers packages installed", Toast.LENGTH_SHORT).show()
-                } else {
-                    val errMsg = if (stderrLog.isNotEmpty()) stderrLog else "unknown error"
-                    bootstrapError = "Extraction failed (exit $exitCode): $errMsg"
-                    Toast.makeText(context, "Extra drivers extraction failed", Toast.LENGTH_LONG).show()
-                }
-            }
-        }
-    } catch (e: Exception) {
-        Log.e("BootstrapExtract", "Extraction error", e)
-        withContext(Dispatchers.Main) {
-            bootstrapError = "Error: ${e.message}"
-            Toast.makeText(context, "Extra drivers installation error", Toast.LENGTH_LONG).show()
-        }
-    } finally {
-        // Clear the URI only after everything finishes – prevents early cancellation
-        withContext(Dispatchers.Main) {
-            bootstrapInProgress = false
-            bootstrapUri = null
-        }
-    }
-}
+// 
 
     // ----- graphics helpers -----
     fun checkAndPromptPanvkDrivers() {
@@ -1750,6 +1512,15 @@ fun setDesktopVulkanMode(mode: String) {
         return
     }
 
+if (bootstrapInProgress) {
+    InstallScreen(
+        progress = bootstrapProgress.first,
+        message  = bootstrapProgress.second
+    )
+    return
+}
+
+
     if (!initialized) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black))
         return
@@ -1788,10 +1559,6 @@ if (backupInProgress) {
         return
     }
 
-if (bootstrapInProgress) {
-    InstallScreen(progress = bootstrapProgress.first, message = bootstrapProgress.second)
-    return
-}
 
 
 if (bootstrapError != null) {
@@ -1799,7 +1566,7 @@ if (bootstrapError != null) {
         onDismissRequest = { bootstrapError = null },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Extra drivers installation", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text("bootstrap installation", fontWeight = FontWeight.Bold, color = Color.White) },
         text = { Text(bootstrapError ?: "", color = Color.White.copy(alpha = 0.85f)) },
         confirmButton = {
             GlassButton(onClick = { bootstrapError = null }) { Text("OK", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
@@ -1808,79 +1575,6 @@ if (bootstrapError != null) {
 }
 
 
-if (bootstrapDownloadInProgress) {
-    AlertDialog(
-        onDismissRequest = { /* cannot dismiss while downloading */ },
-        containerColor = Color.Transparent,
-        modifier = Modifier.glassDialogStyle(),
-        title = { Text("Downloading Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold, color = Color.White) },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (bootstrapDownloadProgress.first >= 0) {
-                    LinearProgressIndicator(
-                        progress = { bootstrapDownloadProgress.first / 100f },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFFC3B6F9),
-                        trackColor = Color.White.copy(alpha = 0.1f)
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        bootstrapDownloadProgress.second,
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                } else {
-                    Text(
-                        bootstrapDownloadProgress.second,
-                        color = Color(0xFFFF6B6B)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            GlassButton(onClick = { bootstrapDownloadInProgress = false }) {
-                Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
-            }
-        }
-    )
-}
-
-if (fullDesktopDownloadInProgress) {
-    AlertDialog(
-        onDismissRequest = { /* cannot dismiss while downloading */ },
-        containerColor = Color.Transparent,
-        modifier = Modifier.glassDialogStyle(),
-        title = { Text("Downloading XFCE4 desktop GUI≈800mb", fontWeight = FontWeight.Bold, color = Color.White) },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (fullDesktopDownloadProgress.first >= 0) {
-                    LinearProgressIndicator(
-                        progress = { fullDesktopDownloadProgress.first / 100f },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Color(0xFFC3B6F9),
-                        trackColor = Color.White.copy(alpha = 0.1f)
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        fullDesktopDownloadProgress.second,
-                        color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                } else {
-                    Text(
-                        fullDesktopDownloadProgress.second,
-                        color = Color(0xFFFF6B6B)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            GlassButton(onClick = { fullDesktopDownloadInProgress = false }) {
-                Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
-            }
-        }
-    )
-}
 
 // ── Restart dialog after installation ───────────────────────────
 if (installDone) {
@@ -2274,74 +1968,8 @@ if (showContainerManager) {
                 }
 
                 // ── Action buttons ──
-                item {
-                    Button(
-                        onClick = {
-                            showContainerManager = false
-                            pickBootstrapFile.launch(arrayOf("application/x-xz", "*/*"))
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(alpha = 0.07f),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))
-                            )
-                        )
-                    ) {
-                        Text("Install Extra / GUI archives", fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            showContainerManager = false
-                            downloadBootstrapArchive()
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(alpha = 0.07f),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))
-                            )
-                        )
-                    ) {
-                        Text("Download Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                item {
-                    Button(
-                        onClick = {
-                            showContainerManager = false
-                            downloadFullDesktopGUIArchive()
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White.copy(alpha = 0.07f),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(
-                            width = 1.dp,
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.03f))
-                            )
-                        )
-                    ) {
-                        Text("Download XFCE4 desktop GUI", fontWeight = FontWeight.Bold)
-                    }
-                }
+                
+                
 
                 item {
                     Button(
@@ -2361,7 +1989,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Clean cache and downloaded drivers", fontWeight = FontWeight.Bold)
+                        Text("Clean cache packages and downloaded drivers", fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -2499,7 +2127,7 @@ if (showRemoveNativeEnvConfirmation) {
         title = { Text("Remove Native Environment?", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Text(
-                "This will delete the installed extra drivers / native xfce4 and all native contents. This action cannot be undone.\n\nAre you sure?",
+                "This will delete the installed  native rootfs and all native contents. This action cannot be undone.\n\nAre you sure?",
                 color = Color.White.copy(alpha = 0.85f)
             )
         },
@@ -3172,7 +2800,7 @@ if (showDistroSelection) {
                              showSlotPicker || 
                              showTurnipDriverDialog || 
                              showExitDialog ||
-                             bootstrapDownloadInProgress
+                             
 
     AppDrawer(
         drawerState = drawerState,
