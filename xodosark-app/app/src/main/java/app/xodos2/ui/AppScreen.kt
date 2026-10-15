@@ -1575,7 +1575,6 @@ if (bootstrapError != null) {
 }
 
 
-
 // ── Restart dialog after installation ───────────────────────────
 if (installDone) {
     // Full‑screen surface to avoid the default window background

@@ -1493,7 +1493,7 @@ private fun applyArchPacmanFixes(context: Context, containerId: Int, distroType:
  * usr/bin/xz | pv | tar pipeline (same as the old picker flow).
  * Returns true on success.
  */
- 
+
  
 suspend fun extractBootstrapFromAssets(
     context: Context,
