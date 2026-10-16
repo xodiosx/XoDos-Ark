@@ -2798,7 +2798,7 @@ if (showDistroSelection) {
                              showNativeContainerPrompt != null || 
                              showSlotPicker || 
                              showTurnipDriverDialog || 
-                             showExitDialog ||
+                             showExitDialog
                              
 
     AppDrawer(
