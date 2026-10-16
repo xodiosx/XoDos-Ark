@@ -646,7 +646,7 @@ private fun writeNativeEnvironmentHook(context: Context) {
         # Only define in the native env; inside a distro rootfs this file
         # is never sourced. Guarded anyway in case the user sources it manually.
         if [ ! -e /.rootfs_type ] && [ ! -e /.xodos2_rootfs_ok ]; then
-            xrun() { exec "${'$'}@"; }
+            xrun() { "${'$'}@"; }
         fi
         """.trimIndent() + "\n"
     )
