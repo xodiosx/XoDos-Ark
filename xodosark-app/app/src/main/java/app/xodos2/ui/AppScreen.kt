@@ -91,7 +91,10 @@ import java.net.URL
 import java.net.HttpURLConnection
 import java.io.BufferedReader
 import java.io.InputStreamReader
-
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import android.view.WindowManager
 
 import app.xodos2.ui.glassDialogStyle
@@ -277,6 +280,8 @@ var backupProgress by remember { mutableStateOf(0 to "") }  // (pct, msg)
 var bootstrapUri by remember { mutableStateOf<Uri?>(null) }
 var bootstrapInProgress by remember { mutableStateOf(false) }
 var bootstrapProgress by remember { mutableStateOf(0 to "") }   // (pct, msg)
+var bootstrapDownloadJob by remember { mutableStateOf<Job?>(null) }
+var fullDesktopDownloadJob by remember { mutableStateOf<Job?>(null) }
 var bootstrapError by remember { mutableStateOf<String?>(null) }
 // --- Bootstrap download ---
 var bootstrapDownloadInProgress by remember { mutableStateOf(false) }
@@ -1044,13 +1049,19 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
 }
 
 fun downloadBootstrapArchive() {
-    scope.launch {
+    bootstrapDownloadJob?.cancel()
+    bootstrapDownloadJob = scope.launch {
         bootstrapDownloadInProgress = true
         bootstrapDownloadProgress = 0 to "Starting download…"
 
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!downloadsDir.exists()) downloadsDir.mkdirs()
+        val outputFile = File(downloadsDir, "fexcore.tar.xz")
+        val tmpFile    = File(downloadsDir, "fexcore.tar.xz.tmp")
+
         try {
             withContext(Dispatchers.IO) {
-                val url = URL("https://github.com/xodiosx/XoDos-Ark/releases/download/extra-0.1/extra-2.tar.xz")
+                val url = URL("https://github.com/xodiosx/XoDos-Ark/releases/download/wine10.1/fexcore.tar.xz")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 15_000
                 connection.readTimeout = 15_000
@@ -1059,18 +1070,14 @@ fun downloadBootstrapArchive() {
                 connection.connect()
 
                 val totalSize = connection.contentLengthLong
-                val inputStream = connection.inputStream
-
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                if (!downloadsDir.exists()) downloadsDir.mkdirs()
-                val outputFile = File(downloadsDir, "extra-2.tar.xz")
-
-                inputStream.use { input ->
-                    outputFile.outputStream().use { output ->
+                tmpFile.delete()
+                connection.inputStream.use { input ->
+                    tmpFile.outputStream().use { output ->
                         val buffer = ByteArray(64 * 1024)
                         var bytesCopied = 0L
                         var read: Int
                         while (input.read(buffer).also { read = it } != -1) {
+                            coroutineContext.ensureActive()       // ← cancellation point
                             output.write(buffer, 0, read)
                             bytesCopied += read
                             if (totalSize > 0) {
@@ -1082,17 +1089,24 @@ fun downloadBootstrapArchive() {
                         }
                     }
                 }
-
-                withContext(Dispatchers.Main) {
-                    bootstrapDownloadProgress = 100 to "Download complete"
-                    Toast.makeText(context, "Extra drivers archive saved to Downloads", Toast.LENGTH_LONG).show()
-                }
             }
+
+            // Atomic swap only after the whole download succeeded
+            if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename downloaded file")
+
+            withContext(Dispatchers.Main) {
+                bootstrapDownloadProgress = 100 to "Download complete"
+                Toast.makeText(context, "Archive saved to Downloads", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: CancellationException) {
+            tmpFile.delete()
+            throw e
         } catch (e: Exception) {
-            Log.e("BootstrapDownload", "Download failed", e)   // for debugging
+            Log.e("BootstrapDownload", "Download failed", e)
+            tmpFile.delete()
             withContext(Dispatchers.Main) {
                 bootstrapDownloadProgress = -1 to "Download failed: ${e.message}"
-                Toast.makeText(context, "Extra drivers download failed", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Download failed", Toast.LENGTH_LONG).show()
             }
         } finally {
             withContext(Dispatchers.Main) {
@@ -1103,13 +1117,18 @@ fun downloadBootstrapArchive() {
 }
 
 fun downloadFullDesktopGUIArchive() {
-    scope.launch {
+    fullDesktopDownloadJob?.cancel()
+    fullDesktopDownloadJob = scope.launch {
         fullDesktopDownloadInProgress = true
         fullDesktopDownloadProgress = 0 to "Starting download…"
 
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!downloadsDir.exists()) downloadsDir.mkdirs()
+        val outputFile = File(downloadsDir, "ark-desktop-gui.tar.xz")
+        val tmpFile    = File(downloadsDir, "ark-desktop-gui.tar.xz.tmp")
+
         try {
             withContext(Dispatchers.IO) {
-                // ★ REPLACE with the actual URL for the full desktop GUI archive
                 val url = URL("https://github.com/xodiosx/XoDos-Ark/releases/download/v0.6.3-full/ark2.tar.xz")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 15_000
@@ -1119,19 +1138,14 @@ fun downloadFullDesktopGUIArchive() {
                 connection.connect()
 
                 val totalSize = connection.contentLengthLong
-                val inputStream = connection.inputStream
-
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                if (!downloadsDir.exists()) downloadsDir.mkdirs()
-                // Change the filename as needed
-                val outputFile = File(downloadsDir, "ark-desktop-gui.tar.xz")
-
-                inputStream.use { input ->
-                    outputFile.outputStream().use { output ->
+                tmpFile.delete()
+                connection.inputStream.use { input ->
+                    tmpFile.outputStream().use { output ->
                         val buffer = ByteArray(64 * 1024)
                         var bytesCopied = 0L
                         var read: Int
                         while (input.read(buffer).also { read = it } != -1) {
+                            coroutineContext.ensureActive()
                             output.write(buffer, 0, read)
                             bytesCopied += read
                             if (totalSize > 0) {
@@ -1143,14 +1157,20 @@ fun downloadFullDesktopGUIArchive() {
                         }
                     }
                 }
-
-                withContext(Dispatchers.Main) {
-                    fullDesktopDownloadProgress = 100 to "Download complete"
-                    Toast.makeText(context, "xfce4 desktop GUI archive saved to Downloads", Toast.LENGTH_LONG).show()
-                }
             }
+
+            if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename downloaded file")
+
+            withContext(Dispatchers.Main) {
+                fullDesktopDownloadProgress = 100 to "Download complete"
+                Toast.makeText(context, "xfce4 desktop GUI archive saved to Downloads", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: CancellationException) {
+            tmpFile.delete()
+            throw e
         } catch (e: Exception) {
             Log.e("FullDesktopDownload", "Download failed", e)
+            tmpFile.delete()
             withContext(Dispatchers.Main) {
                 fullDesktopDownloadProgress = -1 to "Download failed: ${e.message}"
                 Toast.makeText(context, "Full desktop GUI download failed", Toast.LENGTH_LONG).show()
@@ -1162,8 +1182,6 @@ fun downloadFullDesktopGUIArchive() {
         }
     }
 }
-
-
 
     // ----- native init and container check -----
     // ----- native init and container check -----
@@ -1428,12 +1446,12 @@ val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
 
             withContext(Dispatchers.Main) {
                 if (exitCode == 0) {
-                    bootstrapProgress = 100 to "Extra drivers installed"
-                    Toast.makeText(context, "Extra drivers packages installed", Toast.LENGTH_SHORT).show()
+                    bootstrapProgress = 100 to "installed"
+                    Toast.makeText(context, "Package installed", Toast.LENGTH_SHORT).show()
                 } else {
                     val errMsg = if (stderrLog.isNotEmpty()) stderrLog else "unknown error"
                     bootstrapError = "Extraction failed (exit $exitCode): $errMsg"
-                    Toast.makeText(context, "Extra drivers extraction failed", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "extraction failed", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -1441,7 +1459,7 @@ val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
         Log.e("BootstrapExtract", "Extraction error", e)
         withContext(Dispatchers.Main) {
             bootstrapError = "Error: ${e.message}"
-            Toast.makeText(context, "Extra drivers installation error", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Installation error", Toast.LENGTH_LONG).show()
         }
     } finally {
         // Clear the URI only after everything finishes – prevents early cancellation
@@ -1776,6 +1794,11 @@ fun setDesktopVulkanMode(mode: String) {
         }
         return
     }
+    
+    if (bootstrapInProgress) {
+    InstallScreen(progress = bootstrapProgress.first, message = bootstrapProgress.second)
+    return
+}
 
     if (!initialized) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black))
@@ -1815,10 +1838,7 @@ if (backupInProgress) {
         return
     }
 
-if (bootstrapInProgress) {
-    InstallScreen(progress = bootstrapProgress.first, message = bootstrapProgress.second)
-    return
-}
+
 
 
 if (bootstrapError != null) {
@@ -1826,7 +1846,7 @@ if (bootstrapError != null) {
         onDismissRequest = { bootstrapError = null },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Extra drivers installation", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text("Package installation", fontWeight = FontWeight.Bold, color = Color.White) },
         text = { Text(bootstrapError ?: "", color = Color.White.copy(alpha = 0.85f)) },
         confirmButton = {
             GlassButton(onClick = { bootstrapError = null }) { Text("OK", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
@@ -1840,7 +1860,7 @@ if (bootstrapDownloadInProgress) {
         onDismissRequest = { /* cannot dismiss while downloading */ },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Downloading Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text("Downloading wine (≈250Mb)", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (bootstrapDownloadProgress.first >= 0) {
@@ -1865,9 +1885,14 @@ if (bootstrapDownloadInProgress) {
             }
         },
         confirmButton = {
-            GlassButton(onClick = { bootstrapDownloadInProgress = false }) {
-                Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
-            }
+    GlassButton(onClick = {
+        bootstrapDownloadJob?.cancel()
+        bootstrapDownloadJob = null
+        bootstrapDownloadInProgress = false
+    }) {
+        Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+    }
+}
         }
     )
 }
@@ -1902,10 +1927,14 @@ if (fullDesktopDownloadInProgress) {
             }
         },
         confirmButton = {
-            GlassButton(onClick = { fullDesktopDownloadInProgress = false }) {
-                Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
-            }
-        }
+    GlassButton(onClick = {
+        fullDesktopDownloadJob?.cancel()
+        fullDesktopDownloadJob = null
+        fullDesktopDownloadInProgress = false
+    }) {
+        Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+    }
+}
     )
 }
 
@@ -2320,7 +2349,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Install Extra / GUI archives", fontWeight = FontWeight.Bold)
+                        Text("Install native Packages / wine", fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -2343,11 +2372,11 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Download Extra drivers archive (200-Mb)", fontWeight = FontWeight.Bold)
+                        Text("Download Wine 🍷 (≈250Mb)", fontWeight = FontWeight.Bold)
                     }
                 }
 
-                item {
+               /* item {
                     Button(
                         onClick = {
                             showContainerManager = false
@@ -2369,7 +2398,7 @@ if (showContainerManager) {
                         Text("Download XFCE4 desktop GUI", fontWeight = FontWeight.Bold)
                     }
                 }
-
+*/
                 item {
                     Button(
                         onClick = { 
@@ -2388,7 +2417,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Clean cache and downloaded drivers", fontWeight = FontWeight.Bold)
+                        Text("Clean cache and downloaded packages", fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -2526,7 +2555,7 @@ if (showRemoveNativeEnvConfirmation) {
         title = { Text("Remove Native Environment?", fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Text(
-                "This will delete the installed extra drivers / native xfce4 and all native contents. This action cannot be undone.\n\nAre you sure?",
+                "This will delete the installed  native rootfs / PREFIX and all native packages. This action cannot be undone.\n\nAre you sure?",
                 color = Color.White.copy(alpha = 0.85f)
             )
         },
