@@ -624,6 +624,54 @@ private fun writeXodosEnvScript(context: Context) {
     }
 }
 
+/**
+ * Makes the app's own usr/ tree (the "native environment") source
+ * XoDos-env.sh and every *.sh in usr/etc/profile.d/.
+ * Idempotent — safe to call on every launch.
+ */
+private fun writeNativeEnvironmentHook(context: Context) {
+    val usrDir = File(context.filesDir, "usr")
+    if (!usrDir.isDirectory) return
+
+    val profileD = File(usrDir, "etc/profile.d").apply { mkdirs() }
+
+    val hook = File(profileD, "00-xodos-env.sh")
+    hook.writeText(
+        """
+        #!/data/data/app.xodos2/files/usr/bin/sh
+        # Sourced by the native shell (via bash.bashrc loop).
+        [ -r "$XODOS_ENV_HOST_PATH" ] && . "$XODOS_ENV_HOST_PATH"
+
+        # ── xrun: native-only shortcut ──
+        # Only define in the native env; inside a distro rootfs this file
+        # is never sourced. Guarded anyway in case the user sources it manually.
+        if [ ! -e /.rootfs_type ] && [ ! -e /.xodos2_rootfs_ok ]; then
+            xrun() { exec "${'$'}@"; }
+        fi
+        """.trimIndent() + "\n"
+    )
+    hook.setExecutable(true, false)
+
+    // ── Make sure native bash.bashrc sources profile.d/*.sh once ──
+    val bashrc = File(usrDir, "etc/bash.bashrc")
+    bashrc.parentFile?.mkdirs()
+    val marker = "# XoDos-Ark native profile.d loop"
+    val existing = if (bashrc.exists()) bashrc.readText() else ""
+    if (!existing.contains(marker)) {
+        bashrc.appendText(
+            """
+
+            $marker
+            if [ -d /data/data/app.xodos2/files/usr/etc/profile.d ]; then
+                for _x in /data/data/app.xodos2/files/usr/etc/profile.d/*.sh; do
+                    [ -r "${'$'}_x" ] && . "${'$'}_x"
+                done
+                unset _x
+            fi
+            """.trimIndent() + "\n"
+        )
+    }
+}
 /** Ensures XoDos-ver exists with the current app version. */
 private fun writeXodosVerFile(context: Context) {
     try {
@@ -990,63 +1038,70 @@ suspend fun cleanCacheTarballs(context: Context): Boolean =
         val desktopModes: GraphicsModeController.Modes,
     )
 
-   suspend fun initNativeAndSyncAssets(
+suspend fun initNativeAndSyncAssets(
     context: Context,
     prefs: SharedPreferences,
     allowedVulkan: List<String>,
     allowedOpenGL: List<String>,
-    onBootstrapProgress: (suspend (Int, String) -> Unit)? = null,   // ⬅️ NEW
+    onBootstrapProgress: (suspend (Int, String) -> Unit)? = null,
 ): InitResult {
-        migrateRendererPrefsIfNeeded(prefs)
-        val desktopModes = GraphicsModeController.loadFromPrefs(
-            prefs = prefs,
-            allowedVulkan = allowedVulkan,
-            allowedOpenGL = allowedOpenGL,
-        )
-        val ok = withContext(Dispatchers.IO) {
-            if (!NativeBridge.init(
-                    context.filesDir.absolutePath,
-                    context.cacheDir.absolutePath,
-                    context.applicationInfo.nativeLibraryDir,
-                    Environment.getExternalStorageDirectory()?.absolutePath
-                )
-            ) return@withContext false
+    migrateRendererPrefsIfNeeded(prefs)
+    val desktopModes = GraphicsModeController.loadFromPrefs(
+        prefs = prefs,
+        allowedVulkan = allowedVulkan,
+        allowedOpenGL = allowedOpenGL,
+    )
+    val ok = withContext(Dispatchers.IO) {
+        if (!NativeBridge.init(
+                context.filesDir.absolutePath,
+                context.cacheDir.absolutePath,
+                context.applicationInfo.nativeLibraryDir,
+                Environment.getExternalStorageDirectory()?.absolutePath
+            )
+        ) return@withContext false
 
-            setupNativeEnvironment(context)
+val pkgFile = File(context.filesDir, "usr/bin/pkg")
 
-// ── Extract bootstrap if usr/bin/pkg is missing ──
-if (!File(context.filesDir, "usr/bin/pkg").exists()) {
+if (!pkgFile.exists()) {
+    // 1. Create the helper symlinks needed to unpack bootstrap.tar.xz
+    setupNativeEnvironment(context)
+
+    // 2. Extract bootstrap
     if (onBootstrapProgress == null) {
         Log.e("NativeInstall", "Bootstrap missing but no progress callback supplied")
         return@withContext false
     }
     val bootOk = extractBootstrapFromAssets(context, onBootstrapProgress)
     if (!bootOk) return@withContext false
+
+    // 3. One more pass — recreate symlinks/libs on top of the freshly
+    //    extracted bootstrap so usr/bin has the default helper binaries.
+    setupNativeEnvironment(context)
 }
 
 refreshNativeBinariesAndAssets(context)
 
-            NativeBridge.stopVirglHost()
-            PulseAssets.syncFromAssetsIfNeeded(context)
-            VirglAssets.syncFromAssetsIfNeeded(context)
-            true
-        }
-        prefs.edit().remove("display_startup_script").apply()
-        if (!ok) {
-            return InitResult(
-                ok = false,
-                hasArchRootfs = false, hasDebianRootfs = false, hasWineRootfs = false,
-                desktopModes = desktopModes,
-            )
-        }
+        NativeBridge.stopVirglHost()
+        PulseAssets.syncFromAssetsIfNeeded(context)
+        VirglAssets.syncFromAssetsIfNeeded(context)
+        true
+    }
+    prefs.edit().remove("display_startup_script").apply()
+    if (!ok) {
         return InitResult(
-            ok = true,
-            hasArchRootfs = NativeBridge.hasArchRootfs(),
-            hasDebianRootfs = NativeBridge.hasDebianRootfs(),
-            hasWineRootfs = NativeBridge.hasWineRootfs(),
+            ok = false,
+            hasArchRootfs = false, hasDebianRootfs = false, hasWineRootfs = false,
             desktopModes = desktopModes,
         )
     }
+    return InitResult(
+        ok = true,
+        hasArchRootfs = NativeBridge.hasArchRootfs(),
+        hasDebianRootfs = NativeBridge.hasDebianRootfs(),
+        hasWineRootfs = NativeBridge.hasWineRootfs(),
+        desktopModes = desktopModes,
+    )
+}
     
     private const val NUM_CONTAINERS = 3      // 3 containers
 
@@ -1062,6 +1117,7 @@ private fun refreshNativeBinariesAndAssets(context: Context) {
     writeNativeWrapper(context)
      writeXodosVerFile(context)
     writeXodosEnvScript(context) 
+    writeNativeEnvironmentHook(context)
 
     // 2. Refresh assets + env into every container that already has a rootfs.
     val assetDirsToRefresh = listOf("usr/bin")
