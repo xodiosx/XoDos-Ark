@@ -1893,7 +1893,7 @@ if (bootstrapDownloadInProgress) {
         Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
     }
 }
-        }
+        
     )
 }
 
