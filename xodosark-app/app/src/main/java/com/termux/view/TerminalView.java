@@ -456,9 +456,11 @@ public final class TerminalView extends View {
     }
 
     @Override
-    public boolean isOpaque() {
-        return true;
-    }
+public boolean isOpaque() {
+    android.graphics.drawable.Drawable bg = getBackground();
+    return bg == null || bg.getOpacity() == android.graphics.PixelFormat.OPAQUE;
+}
+
 
     /**
      * Get the zero indexed column and row of the terminal view for the
@@ -919,10 +921,12 @@ public final class TerminalView extends View {
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
-        if (mEmulator == null) {
-            canvas.drawColor(0XFF000000);
-        } else {
+protected void onDraw(Canvas canvas) {
+    if (mEmulator == null) {
+        // Do nothing — the view's own background (set from termux.properties)
+        // shows through. Avoid painting opaque black.
+        return;
+} else {
             // render the terminal view and highlight any selected text
             int[] sel = mDefaultSelectors;
             if (mTextSelectionCursorController != null) {
