@@ -36,7 +36,7 @@ import app.xodos2.ui.glass.GlassButton
 import app.xodos2.ui.glassDialogStyle
 import org.json.JSONArray
 
-private const val EDITOR_DEFAULT_EXTRA_KEYS = """
+private val EDITOR_DEFAULT_EXTRA_KEYS = """
 [
   ["ESC", "/", "-", "HOME", "UP", "END", "PASTE"],
   ["TAB", "CTRL", "ALT", "LEFT", "DOWN", "RIGHT", "PGDN"]
