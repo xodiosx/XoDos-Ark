@@ -27,10 +27,6 @@ mod combined {
     use std::sync::{Mutex, OnceLock};
     use std::thread;
 
-    // --------------------------------------------------------------------------
-    // Session management (unchanged)
-    // --------------------------------------------------------------------------
-
     struct PtySession {
         _child: proot::ChildProcess,
         stdin: Box<dyn Write + Send>,
@@ -102,8 +98,6 @@ mod combined {
         Ok(())
     }
 
-    /// Spawn the native (Termux‑style) Android shell with no proot.
-    /// Used when no container is installed, or a container has no usable shell.
     fn spawn_native_shell(session_id: i32, rows: u16, cols: u16) -> Result<()> {
         let mut map = SESSIONS
             .lock()
@@ -132,11 +126,17 @@ mod combined {
         let mut buf = [0u8; 4096];
         loop {
             match master_read.read(&mut buf) {
-                Ok(0) => break,
+                Ok(0) => {
+                    log::info!("pty[{}]: EOF", session_id);
+                    break;
+                }
                 Ok(n) => {
                     post_pty_chunk_to_java(session_id, &buf[..n]);
                 }
-                Err(_) => break,
+                Err(e) => {
+                    log::info!("pty[{}]: read err {:?}", session_id, e);
+                    break;
+                }
             }
         }
     }
@@ -307,8 +307,6 @@ mod combined {
         start_virgl_servers(mask as u32);
     }
 
-    // ---------- Container checks ----------
-
     #[no_mangle]
     pub extern "system" fn Java_app_xodos2_NativeBridge_hasContainerRootfs(
         _env: JNIEnv,
@@ -337,8 +335,6 @@ mod combined {
     ) -> jint {
         first_installed_container().map(|id| id as jint).unwrap_or(0)
     }
-
-    // ---------- Installation into a specific container ----------
 
     fn install_to_container(
         mut env: JNIEnv,
@@ -431,22 +427,42 @@ mod combined {
     ) -> jboolean {
         let r = rows.max(1).min(i32::from(u16::MAX)) as u16;
         let c = cols.max(1).min(i32::from(u16::MAX)) as u16;
+
         let path = match container_rootfs_dir(container_id as u32) {
             Ok(p) => p,
             Err(e) => {
-                log::error!(
-                    "spawnSessionInContainer: invalid container {}: {:?}",
+                log::warn!(
+                    "spawnSessionInContainer: container {} not usable ({:?}) — \
+                     falling back to native shell",
                     container_id,
                     e
                 );
-                return 0;
+                return match spawn_native_shell(session_id, r, c) {
+                    Ok(()) => 1,
+                    Err(e2) => {
+                        log::error!("spawnSessionInContainer: native fallback failed: {:?}", e2);
+                        0
+                    }
+                };
             }
         };
+
         match spawn_shell_in_rootfs(session_id, r, c, &path) {
             Ok(()) => 1,
             Err(e) => {
-                log::error!("spawnSessionInContainer failed: {:?}", e);
-                0
+                log::warn!(
+                    "spawnSessionInContainer failed for container {} ({:?}) — \
+                     falling back to native shell",
+                    container_id,
+                    e
+                );
+                match spawn_native_shell(session_id, r, c) {
+                    Ok(()) => 1,
+                    Err(e2) => {
+                        log::error!("spawnSessionInContainer: native fallback failed: {:?}", e2);
+                        0
+                    }
+                }
             }
         }
     }

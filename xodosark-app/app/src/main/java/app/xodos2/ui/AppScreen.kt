@@ -427,10 +427,17 @@ fun proceedToDistroSelection(containerId: Int) {
 }
 
 fun handleContainerInstallClick(containerId: Int) {
-    val bashrc = File(context.filesDir, "usr/etc/bash.bashrc")
-    if (bashrc.exists()) {
-        showContainerManager = false
-        showNativeContainerPrompt = containerId
+    val bashExists  = File(context.filesDir, "usr/bin/bash").exists()
+    val bashrcExists = File(context.filesDir, "usr/etc/bashrc").exists() ||
+                       File(context.filesDir, "usr/etc/bash.bashrc").exists()
+    if (bashExists && bashrcExists) {
+        // Native environment present → mark as native silently, no dialog
+        markContainerAsNativeTerminal(containerId)
+        Toast.makeText(
+            context,
+            "Container $containerId will use native terminal",
+            Toast.LENGTH_SHORT
+        ).show()
     } else {
         proceedToDistroSelection(containerId)
     }
@@ -1226,9 +1233,30 @@ LaunchedEffect(Unit) {
     }
 
     initialized = true
-    refreshContainerState()
-    refreshLegacyFlags()
-      // Automatically detect and save the distro type for every installed container
+refreshContainerState()
+refreshLegacyFlags()
+
+// ── Auto-activate native terminal ───────────────────────────────
+// If no container has been marked installed yet, but the native
+// environment exists under $PREFIX, silently mark container 1 as
+// native. This removes the need for the "activate native terminal"
+// dialog and lets the terminal start immediately.
+//
+// If any container already has a real distro (marker present),
+// leave it alone — proot.rs will run its shell.
+if (!anyRootfsInstalled) {
+    val hasNativeEnv =
+        File(context.filesDir, "usr/bin/bash").exists() ||
+        File(context.filesDir, "usr/bin/sh").exists()
+    if (hasNativeEnv) {
+        markContainerAsNativeTerminal(1)
+        refreshContainerState()
+        refreshLegacyFlags()
+        AppLogger.log("Auto-marked container 1 as native terminal (bash -l)")
+    }
+}
+
+// Automatically detect and save the distro type for every installed container
 val mask = NativeBridge.getInstalledContainersMask()
 for (id in 1..3) {
     if ((mask and (1 shl (id - 1))) != 0) {
@@ -1242,29 +1270,30 @@ for (id in 1..3) {
         }
     }
 }
-        // Remove leftover Turnip .tmp files
+
 File(context.filesDir, "drivers").listFiles { f ->
     f.name.startsWith("turnip_") && f.name.endsWith(".tmp")
 }?.forEach { it.delete() }
-       onAppReady() 
-        desktopVulkanMode = r.desktopModes.vulkan
-        desktopOpenGLMode = r.desktopModes.openGL
-        GraphicsModeController.applyAndMaybeToggleVirglHost(
-            prefs = prefs,
-            previous = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode),
-            modes = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode),
-        )
-        
-updateLauncherMarkers(context, launcherDefault) 
-        // If no container installed and the setup hasn't been acknowledged, show distro picker
-     // if (!anyRootfsInstalled && !setupAlreadyCompleted) {
-     if (!anyRootfsInstalled) {
-    
+
+onAppReady()
+desktopVulkanMode = r.desktopModes.vulkan
+desktopOpenGLMode = r.desktopModes.openGL
+GraphicsModeController.applyAndMaybeToggleVirglHost(
+    prefs = prefs,
+    previous = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode),
+    modes = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode),
+)
+
+updateLauncherMarkers(context, launcherDefault)
+
+// Show the distro picker ONLY if, after the auto-activation
+// above, there is still genuinely nothing to run
+// (no distro AND no native env to fall back to).
+if (!anyRootfsInstalled) {
     distroFetchState = DistroFetchState.LOADING
     availableDistros = withContext(Dispatchers.IO) {
-    NativeInstallCoordinator.fetchAvailableDistros(NativeInstallCoordinator.DistroSource.CUSTOM) 
-}
- 
+        NativeInstallCoordinator.fetchAvailableDistros(NativeInstallCoordinator.DistroSource.CUSTOM)
+    }
     distroFetchState = if (availableDistros.isEmpty()) {
         DistroFetchState.ERROR
     } else {
@@ -1272,7 +1301,6 @@ updateLauncherMarkers(context, launcherDefault)
     }
     showDistroSelection = true
 }
-
 
 }
     // ----- wayland / X11 effects (unchanged) -----

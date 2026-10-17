@@ -223,14 +223,7 @@ pub(super) fn find_shell_in_rootfs(rootfs: &Path) -> Option<(&'static str, bool)
             ("/data/data/com.termux/files/usr/bin/sh", false),
             ("/data/data/com.termux/files/usr/bin/dash", false),
             ("/data/data/com.termux/files/usr/bin/ash", false),
-            ("/usr/bin/bash", false),
-            ("/bin/bash", false),
-            ("/usr/bin/sh", false),
-            ("/bin/sh", false),
-            ("/usr/bin/dash", false),
-            ("/bin/dash", false),
-            ("/usr/bin/ash", false),
-            ("/bin/ash", false),
+            
         ]
     } else {
         vec![
