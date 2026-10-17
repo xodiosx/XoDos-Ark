@@ -427,18 +427,21 @@ fun proceedToDistroSelection(containerId: Int) {
 }
 
 fun handleContainerInstallClick(containerId: Int) {
-    val bashExists  = File(context.filesDir, "usr/bin/bash").exists()
-    val bashrcExists = File(context.filesDir, "usr/etc/bashrc").exists() ||
-                       File(context.filesDir, "usr/etc/bash.bashrc").exists()
-    if (bashExists && bashrcExists) {
-        // Native environment present → mark as native silently, no dialog
-        markContainerAsNativeTerminal(containerId)
-        Toast.makeText(
-            context,
-            "Container $containerId will use native terminal",
-            Toast.LENGTH_SHORT
-        ).show()
+    // When the user explicitly clicks "+" on a container, give them a choice:
+    //   • use it as a native Android terminal (bash -l, Termux-style), or
+    //   • install a real distro (proot.rs spawns the distro shell).
+    //
+    // Container 1 is auto-marked as native on first launch (see
+    // LaunchedEffect(Unit)), so the terminal already works out of the box —
+    // this prompt only appears when the user asks to install something.
+    val hasNativeEnv = File(context.filesDir, "usr/bin/bash").exists() ||
+                       File(context.filesDir, "usr/bin/sh").exists()
+
+    if (hasNativeEnv) {
+        showContainerManager = false
+        showNativeContainerPrompt = containerId
     } else {
+        // No native bash/sh available → distro is the only option.
         proceedToDistroSelection(containerId)
     }
 }
