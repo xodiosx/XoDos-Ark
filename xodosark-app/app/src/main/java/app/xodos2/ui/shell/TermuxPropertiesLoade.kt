@@ -9,10 +9,12 @@ data class TermuxProperties(
     val backgroundColor: Int? = null,
     val foregroundColor: Int? = null,
     val cursorColor: Int? = null,
-    val ansiColors: IntArray? = null,
+    val ansiColors: IntArray? = null,       // -1 = not set (skip on apply)
     val cursorBlinkRate: Int? = null,
     val fontPath: String? = null,
     val extraKeys: String? = null,
+    val backgroundImagePath: String? = null,
+    val backgroundImageOverlayColor: Int? = null,   // overlay over image
     val sourceFile: File? = null
 )
 
@@ -20,31 +22,24 @@ object TermuxPropertiesLoader {
 
     private const val TAG = "TermuxProps"
 
-    fun candidates(context: Context, containerId: Int): List<File> {
-        return listOf(
-            File(context.filesDir, "containers/$containerId/root/.termux/termux.properties"),
-            File(context.filesDir, "home/.termux/termux.properties"),
-            File(context.filesDir, "termux.properties")
-        )
-    }
+    fun candidates(context: Context, containerId: Int): List<File> = listOf(
+        File(context.filesDir, "containers/$containerId/root/.termux/termux.properties"),
+        File(context.filesDir, "home/.termux/termux.properties"),
+        File(context.filesDir, "termux.properties")
+    )
 
     fun defaultFile(context: Context, containerId: Int): File {
         val prootRoot = File(context.filesDir, "containers/$containerId/root")
-        return if (prootRoot.isDirectory) {
-            File(prootRoot, ".termux/termux.properties")
-        } else {
-            File(context.filesDir, "home/.termux/termux.properties")
-        }
+        return if (prootRoot.isDirectory) File(prootRoot, ".termux/termux.properties")
+        else File(context.filesDir, "home/.termux/termux.properties")
     }
 
     fun load(context: Context, containerId: Int): TermuxProperties {
         val searchPaths = candidates(context, containerId)
         Log.d(TAG, "Searching termux.properties for container $containerId:")
-        for (p in searchPaths) {
-            Log.d(TAG, "  ${p.absolutePath} exists=${p.isFile}")
-        }
+        for (p in searchPaths) Log.d(TAG, "  ${p.absolutePath} exists=${p.isFile}")
 
-        val file: File? = searchPaths.firstOrNull { it.isFile }
+        val file = searchPaths.firstOrNull { it.isFile }
         if (file == null) {
             Log.w(TAG, "No termux.properties found for container $containerId")
             return TermuxProperties()
@@ -53,25 +48,26 @@ object TermuxPropertiesLoader {
 
         val props = Properties()
         try {
-            file.inputStream().use { input -> props.load(input) }
+            file.inputStream().use { props.load(it) }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read $file", e)
             return TermuxProperties(sourceFile = file)
         }
 
+        // ── background ──
         var background = parseColor(props.getProperty("background"))
         val opacityRaw = props.getProperty("background_opacity")?.trim()?.toFloatOrNull()
         if (opacityRaw != null) {
             val alpha = (opacityRaw.coerceIn(0f, 1f) * 255).toInt() and 0xFF
             val rgb = (background ?: 0xFF000000.toInt()) and 0x00FFFFFF
             background = (alpha shl 24) or rgb
-            Log.d(TAG, "background_opacity=$opacityRaw → background=#${Integer.toHexString(background)}")
         }
 
         val foreground = parseColor(props.getProperty("foreground"))
-        val cursorColor = parseColor(props.getProperty("cursor"))
+        val cursor = parseColor(props.getProperty("cursor"))
 
-        val ansi = IntArray(16)
+        // ── ANSI palette: -1 means "not set" so we never zero out preset colors ──
+        val ansi = IntArray(16) { -1 }
         var anyAnsi = false
         for (i in 0..15) {
             val c = parseColor(props.getProperty("color$i"))
@@ -81,36 +77,43 @@ object TermuxPropertiesLoader {
             }
         }
 
+        // ── blink rate ──
         val rawBlink = props.getProperty("terminal-cursor-blink-rate")?.trim()?.toIntOrNull()
-        val blinkRate: Int? = when {
+        val blinkRate = when {
             rawBlink == null -> null
             rawBlink == 0 -> 0
             rawBlink in 100..2000 -> rawBlink
-            rawBlink in 1..99 -> {
-                Log.w(TAG, "blink $rawBlink too fast → 100")
-                100
-            }
-            rawBlink > 2000 -> {
-                Log.w(TAG, "blink $rawBlink too slow → 2000")
-                2000
-            }
+            rawBlink in 1..99 -> 100
+            rawBlink > 2000 -> 2000
             else -> null
         }
 
+        // ── extra keys ──
         val rawExtra = props.getProperty("extra-keys")?.trim()?.takeIf { it.isNotEmpty() }
-        val extraKeys = if (rawExtra != null) normalizeExtraKeys(rawExtra) else null
+        val extraKeys = rawExtra?.let { normalizeExtraKeys(it) }
 
+        // ── font ──
         val fontFile = File(file.parentFile ?: File("/"), "font.ttf")
         val fontPath = if (fontFile.isFile) fontFile.absolutePath else null
+
+        // ── background image ──
+        val rawImagePath = props.getProperty("background_image")?.trim()?.takeIf { it.isNotEmpty() }
+        val resolvedImagePath = rawImagePath?.let { p ->
+            if (p.startsWith("/")) p else File(context.filesDir, p).absolutePath
+        }?.takeIf { File(it).isFile }
+
+        val overlayColor = parseColor(props.getProperty("background_image_overlay"))
 
         return TermuxProperties(
             backgroundColor = background,
             foregroundColor = foreground,
-            cursorColor = cursorColor,
+            cursorColor = cursor,
             ansiColors = if (anyAnsi) ansi else null,
             cursorBlinkRate = blinkRate,
             fontPath = fontPath,
             extraKeys = extraKeys,
+            backgroundImagePath = resolvedImagePath,
+            backgroundImageOverlayColor = overlayColor,
             sourceFile = file
         )
     }
@@ -124,18 +127,11 @@ object TermuxPropertiesLoader {
                 8 -> hex.toLong(16).toInt()
                 else -> null
             }
-        } catch (e: NumberFormatException) {
-            null
-        }
+        } catch (e: NumberFormatException) { null }
     }
 
     private fun normalizeExtraKeys(raw: String): String? {
-        try {
-            org.json.JSONArray(raw)
-            return raw
-        } catch (_: Exception) {
-            // fall through
-        }
+        try { org.json.JSONArray(raw); return raw } catch (_: Exception) {}
 
         var s = raw.trim()
         s = Regex("""([\[,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*[,\]])""").replace(s) { m ->
@@ -145,14 +141,7 @@ object TermuxPropertiesLoader {
             "${m.groupValues[1]}\"${m.groupValues[2]}\"${m.groupValues[3]}"
         }
         s = s.replace('\'', '"')
-
-        return try {
-            org.json.JSONArray(s)
-            s
-        } catch (e: Exception) {
-            Log.e(TAG, "extra-keys normalise failed", e)
-            null
-        }
+        return try { org.json.JSONArray(s); s } catch (e: Exception) { null }
     }
 
     fun apply(tv: com.termux.view.TerminalView, props: TermuxProperties): Boolean {
@@ -161,8 +150,11 @@ object TermuxPropertiesLoader {
 
         props.backgroundColor?.let { bg ->
             colors[com.termux.terminal.TextStyle.COLOR_INDEX_BACKGROUND] = bg
-            tv.setBackgroundColor(bg)
-            Log.i(TAG, "Applied background=#${Integer.toHexString(bg)} alpha=${(bg ushr 24) and 0xFF}")
+            // Do NOT set view background here — the ImageView behind will show
+            // through if the cells are transparent. View stays fully transparent.
+            tv.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            Log.i(TAG, "Applied background=#${Integer.toHexString(bg)} " +
+                    "alpha=${(bg ushr 24) and 0xFF}")
         }
         props.foregroundColor?.let { fg ->
             colors[com.termux.terminal.TextStyle.COLOR_INDEX_FOREGROUND] = fg
@@ -172,9 +164,13 @@ object TermuxPropertiesLoader {
             colors[com.termux.terminal.TextStyle.COLOR_INDEX_CURSOR] = cur
             Log.i(TAG, "Applied cursor=#${Integer.toHexString(cur)}")
         }
+        // CRITICAL: only override palette slots the user actually set.
+        // -1 means "leave preset alone". Without this, bash PS1 colors break.
         props.ansiColors?.let { pal ->
-            for (i in 0..15) colors[i] = pal[i]
-            Log.i(TAG, "Applied ANSI palette")
+            for (i in 0..15) {
+                if (pal[i] != -1) colors[i] = pal[i]
+            }
+            Log.i(TAG, "Applied ANSI palette (partial — only explicitly-set colors)")
         }
         props.cursorBlinkRate?.let { rate ->
             val ok = tv.setTerminalCursorBlinkerRate(rate)
@@ -185,9 +181,7 @@ object TermuxPropertiesLoader {
             try {
                 tv.setTypeface(android.graphics.Typeface.createFromFile(path))
                 Log.i(TAG, "Applied font=$path")
-            } catch (e: Exception) {
-                Log.e(TAG, "Font load failed", e)
-            }
+            } catch (e: Exception) { Log.e(TAG, "Font load failed", e) }
         }
         tv.invalidate()
         return true
@@ -196,10 +190,7 @@ object TermuxPropertiesLoader {
     fun seedNativeDefault(context: Context) {
         val file = File(context.filesDir, "home/.termux/termux.properties")
         if (file.exists()) return
-        val parent = file.parentFile
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs()
-        }
+        file.parentFile?.mkdirs()
         file.writeText(
             """
             # XoDos-Ark terminal properties (native shell)
@@ -207,6 +198,8 @@ object TermuxPropertiesLoader {
             # foreground=#E9D5FF
             # cursor=#FFD700
             # terminal-cursor-blink-rate=500
+            # background_image=terminal_background.png
+            # background_image_overlay=#80000000
             """.trimIndent()
         )
     }
@@ -214,9 +207,7 @@ object TermuxPropertiesLoader {
 
 object TermuxPropertiesWriter {
     fun save(file: File, values: Map<String, String?>) {
-        val lines: MutableList<String> =
-            if (file.exists()) file.readLines().toMutableList() else mutableListOf()
-
+        val lines = if (file.exists()) file.readLines().toMutableList() else mutableListOf()
         for ((key, value) in values) {
             val idx = lines.indexOfFirst { line ->
                 val t = line.trim()
@@ -229,11 +220,7 @@ object TermuxPropertiesWriter {
                 if (idx >= 0) lines[idx] = newLine else lines.add(newLine)
             }
         }
-
-        val parent = file.parentFile
-        if (parent != null && !parent.exists()) {
-            parent.mkdirs()
-        }
+        file.parentFile?.mkdirs()
         file.writeText(lines.joinToString("\n"))
     }
 }

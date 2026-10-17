@@ -19,8 +19,10 @@ import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,9 +43,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -52,22 +56,17 @@ import app.xodos2.NativeBridge
 import app.xodos2.PtyOutputRelay
 import app.xodos2.R
 import app.xodos2.RustPtySession
+import app.xodos2.TerminalSessionIds
 import app.xodos2.shell.ShellFonts
 import app.xodos2.shell.ShellSessionClient
 import app.xodos2.shell.ShellViewClient
-import app.xodos2.TerminalSessionIds
+import app.xodos2.ui.glass.GlassButton
+import app.xodos2.ui.glassDialogStyle
 import app.xodos2.wayland.input.InputRouteState
 import com.termux.view.TerminalView
 import org.json.JSONArray
 import org.json.JSONObject
-
-import app.xodos2.ui.glass.GlassButton
-import app.xodos2.ui.glassDialogStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color as ComposeColor
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.ui.Alignment
-import androidx.compose.foundation.layout.Arrangement
 
 private val DEFAULT_EXTRA_KEYS_JSON = """
 [
@@ -108,14 +107,15 @@ fun ShellScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var propertiesEpoch by remember { mutableIntStateOf(0) }
     val activity = remember { context as Activity }
     val imm = remember(context) {
         context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     }
+
     val sharedPrefs = remember {
         context.getSharedPreferences("xodos2_terminal_prefs", Context.MODE_PRIVATE)
     }
+
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val activeContainerId = remember(activeSessionId) {
@@ -127,7 +127,7 @@ fun ShellScreen(
         }
     }
 
-    // Initial extra keys: prefer termux.properties > prefs > default
+    // Extra keys: prefer file, fall back to prefs, then default
     var extraKeysJson by remember(activeContainerId) {
         val fromFile = TermuxPropertiesLoader.load(context, activeContainerId).extraKeys
         mutableStateOf(
@@ -137,15 +137,20 @@ fun ShellScreen(
         )
     }
 
+    // Bumped after every properties save to force update() to re-apply
+    var propertiesEpoch by remember { mutableIntStateOf(0) }
+
     var showCloseSessionDialog by remember { mutableStateOf(false) }
-    var showExtraKeysEditor by remember { mutableStateOf(false) }
+    var showPropertiesEditor by remember { mutableStateOf(false) }
 
     if (showCloseSessionDialog) {
         AlertDialog(
             onDismissRequest = { showCloseSessionDialog = false },
             containerColor = ComposeColor.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text("Close terminal", fontWeight = FontWeight.Bold, color = ComposeColor.White) },
+            title = {
+                Text("Close terminal", fontWeight = FontWeight.Bold, color = ComposeColor.White)
+            },
             text = {
                 Text(
                     if (terminalSessionIds.size <= 1) "Are you sure you want to exit?"
@@ -160,7 +165,8 @@ fun ShellScreen(
                 }) {
                     Text(
                         if (terminalSessionIds.size <= 1) "Exit" else "Close",
-                        color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold
+                        color = ComposeColor(0xFFC3B6F9),
+                        fontWeight = FontWeight.Bold
                     )
                 }
             },
@@ -171,22 +177,22 @@ fun ShellScreen(
             }
         )
     }
-if (showExtraKeysEditor) {
-    TermuxPropertiesEditorDialog(
-        context = context,
-        containerId = activeContainerId,
-        onDismiss = { showExtraKeysEditor = false },
-        onSaved = {
-            val reloaded = TermuxPropertiesLoader.load(context, activeContainerId)
-            extraKeysJson = reloaded.extraKeys
-                ?: sharedPrefs.getString("extra_keys_layout", DEFAULT_EXTRA_KEYS_JSON)
-                ?: DEFAULT_EXTRA_KEYS_JSON
-            showExtraKeysEditor = false
-            propertiesEpoch++          // triggers the update block to re-apply
-        }
-    )
-}
 
+    if (showPropertiesEditor) {
+        TermuxPropertiesEditorDialog(
+            context = context,
+            containerId = activeContainerId,
+            onDismiss = { showPropertiesEditor = false },
+            onSaved = {
+                val reloaded = TermuxPropertiesLoader.load(context, activeContainerId)
+                extraKeysJson = reloaded.extraKeys
+                    ?: sharedPrefs.getString("extra_keys_layout", DEFAULT_EXTRA_KEYS_JSON)
+                    ?: DEFAULT_EXTRA_KEYS_JSON
+                showPropertiesEditor = false
+                propertiesEpoch++
+            }
+        )
+    }
 
     val defaultTextSizePx = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_SP, 14f, context.resources.displayMetrics
@@ -194,13 +200,16 @@ if (showExtraKeysEditor) {
 
     var currentTextSize by remember { mutableIntStateOf(defaultTextSizePx) }
     val saveHandler = remember { Handler(Looper.getMainLooper()) }
+
     val saveRunnable = remember {
         Runnable { sharedPrefs.edit().putInt("terminal_zoom_size", currentTextSize).apply() }
     }
+
     fun scheduleZoomSave() {
         saveHandler.removeCallbacks(saveRunnable)
         saveHandler.postDelayed(saveRunnable, 500L)
     }
+
     fun saveZoomImmediately() {
         saveHandler.removeCallbacks(saveRunnable)
         sharedPrefs.edit().putInt("terminal_zoom_size", currentTextSize).apply()
@@ -221,7 +230,7 @@ if (showExtraKeysEditor) {
         }
     }
 
-    // Seed native default template so the user can find where to put termux.properties
+    // Seed the native template on first run so the user has a file to edit
     remember(activeContainerId) {
         TermuxPropertiesLoader.seedNativeDefault(context)
     }
@@ -255,22 +264,20 @@ if (showExtraKeysEditor) {
                 override fun shouldEnforceCharBasedInput(): Boolean = false
                 override fun isTerminalViewSelected(): Boolean = true
 
-                // ── KEY: reapply termux.properties when the emulator is ready ──
-              override fun onEmulatorSet() {
-    val session = tv.currentSession
-    if (session is RustPtySession) {
-        val cid = when (TerminalSessionIds.namespaceOf(session.sessionId)) {
-            TerminalSessionIds.NS_ARCH   -> 1
-            TerminalSessionIds.NS_DEBIAN -> 2
-            TerminalSessionIds.NS_WINE   -> 3
-            else -> 1
-        }
-        val props = TermuxPropertiesLoader.load(context, cid)
-        TermuxPropertiesLoader.apply(tv, props)
-    }
-}
-                
-                
+                // Re-apply termux.properties whenever the emulator is created
+                override fun onEmulatorSet() {
+                    val session = tv.currentSession
+                    if (session is RustPtySession) {
+                        val cid = when (TerminalSessionIds.namespaceOf(session.sessionId)) {
+                            TerminalSessionIds.NS_ARCH   -> 1
+                            TerminalSessionIds.NS_DEBIAN -> 2
+                            TerminalSessionIds.NS_WINE   -> 3
+                            else -> 1
+                        }
+                        val props = TermuxPropertiesLoader.load(ctx, cid)
+                        TermuxPropertiesLoader.apply(tv, props)
+                    }
+                }
             }
             tv.setTerminalViewClient(wrappedClient)
 
@@ -285,6 +292,7 @@ if (showExtraKeysEditor) {
             tv.isFocusable = true
             tv.isFocusableInTouchMode = true
             tv.keepScreenOn = true
+            tv.setBackgroundColor(Color.TRANSPARENT)   // image layer shows through
 
             // Context menu
             tv.setOnCreateContextMenuListener { menu, _, _ ->
@@ -303,9 +311,34 @@ if (showExtraKeysEditor) {
                 }
             }
 
+            // ── Terminal container with layered background ──
+            // Layer 0: image, Layer 1: tint overlay, Layer 2: terminal
             val terminalFrame = FrameLayout(ctx).apply {
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+                setBackgroundColor(Color.BLACK)
             }
+
+            val bgImageView = ImageView(ctx).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                visibility = View.GONE
+            }
+            terminalFrame.addView(
+                bgImageView,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+
+            val bgOverlay = View(ctx).apply { visibility = View.GONE }
+            terminalFrame.addView(
+                bgOverlay,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+
             terminalFrame.addView(
                 tv,
                 FrameLayout.LayoutParams(
@@ -313,6 +346,7 @@ if (showExtraKeysEditor) {
                     FrameLayout.LayoutParams.MATCH_PARENT
                 )
             )
+
             root.addView(terminalFrame)
 
             // Extra keys bar
@@ -336,6 +370,7 @@ if (showExtraKeysEditor) {
                 isFillViewport = true
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             }
+
             val keysContainer = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = FrameLayout.LayoutParams(
@@ -364,6 +399,10 @@ if (showExtraKeysEditor) {
             root
         },
         update = { root ->
+            // Subscribe to propertiesEpoch so save() triggers re-apply
+            @Suppress("UNUSED_VARIABLE")
+            val epoch = propertiesEpoch
+
             val cache = root.tag as ViewCache
             val controller = cache.controller
 
@@ -376,25 +415,51 @@ if (showExtraKeysEditor) {
             controller.attachSessionIfNeeded(activeSessionId)
 
             val terminalFrame = root.getChildAt(0) as FrameLayout
-            val tv = terminalFrame.getChildAt(0) as TerminalView
+            // Layer order: 0 = image, 1 = overlay, 2 = terminal
+            val bgImageView = terminalFrame.getChildAt(0) as ImageView
+            val bgOverlay   = terminalFrame.getChildAt(1) as View
+            val tv          = terminalFrame.getChildAt(2) as TerminalView
 
-            // Apply termux.properties — but asynchronously, so the emulator is ready.
-            // Also hook onEmulatorSet() above for the case where attachSessionIfNeeded
-            // was deferred (view not yet laid out).
-               tv.post {
-        val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
-        TermuxPropertiesLoader.apply(tv, props)
-        props.extraKeys?.let { fileJson ->
-            if (cache.appliedExtraKeysJson != fileJson) {
-                cache.appliedExtraKeysJson = fileJson
-                rebuildExtraKeys(
-                    tv.context, tv, cache.viewClient,
-                    cache.keysContainer, cache.fixedContainer, fileJson
-                ) { showExtraKeysEditor = true }
+            // Apply termux.properties + background image on every update
+            tv.post {
+                val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
+                TermuxPropertiesLoader.apply(tv, props)
+
+                // ── Background image ──
+                val imgPath = props.backgroundImagePath
+                if (!imgPath.isNullOrBlank()) {
+                    val bmp = android.graphics.BitmapFactory.decodeFile(imgPath)
+                    if (bmp != null) {
+                        bgImageView.setImageBitmap(bmp)
+                        bgImageView.visibility = View.VISIBLE
+
+                        val overlay = props.backgroundImageOverlayColor ?: 0x80000000.toInt()
+                        bgOverlay.setBackgroundColor(overlay)
+                        bgOverlay.visibility = View.VISIBLE
+                        terminalFrame.setBackgroundColor(Color.BLACK)
+                    } else {
+                        bgImageView.visibility = View.GONE
+                        bgOverlay.visibility = View.GONE
+                    }
+                } else {
+                    bgImageView.visibility = View.GONE
+                    bgOverlay.visibility = View.GONE
+                    // Keep frame black so default background cells have something behind
+                    terminalFrame.setBackgroundColor(Color.BLACK)
+                }
+
+                // Extra keys from file override
+                props.extraKeys?.let { fileJson ->
+                    if (cache.appliedExtraKeysJson != fileJson) {
+                        cache.appliedExtraKeysJson = fileJson
+                        rebuildExtraKeys(
+                            tv.context, tv, cache.viewClient,
+                            cache.keysContainer, cache.fixedContainer, fileJson
+                        ) { showPropertiesEditor = true }
+                    }
+                }
             }
-        }
-    }
-    
+
             val appliedFont = root.getTag(R.id.xodos2_terminal_font_applied) as? String
             if (appliedFont != terminalFontKey) {
                 root.setTag(R.id.xodos2_terminal_font_applied, terminalFontKey)
@@ -406,7 +471,7 @@ if (showExtraKeysEditor) {
                 rebuildExtraKeys(
                     tv.context, tv, cache.viewClient,
                     cache.keysContainer, cache.fixedContainer, extraKeysJson
-                ) { showExtraKeysEditor = true }
+                ) { showPropertiesEditor = true }
             }
 
             if (showKeyboardTrigger > 0) {
@@ -430,9 +495,7 @@ if (showExtraKeysEditor) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Keyboard visibility — based on window visible display frame
-// rather than InputMethodManager.isAcceptingText, which is
-// unreliable once the keyboard has been dismissed.
+// Keyboard visibility — window-visible-frame based, not IMM-based
 // ─────────────────────────────────────────────────────────────
 private fun isKeyboardVisible(view: View): Boolean {
     if (view.rootView == null) return false
@@ -495,6 +558,7 @@ private fun rebuildExtraKeys(
         setStroke(1.dpToPx(context), Color.parseColor("#3BFFFFFF"))
         cornerRadius = 8f * context.resources.displayMetrics.density
     }
+
     fun createPressedDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
         intArrayOf(Color.parseColor("#5AFFFFFF"), Color.parseColor("#1EFFFFFF"), Color.parseColor("#00000000"))
@@ -503,6 +567,7 @@ private fun rebuildExtraKeys(
         setStroke(1.dpToPx(context), Color.parseColor("#80FFFFFF"))
         cornerRadius = 8f * context.resources.displayMetrics.density
     }
+
     fun createActiveDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
         intArrayOf(Color.parseColor("#E67C3AED"), Color.parseColor("#CC4C1D95"))
@@ -511,11 +576,13 @@ private fun rebuildExtraKeys(
         setStroke(1.dpToPx(context), Color.parseColor("#FFD700"))
         cornerRadius = 8f * context.resources.displayMetrics.density
     }
+
     fun createDefaultStateList(): android.graphics.drawable.StateListDrawable =
         android.graphics.drawable.StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_pressed), createPressedDrawable())
             addState(intArrayOf(), createNormalDrawable())
         }
+
     fun updateButtonColors() {
         ctrlButton?.let { btn ->
             btn.setTextColor(if (viewClient.ctrlActive) activeTextColor else textColor)
@@ -526,6 +593,7 @@ private fun rebuildExtraKeys(
             btn.background = if (viewClient.altActive) createActiveDrawable() else createDefaultStateList()
         }
     }
+
     viewClient.onModifierReset = { terminalView.post { updateButtonColors() } }
 
     fun makeButton(label: String, isTransparent: Boolean = false, isFixed: Boolean = false): TextView {
@@ -535,6 +603,7 @@ private fun rebuildExtraKeys(
             label.length <= 5 -> baseTextSize * 0.85f
             else -> baseTextSize * 0.7f
         }
+
         val drawable = if (label == "CTRL") {
             if (viewClient.ctrlActive) createActiveDrawable() else createDefaultStateList()
         } else if (label == "ALT") {
@@ -565,13 +634,12 @@ private fun rebuildExtraKeys(
         }
     }
 
-    // ─── RELIABLE keyboard toggle ──────────────────────────────
+    // Reliable keyboard toggle (frame-based detection)
     fun toggleKeyboard() {
         val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         if (isKeyboardVisible(terminalView)) {
             imm.hideSoftInputFromWindow(terminalView.windowToken, 0)
         } else {
-            // Give the view focus first; SHOW_IMPLICIT only works on a focused view.
             terminalView.requestFocus()
             terminalView.postDelayed({
                 imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
@@ -596,6 +664,7 @@ private fun rebuildExtraKeys(
         "PASTE" -> "SPECIAL_PASTE"
         else -> key
     }
+
     fun getDisplayLabel(key: String): String = when (key.uppercase()) {
         "UP" -> "↑"; "DOWN" -> "↓"; "LEFT" -> "←"; "RIGHT" -> "→"; else -> key
     }
@@ -611,34 +680,52 @@ private fun rebuildExtraKeys(
         for (item in keys) {
             val displayLabel = if (item.display.isNotEmpty()) item.display else getDisplayLabel(item.key)
             val btn = makeButton(displayLabel)
+
             if (item.macro.isNotEmpty()) {
                 btn.setOnClickListener { terminalView.currentSession?.write(item.macro) }
             } else {
                 val action = getActionFor(item.key)
                 when (action) {
-                    "CTRL_MOD" -> { ctrlButton = btn; btn.setOnClickListener {
-                        viewClient.ctrlActive = !viewClient.ctrlActive
-                        if (viewClient.ctrlActive) viewClient.altActive = false
-                        updateButtonColors()
-                    } }
-                    "ALT_MOD" -> { altButton = btn; btn.setOnClickListener {
-                        viewClient.altActive = !viewClient.altActive
-                        if (viewClient.altActive) viewClient.ctrlActive = false
-                        updateButtonColors()
-                    } }
+                    "CTRL_MOD" -> {
+                        ctrlButton = btn
+                        btn.setOnClickListener {
+                            viewClient.ctrlActive = !viewClient.ctrlActive
+                            if (viewClient.ctrlActive) viewClient.altActive = false
+                            updateButtonColors()
+                        }
+                    }
+                    "ALT_MOD" -> {
+                        altButton = btn
+                        btn.setOnClickListener {
+                            viewClient.altActive = !viewClient.altActive
+                            if (viewClient.altActive) viewClient.ctrlActive = false
+                            updateButtonColors()
+                        }
+                    }
                     "SPECIAL_COPY" -> btn.setOnClickListener { terminalView.showContextMenu() }
                     "SPECIAL_PASTE" -> btn.setOnClickListener {
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.primaryClip?.let { if (it.itemCount > 0) terminalView.currentSession?.write(it.getItemAt(0).text?.toString() ?: "") }
+                        cm.primaryClip?.let { clip ->
+                            if (clip.itemCount > 0) {
+                                terminalView.currentSession?.write(clip.getItemAt(0).text?.toString() ?: "")
+                            }
+                        }
                     }
                     else -> {
                         val fireAction = {
-                            sendModifiedSequence(terminalView, action, viewClient.ctrlActive, viewClient.altActive) {
-                                viewClient.ctrlActive = false; viewClient.altActive = false; updateButtonColors()
+                            sendModifiedSequence(
+                                terminalView, action, viewClient.ctrlActive, viewClient.altActive
+                            ) {
+                                viewClient.ctrlActive = false
+                                viewClient.altActive = false
+                                updateButtonColors()
                             }
                         }
-                        if (item.key.uppercase() in listOf("UP","DOWN","LEFT","RIGHT")) setRepeatClickListener(btn, fireAction)
-                        else btn.setOnClickListener { fireAction() }
+                        if (item.key.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
+                            setRepeatClickListener(btn, fireAction)
+                        } else {
+                            btn.setOnClickListener { fireAction() }
+                        }
                     }
                 }
             }
@@ -652,16 +739,20 @@ private fun rebuildExtraKeys(
         for (i in 0 until jsonArray.length()) {
             val rowArray = jsonArray.getJSONArray(i)
             val rowKeys = mutableListOf<ExtraKeyItem>()
+
             for (j in 0 until rowArray.length()) {
                 when (val item = rowArray.get(j)) {
                     is String -> rowKeys.add(ExtraKeyItem(key = item))
-                    is JSONObject -> rowKeys.add(ExtraKeyItem(
-                        key = item.optString("key", ""),
-                        macro = item.optString("macro", ""),
-                        display = item.optString("display", "")
-                    ))
+                    is JSONObject -> rowKeys.add(
+                        ExtraKeyItem(
+                            key = item.optString("key", ""),
+                            macro = item.optString("macro", ""),
+                            display = item.optString("display", "")
+                        )
+                    )
                 }
             }
+
             scrollParent.addView(addScrollRow(rowKeys))
 
             val fixedRow = LinearLayout(context).apply {
@@ -669,28 +760,33 @@ private fun rebuildExtraKeys(
                 gravity = Gravity.CENTER_HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
             }
+
             when {
+                // Second-to-last row: keyboard toggle
                 i == jsonArray.length() - 2 -> {
                     val kbBtn = makeButton("⌨️", isFixed = true)
                     kbBtn.setOnClickListener { toggleKeyboard() }
                     fixedRow.addView(kbBtn)
                 }
+                // Last row: properties editor gear
                 i == jsonArray.length() - 1 -> {
                     val editBtn = makeButton("⚙️", isFixed = true)
                     editBtn.setOnClickListener { onEditClicked() }
                     fixedRow.addView(editBtn)
                 }
+                // All others: transparent placeholder for alignment
                 else -> {
-                    val placeholder = if (rowKeys.isNotEmpty())
-                        (if (rowKeys.first().display.isNotEmpty()) rowKeys.first().display
-                         else getDisplayLabel(rowKeys.first().key))
-                    else "ESC"
-                    fixedRow.addView(makeButton(placeholder, isTransparent = true, isFixed = true))
+                    val placeholderText = if (rowKeys.isNotEmpty()) {
+                        if (rowKeys.first().display.isNotEmpty()) rowKeys.first().display
+                        else getDisplayLabel(rowKeys.first().key)
+                    } else "ESC"
+                    fixedRow.addView(makeButton(placeholderText, isTransparent = true, isFixed = true))
                 }
             }
             fixedParent.addView(fixedRow)
         }
 
+        // Edge cases: ensure keyboard + gear are always reachable
         when (jsonArray.length()) {
             0 -> {
                 val kbRow = LinearLayout(context).apply {
@@ -714,6 +810,7 @@ private fun rebuildExtraKeys(
                 fixedParent.addView(gearRow)
             }
             1 -> {
+                // Insert keyboard row above gear
                 val kbRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_HORIZONTAL
@@ -740,8 +837,11 @@ private fun sendModifiedSequence(
     val session = terminalView.currentSession ?: return
     val text = buildString {
         if (altActive) append('\u001B')
-        if (ctrlActive && baseSequence.length == 1) append((baseSequence[0].code and 0x1F).toChar())
-        else append(baseSequence)
+        if (ctrlActive && baseSequence.length == 1) {
+            append((baseSequence[0].code and 0x1F).toChar())
+        } else {
+            append(baseSequence)
+        }
     }
     session.write(text)
     onConsumed()
@@ -767,6 +867,7 @@ private class ShellSessionController(
 
     fun attachSessionIfNeeded(id: Int) {
         if (id == attachedId) return
+
         val attachLogic = {
             attachedId = id
             val s = sessionFor(id)
@@ -774,6 +875,7 @@ private class ShellSessionController(
             PtyOutputRelay.bind(s, terminalView)
             terminalView.updateSize()
         }
+
         if (terminalView.width > 0 && terminalView.height > 0) {
             attachLogic()
         } else {
@@ -793,7 +895,8 @@ private class ShellSessionController(
         val removed = sessions.keys.filter { it !in keep }
         for (id in removed) {
             NativeBridge.closeSession(id)
-            sessions.remove(id); clients.remove(id)
+            sessions.remove(id)
+            clients.remove(id)
             PtyOutputRelay.discardSessionQueue(id)
         }
         if (attachedId !in keep) attachedId = -1
@@ -802,7 +905,8 @@ private class ShellSessionController(
     fun invalidateAllSessions() {
         for (id in sessions.keys.toList()) {
             NativeBridge.closeSession(id)
-            sessions.remove(id); clients.remove(id)
+            sessions.remove(id)
+            clients.remove(id)
             PtyOutputRelay.discardSessionQueue(id)
         }
         attachedId = -1
