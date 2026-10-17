@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,7 +52,7 @@ private val EDITOR_DEFAULT_EXTRA_KEYS = """
 ]
 """.trimIndent()
 
-/** Row descriptors so we can reuse the same picker for every color. */
+/** Internal descriptor used by the Colors tab. */
 private data class ColorField(
     val label: String,
     val key: String,
@@ -92,7 +93,6 @@ fun TermuxPropertiesEditorDialog(
     var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    // Image picker
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -136,13 +136,12 @@ fun TermuxPropertiesEditorDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = ComposeColor.Transparent,
-        modifier = Modifier.glassDialogStyle().fillMaxWidth(0.95f).heightIn(max = 760.dp),
+        modifier = Modifier
+            .glassDialogStyle()
+            .fillMaxWidth(0.95f)
+            .heightIn(max = 760.dp),
         title = {
-            Text(
-                "Terminal Properties",
-                color = ComposeColor.White,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Terminal Properties", color = ComposeColor.White, fontWeight = FontWeight.Bold)
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -284,7 +283,6 @@ private fun ColorRow(field: ColorField, onClick: () -> Unit) {
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Color swatch
         Box(
             modifier = Modifier
                 .size(36.dp)
@@ -393,7 +391,7 @@ private fun ExtraKeysTab(
             EDITOR_DEFAULT_EXTRA_KEYS,
             color = ComposeColor(0xFFC3B6F9),
             fontSize = 10.sp,
-            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            fontFamily = FontFamily.Monospace
         )
     }
 }
