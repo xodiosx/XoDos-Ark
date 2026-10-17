@@ -13,6 +13,8 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -57,7 +59,6 @@ import app.xodos2.wayland.input.InputRouteState
 import com.termux.view.TerminalView
 import org.json.JSONArray
 import org.json.JSONObject
-import app.xodos2.ui.glassDialogStyle
 
 // ── Glass Dialog & Custom Imports ────────────────────────────────
 import app.xodos2.ui.glass.GlassButton
@@ -92,6 +93,25 @@ private class ViewCache(
     val viewClient: ShellViewClient,
     var appliedExtraKeysJson: String? = null
 )
+
+/**
+ * TerminalView subclass that enables IME text suggestions / autocorrect.
+ * Termux's default TerminalView sets inputType = TYPE_NULL, which disables
+ * suggestions in most soft keyboards. We override onCreateInputConnection
+ * to expose TYPE_CLASS_TEXT while keeping the parent InputConnection intact
+ * so commitText still writes to the PTY.
+ */
+class SuggestiveTerminalView(context: Context) : TerminalView(context, null) {
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+        val ic = super.onCreateInputConnection(outAttrs)
+        outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT or
+                EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES
+        outAttrs.imeOptions = EditorInfo.IME_ACTION_NONE or
+                EditorInfo.IME_FLAG_NO_FULLSCREEN or
+                EditorInfo.IME_FLAG_NO_ENTER_ACTION
+        return ic
+    }
+}
 
 @Composable
 fun ShellScreen(
@@ -282,7 +302,7 @@ fun ShellScreen(
                 )
             }
 
-            val tv = TerminalView(ctx, null)
+            val tv = SuggestiveTerminalView(ctx)
             val controller = ShellSessionController(ctx, tv)
             val viewClient = ShellViewClient(tv)
 
@@ -348,11 +368,11 @@ fun ShellScreen(
                 val barDrawable = GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(
-                        Color.parseColor("#E6080512"), // 90% opaque dark violet-slate background
-                        Color.parseColor("#FA030207")  // 98% opaque bottom
+                        Color.parseColor("#E6080512"),
+                        Color.parseColor("#FA030207")
                     )
                 ).apply {
-                    setStroke(1.dpToPx(ctx), Color.parseColor("#22FFFFFF")) // premium subtle thin top-highlight
+                    setStroke(1.dpToPx(ctx), Color.parseColor("#22FFFFFF"))
                 }
                 background = barDrawable
                 setPadding(0, 4.dpToPx(ctx), 0, 4.dpToPx(ctx))
@@ -370,7 +390,6 @@ fun ShellScreen(
                 layoutParams = FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
                 )
-                // Only a small horizontal padding, no vertical
                 setPadding(2.dpToPx(ctx), 0, 2.dpToPx(ctx), 0)
             }
             keysScroll.addView(keysContainer)
@@ -381,7 +400,6 @@ fun ShellScreen(
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
                 )
-                // No top padding, tiny right padding
                 setPadding(0, 0, 2.dpToPx(ctx), 0)
             }
             bottomBarLayout.addView(fixedContainer)
@@ -499,44 +517,44 @@ private fun rebuildExtraKeys(
     var ctrlButton: TextView? = null
     var altButton: TextView? = null
 
-    val textColor = Color.parseColor("#E9D5FF") // elegant light purple-white
-    val activeTextColor = Color.parseColor("#FFD700") // golden yellow for active modifiers
+    val textColor = Color.parseColor("#E9D5FF")
+    val activeTextColor = Color.parseColor("#FFD700")
 
     fun createNormalDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
         intArrayOf(
-            Color.parseColor("#22FFFFFF"), // 13% white highlight at top for reflection
-            Color.parseColor("#08FFFFFF"), // 3% white at middle
-            Color.parseColor("#15000000"), // 8% black shadow at bottom for depth
+            Color.parseColor("#22FFFFFF"),
+            Color.parseColor("#08FFFFFF"),
+            Color.parseColor("#15000000"),
         )
     ).apply {
         shape = GradientDrawable.RECTANGLE
-        setStroke(1.dpToPx(context), Color.parseColor("#3BFFFFFF")) // 23% white glassy rim
+        setStroke(1.dpToPx(context), Color.parseColor("#3BFFFFFF"))
         cornerRadius = 8f * context.resources.displayMetrics.density
     }
 
     fun createPressedDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
         intArrayOf(
-            Color.parseColor("#5AFFFFFF"), // 35% white highlight at top
-            Color.parseColor("#1EFFFFFF"), // 12% white at middle
-            Color.parseColor("#00000000"), // transparent at bottom
+            Color.parseColor("#5AFFFFFF"),
+            Color.parseColor("#1EFFFFFF"),
+            Color.parseColor("#00000000"),
         )
     ).apply {
         shape = GradientDrawable.RECTANGLE
-        setStroke(1.dpToPx(context), Color.parseColor("#80FFFFFF")) // 50% white border
+        setStroke(1.dpToPx(context), Color.parseColor("#80FFFFFF"))
         cornerRadius = 8f * context.resources.displayMetrics.density
     }
 
     fun createActiveDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
         intArrayOf(
-            Color.parseColor("#E67C3AED"), // 90% opaque vibrant violet
-            Color.parseColor("#CC4C1D95")  // 80% opaque deep purple
+            Color.parseColor("#E67C3AED"),
+            Color.parseColor("#CC4C1D95")
         )
     ).apply {
         shape = GradientDrawable.RECTANGLE
-        setStroke(1.dpToPx(context), Color.parseColor("#FFD700")) // Golden border
+        setStroke(1.dpToPx(context), Color.parseColor("#FFD700"))
         cornerRadius = 8f * context.resources.displayMetrics.density
     }
 
@@ -560,7 +578,6 @@ private fun rebuildExtraKeys(
     viewClient.onModifierReset = { terminalView.post { updateButtonColors() } }
 
     fun makeButton(label: String, isTransparent: Boolean = false, isFixed: Boolean = false): TextView {
-        // Dynamic font size for long labels
         val baseTextSize = 12f
         val scaledTextSize = when {
             label.length <= 3 -> baseTextSize
@@ -607,6 +624,18 @@ private fun rebuildExtraKeys(
             gravity = Gravity.CENTER
         }
     }
+
+    fun toggleKeyboard() {
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        if (imm.isAcceptingText) {
+            imm.hideSoftInputFromWindow(terminalView.windowToken, 0)
+        } else {
+            terminalView.post {
+                terminalView.requestFocus()
+                imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+            }
+        }
+    }
     
     fun getActionFor(key: String): String {
         return when (key.uppercase()) {
@@ -638,7 +667,6 @@ private fun rebuildExtraKeys(
         }
     }
 
-    // Fixed row height to guarantee identical height for every row
     val rowHeight = 44.dpToPx(context)
 
     fun addScrollRow(keys: List<ExtraKeyItem>): LinearLayout {
@@ -660,7 +688,6 @@ private fun rebuildExtraKeys(
             val btn = makeButton(displayLabel)
             
             if (item.macro.isNotEmpty()) {
-                // Execute Macro Directly
                 btn.setOnClickListener {
                     terminalView.currentSession?.write(item.macro)
                 }
@@ -744,7 +771,6 @@ private fun rebuildExtraKeys(
             
             scrollParent.addView(addScrollRow(rowKeys))
             
-            // Fixed column row – same height as scroll rows
             val fixedRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -753,38 +779,69 @@ private fun rebuildExtraKeys(
                 )
             }
             
-            if (i == jsonArray.length() - 1) {
-                val editBtn = makeButton("⚙️", isTransparent = false, isFixed = true)
-                editBtn.setOnClickListener { onEditClicked() }
-                fixedRow.addView(editBtn)
-            } else {
-                // Placeholder with same height as the corresponding row's first button
-                val placeholderText = if (rowKeys.isNotEmpty()) {
-                    if (rowKeys.first().display.isNotEmpty()) rowKeys.first().display else getDisplayLabel(rowKeys.first().key)
-                } else {
-                    "ESC"
+            when {
+                // Second-to-last row: keyboard toggle
+                i == jsonArray.length() - 2 -> {
+                    val kbBtn = makeButton("⌨️", isTransparent = false, isFixed = true)
+                    kbBtn.setOnClickListener { toggleKeyboard() }
+                    fixedRow.addView(kbBtn)
                 }
-                
-                val spaceBtn = makeButton(placeholderText, isTransparent = true, isFixed = true)
-                fixedRow.addView(spaceBtn)
+                // Last row: gear button
+                i == jsonArray.length() - 1 -> {
+                    val editBtn = makeButton("⚙️", isTransparent = false, isFixed = true)
+                    editBtn.setOnClickListener { onEditClicked() }
+                    fixedRow.addView(editBtn)
+                }
+                // Any other row: transparent placeholder for alignment
+                else -> {
+                    val placeholderText = if (rowKeys.isNotEmpty()) {
+                        if (rowKeys.first().display.isNotEmpty()) rowKeys.first().display
+                        else getDisplayLabel(rowKeys.first().key)
+                    } else {
+                        "ESC"
+                    }
+                    val spaceBtn = makeButton(placeholderText, isTransparent = true, isFixed = true)
+                    fixedRow.addView(spaceBtn)
+                }
             }
             fixedParent.addView(fixedRow)
         }
-        
-        // If the array was empty, still add a clickable gear button
-        if (fixedParent.childCount == 0) {
-            val row = LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT,  // <-- FIXED: fully qualified
-                    rowHeight
-                )
+
+        // Edge cases: ensure keyboard + gear always appear
+        when (jsonArray.length()) {
+            0 -> {
+                val kbRow = LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
+                }
+                val kbBtn = makeButton("⌨️", isTransparent = false, isFixed = true)
+                kbBtn.setOnClickListener { toggleKeyboard() }
+                kbRow.addView(kbBtn)
+                fixedParent.addView(kbRow)
+
+                val gearRow = LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
+                }
+                val editBtn = makeButton("⚙️", isTransparent = false, isFixed = true)
+                editBtn.setOnClickListener { onEditClicked() }
+                gearRow.addView(editBtn)
+                fixedParent.addView(gearRow)
             }
-            val editBtn = makeButton("⚙️", isTransparent = false, isFixed = true)
-            editBtn.setOnClickListener { onEditClicked() }
-            row.addView(editBtn)
-            fixedParent.addView(row)
+            1 -> {
+                // Only gear was added (as the last row). Insert keyboard row above it.
+                val kbRow = LinearLayout(context).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
+                }
+                val kbBtn = makeButton("⌨️", isTransparent = false, isFixed = true)
+                kbBtn.setOnClickListener { toggleKeyboard() }
+                kbRow.addView(kbBtn)
+                fixedParent.addView(kbRow, 0)
+            }
         }
     } catch (e: Exception) {
         e.printStackTrace()
@@ -841,7 +898,6 @@ private class ShellSessionController(
             terminalView.updateSize()
         }
 
-        // Defer attachment if the view hasn't been measured by Android yet
         if (terminalView.width > 0 && terminalView.height > 0) {
             attachLogic()
         } else {
