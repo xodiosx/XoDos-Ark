@@ -7,12 +7,32 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as ComposeColor
@@ -32,7 +52,12 @@ private val EDITOR_DEFAULT_EXTRA_KEYS = """
 """.trimIndent()
 
 /** Row descriptors so we can reuse the same picker for every color. */
-private data class ColorField(val label: String, val key: String, val value: String, val onChange: (String) -> Unit)
+private data class ColorField(
+    val label: String,
+    val key: String,
+    val value: String,
+    val onChange: (String) -> Unit
+)
 
 @Composable
 fun TermuxPropertiesEditorDialog(
@@ -61,7 +86,9 @@ fun TermuxPropertiesEditorDialog(
         )
     }
     var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
-    var overlayColor by remember { mutableStateOf(intToHex(initial.backgroundImageOverlayColor ?: 0x80000000.toInt())) }
+    var overlayColor by remember {
+        mutableStateOf(intToHex(initial.backgroundImageOverlayColor ?: 0x80000000.toInt()))
+    }
     var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -111,7 +138,11 @@ fun TermuxPropertiesEditorDialog(
         containerColor = ComposeColor.Transparent,
         modifier = Modifier.glassDialogStyle().fillMaxWidth(0.95f).heightIn(max = 760.dp),
         title = {
-            Text("Terminal Properties", color = ComposeColor.White, fontWeight = FontWeight.Bold)
+            Text(
+                "Terminal Properties",
+                color = ComposeColor.White,
+                fontWeight = FontWeight.Bold
+            )
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -125,7 +156,11 @@ fun TermuxPropertiesEditorDialog(
 
                 when (selectedTab) {
                     0 -> ColorsTabContent(allColorFields) { editingColor = it }
-                    1 -> ExtraKeysTab(extraKeys) { extraKeys = it; error = null }
+                    1 -> ExtraKeysTab(
+                        value = extraKeys,
+                        onChange = { extraKeys = it; error = null },
+                        onReset = { extraKeys = EDITOR_DEFAULT_EXTRA_KEYS; error = null }
+                    )
                     2 -> ImageTab(
                         imagePath = backgroundImagePath,
                         overlayColor = overlayColor,
@@ -147,7 +182,11 @@ fun TermuxPropertiesEditorDialog(
 
                 error?.let { msg ->
                     Spacer(Modifier.height(8.dp))
-                    Text(msg, color = ComposeColor(0xFFFF6B6B), style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        msg,
+                        color = ComposeColor(0xFFFF6B6B),
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         },
@@ -174,7 +213,9 @@ fun TermuxPropertiesEditorDialog(
                 } catch (e: Exception) {
                     error = "Invalid input: ${e.message}"
                 }
-            }) { Text("Save", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
+            }) {
+                Text("Save", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+            }
         },
         dismissButton = {
             GlassButton(onClick = onDismiss) {
@@ -220,7 +261,10 @@ private fun EditorTabButton(label: String, selected: Boolean, onClick: () -> Uni
 @Composable
 private fun ColorsTabContent(fields: List<ColorField>, onEdit: (ColorField) -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState())
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 520.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         for (field in fields) {
             ColorRow(field) { onEdit(field) }
@@ -244,36 +288,112 @@ private fun ColorRow(field: ColorField, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(36.dp)
-                .background(preview?.let { ComposeColor(it) } ?: ComposeColor.Transparent, RoundedCornerShape(8.dp))
-                .border(1.dp, ComposeColor.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                .background(
+                    preview?.let { ComposeColor(it) } ?: ComposeColor.Transparent,
+                    RoundedCornerShape(8.dp)
+                )
+                .border(
+                    1.dp,
+                    ComposeColor.White.copy(alpha = 0.3f),
+                    RoundedCornerShape(8.dp)
+                )
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(field.label, color = ComposeColor.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                field.label,
+                color = ComposeColor.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
             Text(
                 if (field.value.isBlank()) "not set" else field.value,
                 color = ComposeColor.White.copy(alpha = 0.55f),
                 fontSize = 11.sp
             )
         }
-        Text("Edit", color = ComposeColor(0xFFC3B6F9), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "Edit",
+            color = ComposeColor(0xFFC3B6F9),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 
 @Composable
-private fun ExtraKeysTab(value: String, onChange: (String) -> Unit) {
+private fun ExtraKeysTab(
+    value: String,
+    onChange: (String) -> Unit,
+    onReset: () -> Unit
+) {
+    var jsonValid by remember(value) {
+        mutableStateOf(
+            try { JSONArray(value); true } catch (_: Exception) { false }
+        )
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = value,
-            onValueChange = onChange,
+            onValueChange = {
+                onChange(it)
+                jsonValid = try { JSONArray(it); true } catch (_: Exception) { false }
+            },
             modifier = Modifier.fillMaxWidth().height(320.dp),
+            isError = !jsonValid,
             colors = editorTextFieldColors()
         )
+
         Spacer(Modifier.height(8.dp))
+
         Text(
-            "Strings or {\"key\":\"…\",\"macro\":\"…\",\"display\":\"…\"}. Valid 2D JSON.",
+            if (jsonValid) "✓ Valid JSON" else "✗ Invalid JSON — fix before saving",
+            color = if (jsonValid) ComposeColor(0xFF10B981) else ComposeColor(0xFFFF6B6B),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            GlassButton(onClick = onReset) {
+                Text(
+                    "Reset to Default",
+                    color = ComposeColor(0xFFFF6B6B),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Text(
+                "Restores 2 rows of Termux-style keys",
+                color = ComposeColor.White.copy(alpha = 0.55f),
+                fontSize = 11.sp
+            )
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            "Strings or {\"key\":\"…\",\"macro\":\"…\",\"display\":\"…\"}. Must be a valid 2D JSON array.",
             color = ComposeColor.White.copy(alpha = 0.55f),
             style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Default:",
+            color = ComposeColor.White.copy(alpha = 0.55f),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            EDITOR_DEFAULT_EXTRA_KEYS,
+            color = ComposeColor(0xFFC3B6F9),
+            fontSize = 10.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
         )
     }
 }
@@ -327,23 +447,41 @@ private fun ImageTab(
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(preview?.let { ComposeColor(it) } ?: ComposeColor.Transparent, RoundedCornerShape(8.dp))
+                    .background(
+                        preview?.let { ComposeColor(it) } ?: ComposeColor.Transparent,
+                        RoundedCornerShape(8.dp)
+                    )
                     .border(1.dp, ComposeColor.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
             )
             Spacer(Modifier.width(12.dp))
             Text(overlayColor, color = ComposeColor.White, modifier = Modifier.weight(1f))
-            Text("Edit", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Text(
+                "Edit",
+                color = ComposeColor(0xFFC3B6F9),
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
         }
     }
 }
 
 @Composable
 private fun AdvancedTab(blink: String, onBlink: (String) -> Unit, filePath: String) {
-    Column(modifier = Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState())) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 480.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
         OutlinedTextField(
             value = blink,
             onValueChange = onBlink,
-            label = { Text("Cursor blink rate (0 or 100–2000)", color = ComposeColor.White.copy(alpha = 0.7f)) },
+            label = {
+                Text(
+                    "Cursor blink rate (0 or 100–2000)",
+                    color = ComposeColor.White.copy(alpha = 0.7f)
+                )
+            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             colors = editorTextFieldColors()
@@ -382,5 +520,7 @@ private fun parseColor(raw: String): Int? {
             8 -> hex.toLong(16).toInt()
             else -> null
         }
-    } catch (_: NumberFormatException) { null }
+    } catch (_: NumberFormatException) {
+        null
+    }
 }
