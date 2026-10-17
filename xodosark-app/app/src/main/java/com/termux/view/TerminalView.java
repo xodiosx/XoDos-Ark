@@ -455,7 +455,7 @@ public final class TerminalView extends View {
         return true;
     }
 
-    @Override
+@Override
 public boolean isOpaque() {
     android.graphics.drawable.Drawable bg = getBackground();
     return bg == null || bg.getOpacity() == android.graphics.PixelFormat.OPAQUE;
@@ -923,22 +923,17 @@ public boolean isOpaque() {
     @Override
 protected void onDraw(Canvas canvas) {
     if (mEmulator == null) {
-        // Do nothing — the view's own background (set from termux.properties)
-        // shows through. Avoid painting opaque black.
+        // Do NOT paint opaque black — let the view's own (possibly translucent)
+        // background show through to the Compose parent behind it.
         return;
-} else {
-            // render the terminal view and highlight any selected text
-            int[] sel = mDefaultSelectors;
-            if (mTextSelectionCursorController != null) {
-                mTextSelectionCursorController.getSelectors(sel);
-            }
-
-            mRenderer.render(mEmulator, canvas, mTopRow, sel[0], sel[1], sel[2], sel[3]);
-
-            // render the text selection handles
-            renderTextSelection();
-        }
     }
+    int[] sel = mDefaultSelectors;
+    if (mTextSelectionCursorController != null) {
+        mTextSelectionCursorController.getSelectors(sel);
+    }
+    mRenderer.render(mEmulator, canvas, mTopRow, sel[0], sel[1], sel[2], sel[3]);
+    renderTextSelection();
+}
 
     public DisplayableTermSession getCurrentSession() {
         return mTermSession;

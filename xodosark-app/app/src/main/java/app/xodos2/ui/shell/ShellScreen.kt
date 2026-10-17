@@ -108,6 +108,7 @@ fun ShellScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var propertiesEpoch by remember { mutableIntStateOf(0) }
     val activity = remember { context as Activity }
     val imm = remember(context) {
         context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
@@ -170,68 +171,22 @@ fun ShellScreen(
             }
         )
     }
+if (showExtraKeysEditor) {
+    TermuxPropertiesEditorDialog(
+        context = context,
+        containerId = activeContainerId,
+        onDismiss = { showExtraKeysEditor = false },
+        onSaved = {
+            val reloaded = TermuxPropertiesLoader.load(context, activeContainerId)
+            extraKeysJson = reloaded.extraKeys
+                ?: sharedPrefs.getString("extra_keys_layout", DEFAULT_EXTRA_KEYS_JSON)
+                ?: DEFAULT_EXTRA_KEYS_JSON
+            showExtraKeysEditor = false
+            propertiesEpoch++          // triggers the update block to re-apply
+        }
+    )
+}
 
-    if (showExtraKeysEditor) {
-        var editingJson by remember { mutableStateOf(extraKeysJson) }
-        var errorText by remember { mutableStateOf("") }
-
-        AlertDialog(
-            onDismissRequest = { showExtraKeysEditor = false },
-            containerColor = ComposeColor.Transparent,
-            modifier = Modifier.glassDialogStyle(),
-            title = { Text("Edit Extra Keys", fontWeight = FontWeight.Bold, color = ComposeColor.White) },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = editingJson,
-                        onValueChange = { editingJson = it; errorText = "" },
-                        modifier = Modifier.fillMaxWidth().height(180.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = ComposeColor.White,
-                            unfocusedTextColor = ComposeColor.White.copy(alpha = 0.8f),
-                            focusedContainerColor = ComposeColor.Black.copy(alpha = 0.2f),
-                            unfocusedContainerColor = ComposeColor.Black.copy(alpha = 0.2f),
-                            focusedBorderColor = ComposeColor(0xFFC3B6F9),
-                            unfocusedBorderColor = ComposeColor.White.copy(alpha = 0.15f)
-                        )
-                    )
-                    Text(
-                        text = "Termux format objects: {\"key\": \"ESC\", \"display\": \"␛\"} or {\"macro\": \"history\\n\", \"display\": \"H\"}. Must be valid 2D JSON.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ComposeColor.White.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                    if (errorText.isNotEmpty()) {
-                        Text(errorText, color = ComposeColor(0xFFFF6B6B),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp))
-                    }
-                }
-            },
-            confirmButton = {
-                GlassButton(onClick = {
-                    try {
-                        JSONArray(editingJson)
-                        extraKeysJson = editingJson
-                        sharedPrefs.edit().putString("extra_keys_layout", editingJson).apply()
-                        showExtraKeysEditor = false
-                    } catch (e: Exception) {
-                        errorText = "Invalid JSON: ${e.localizedMessage}"
-                    }
-                }) { Text("Save", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassButton(onClick = { editingJson = DEFAULT_EXTRA_KEYS_JSON }) {
-                        Text("Reset", color = ComposeColor.White.copy(alpha = 0.8f))
-                    }
-                    GlassButton(onClick = { showExtraKeysEditor = false }) {
-                        Text("Close", color = ComposeColor.White.copy(alpha = 0.8f))
-                    }
-                }
-            }
-        )
-    }
 
     val defaultTextSizePx = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_SP, 14f, context.resources.displayMetrics
@@ -301,19 +256,21 @@ fun ShellScreen(
                 override fun isTerminalViewSelected(): Boolean = true
 
                 // ── KEY: reapply termux.properties when the emulator is ready ──
-                override fun onEmulatorSet() {
-                    val session = tv.currentSession
-                    if (session is RustPtySession) {
-                        val cid = when (TerminalSessionIds.namespaceOf(session.sessionId)) {
-                            TerminalSessionIds.NS_ARCH   -> 1
-                            TerminalSessionIds.NS_DEBIAN -> 2
-                            TerminalSessionIds.NS_WINE   -> 3
-                            else -> 1
-                        }
-                        val props = TermuxPropertiesLoader.load(ctx, cid)
-                        TermuxPropertiesLoader.apply(tv, props)
-                    }
-                }
+              override fun onEmulatorSet() {
+    val session = tv.currentSession
+    if (session is RustPtySession) {
+        val cid = when (TerminalSessionIds.namespaceOf(session.sessionId)) {
+            TerminalSessionIds.NS_ARCH   -> 1
+            TerminalSessionIds.NS_DEBIAN -> 2
+            TerminalSessionIds.NS_WINE   -> 3
+            else -> 1
+        }
+        val props = TermuxPropertiesLoader.load(context, cid)
+        TermuxPropertiesLoader.apply(tv, props)
+    }
+}
+                
+                
             }
             tv.setTerminalViewClient(wrappedClient)
 
@@ -424,20 +381,20 @@ fun ShellScreen(
             // Apply termux.properties — but asynchronously, so the emulator is ready.
             // Also hook onEmulatorSet() above for the case where attachSessionIfNeeded
             // was deferred (view not yet laid out).
-            tv.postDelayed({
-                val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
-                TermuxPropertiesLoader.apply(tv, props)
-                props.extraKeys?.let { fileJson ->
-                    if (cache.appliedExtraKeysJson != fileJson) {
-                        cache.appliedExtraKeysJson = fileJson
-                        rebuildExtraKeys(
-                            tv.context, tv, cache.viewClient,
-                            cache.keysContainer, cache.fixedContainer, fileJson
-                        ) { showExtraKeysEditor = true }
-                    }
-                }
-            }, 300)
-
+               tv.post {
+        val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
+        TermuxPropertiesLoader.apply(tv, props)
+        props.extraKeys?.let { fileJson ->
+            if (cache.appliedExtraKeysJson != fileJson) {
+                cache.appliedExtraKeysJson = fileJson
+                rebuildExtraKeys(
+                    tv.context, tv, cache.viewClient,
+                    cache.keysContainer, cache.fixedContainer, fileJson
+                ) { showExtraKeysEditor = true }
+            }
+        }
+    }
+    
             val appliedFont = root.getTag(R.id.xodos2_terminal_font_applied) as? String
             if (appliedFont != terminalFontKey) {
                 root.setTag(R.id.xodos2_terminal_font_applied, terminalFontKey)

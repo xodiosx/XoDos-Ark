@@ -6,7 +6,7 @@ import java.io.File
 import java.util.Properties
 
 data class TermuxProperties(
-    val backgroundColor: Int? = null,          // 0xAARRGGBB
+    val backgroundColor: Int? = null,
     val foregroundColor: Int? = null,
     val cursorColor: Int? = null,
     val ansiColors: IntArray? = null,
@@ -19,21 +19,25 @@ data class TermuxProperties(
 object TermuxPropertiesLoader {
     private const val TAG = "TermuxProps"
 
-    /** All paths we search, in priority order. */
     fun candidates(context: Context, containerId: Int): List<File> = listOf(
-        // proot container rootfs
         File(context.filesDir, "containers/$containerId/root/.termux/termux.properties"),
-        // native shell home (what fallback proot uses)
         File(context.filesDir, "home/.termux/termux.properties"),
-        // app-level fallback
         File(context.filesDir, "termux.properties")
     )
+
+    fun defaultFile(context: Context, containerId: Int): File {
+        val prootRoot = File(context.filesDir, "containers/$containerId/root")
+        return if (prootRoot.isDirectory) {
+            File(prootRoot, ".termux/termux.properties")
+        } else {
+            File(context.filesDir, "home/.termux/termux.properties")
+        }
+    }
 
     fun load(context: Context, containerId: Int): TermuxProperties {
         val candidates = candidates(context, containerId)
         Log.d(TAG, "Searching termux.properties for container $containerId:")
         candidates.forEach { Log.d(TAG, "  ${it.absolutePath} exists=${it.isFile}") }
-
         val file = candidates.firstOrNull { it.isFile }
         if (file == null) {
             Log.w(TAG, "No termux.properties found for container $containerId")
@@ -49,7 +53,6 @@ object TermuxPropertiesLoader {
             return TermuxProperties(sourceFile = file)
         }
 
-        // ── colours ─────────────────────────────────────────────
         fun parseColor(raw: String?): Int? {
             if (raw == null) return null
             val hex = raw.trim().removePrefix("#").removePrefix("0x").trim()
@@ -68,7 +71,6 @@ object TermuxPropertiesLoader {
             val alpha = (opacityRaw.coerceIn(0f, 1f) * 255).toInt() and 0xFF
             val rgb = (background ?: 0xFF000000.toInt()) and 0x00FFFFFF
             background = (alpha shl 24) or rgb
-            Log.d(TAG, "background_opacity=$opacityRaw → background=#${Integer.toHexString(background)}")
         }
 
         val foreground = parseColor(props.getProperty("foreground"))
@@ -80,7 +82,6 @@ object TermuxPropertiesLoader {
             parseColor(props.getProperty("color$i"))?.let { ansi[i] = it; anyAnsi = true }
         }
 
-        // ── cursor blink rate (clamp) ───────────────────────────
         val rawBlink = props.getProperty("terminal-cursor-blink-rate")?.trim()?.toIntOrNull()
         val blinkRate = rawBlink?.let {
             when {
@@ -92,11 +93,9 @@ object TermuxPropertiesLoader {
             }
         }
 
-        // ── extra keys ──────────────────────────────────────────
         val rawExtra = props.getProperty("extra-keys")?.trim()?.takeIf { it.isNotEmpty() }
         val extraKeys = rawExtra?.let { normalizeExtraKeys(it) }
 
-        // ── font ────────────────────────────────────────────────
         val fontFile = File(file.parentFile ?: File("/"), "font.ttf")
         val fontPath = fontFile.takeIf { it.isFile }?.absolutePath
 
@@ -123,26 +122,17 @@ object TermuxPropertiesLoader {
         }
         s = s.replace('\'', '"')
         return try { org.json.JSONArray(s); s }
-        catch (e: Exception) { Log.e(TAG, "extra-keys normalise failed: $raw → $s", e); null }
+        catch (e: Exception) { Log.e(TAG, "extra-keys normalise failed", e); null }
     }
 
-    /**
-     * Applies properties to a TerminalView. Returns true only if the emulator
-     * existed and something was actually written.
-     */
     fun apply(tv: com.termux.view.TerminalView, props: TermuxProperties): Boolean {
-        val emulator = tv.mEmulator
-        if (emulator == null) { Log.d(TAG, "apply: no emulator yet"); return false }
-        val colors = emulator.mColors?.mCurrentColors
-        if (colors == null) { Log.d(TAG, "apply: no mCurrentColors"); return false }
+        val emulator = tv.mEmulator ?: return false
+        val colors = emulator.mColors?.mCurrentColors ?: return false
 
         props.backgroundColor?.let { bg ->
-            // Cells draw nothing for default-background; reveal view bg.
             colors[com.termux.terminal.TextStyle.COLOR_INDEX_BACKGROUND] = bg
-            // Paint the *actual* colour on the view (alpha included).
             tv.setBackgroundColor(bg)
-            Log.i(TAG, "Applied background=#${Integer.toHexString(bg)} " +
-                    "(alpha=${(bg ushr 24) and 0xFF})")
+            Log.i(TAG, "Applied background=#${Integer.toHexString(bg)} alpha=${(bg ushr 24) and 0xFF}")
         }
         props.foregroundColor?.let {
             colors[com.termux.terminal.TextStyle.COLOR_INDEX_FOREGROUND] = it
@@ -171,7 +161,6 @@ object TermuxPropertiesLoader {
         return true
     }
 
-    /** Creates a starter template in the native shell home so the user can find it. */
     fun seedNativeDefault(context: Context) {
         val file = File(context.filesDir, "home/.termux/termux.properties")
         if (file.exists()) return
@@ -179,15 +168,31 @@ object TermuxPropertiesLoader {
         file.writeText(
             """
             # XoDos-Ark terminal properties (native shell)
-            # See https://wiki.termux.com/wiki/Terminal_Settings
-            #
             # background=#4D000000
             # foreground=#E9D5FF
             # cursor=#FFD700
             # terminal-cursor-blink-rate=500
-            # extra-keys = [[ESC, TAB, CTRL, ALT, {key: '-', popup: '|'}, DOWN, UP]]
             """.trimIndent()
         )
-        Log.i(TAG, "Seeded template at ${file.absolutePath}")
+    }
+}
+
+object TermuxPropertiesWriter {
+    fun save(file: File, values: Map<String, String?>) {
+        val lines = if (file.exists()) file.readLines().toMutableList() else mutableListOf()
+        for ((key, value) in values) {
+            val idx = lines.indexOfFirst { line ->
+                val t = line.trim()
+                !t.startsWith("#") && (t.startsWith("$key=") || t.startsWith("$key "))
+            }
+            if (value.isNullOrBlank()) {
+                if (idx >= 0) lines.removeAt(idx)
+            } else {
+                val newLine = "$key = $value"
+                if (idx >= 0) lines[idx] = newLine else lines.add(newLine)
+            }
+        }
+        file.parentFile?.mkdirs()
+        file.writeText(lines.joinToString("\n"))
     }
 }

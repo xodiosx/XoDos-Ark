@@ -1,8 +1,11 @@
 package app.xodos2
 
+import android.graphics.Color
 import android.media.AudioManager
+import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
@@ -24,20 +27,32 @@ class MainActivity : ComponentActivity() {
     private var startInTerminal by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    volumeControlStream = AudioManager.STREAM_MUSIC
-    startInTerminal = intent?.action == ACTION_OPEN_TERMINAL
+        super.onCreate(savedInstanceState)
+        volumeControlStream = AudioManager.STREAM_MUSIC
+        startInTerminal = intent?.action == ACTION_OPEN_TERMINAL
 
-    // ----- NEW: global crash handler -----
-    CrashHandler.install(this)
-    // ------------------------------------
+        // ── Make the Activity window transparent so the terminal's
+        //    translucent background (and the wallpaper behind it) can show.
+        window.setBackgroundDrawableResource(android.R.color.transparent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Let Compose draw edge-to-edge and let the wallpaper show through gaps.
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
+        // Optional: dim the wallpaper slightly for readability.
+        // Remove this line if you want 100% wallpaper visibility.
+        window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
 
-    setContent {
-        xodos2Theme {
-            AppScreen(startInTerminal = startInTerminal)
+        CrashHandler.install(this)
+
+        setContent {
+            xodos2Theme {
+                AppScreen(startInTerminal = startInTerminal)
+            }
         }
     }
-}
 
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
