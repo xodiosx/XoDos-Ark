@@ -258,6 +258,6 @@ object TermuxPropertiesWriter {
         }
 
         file.parentFile?.mkdirs()
-        file.writeText(lines.joinToString("\n"))
+        file.writeText(lines.joinToString("\n"), Charsets.UTF_8)
     }
 }
