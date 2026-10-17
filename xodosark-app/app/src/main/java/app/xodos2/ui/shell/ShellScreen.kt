@@ -13,8 +13,6 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -33,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +52,7 @@ import app.xodos2.RustPtySession
 import app.xodos2.shell.ShellFonts
 import app.xodos2.shell.ShellSessionClient
 import app.xodos2.shell.ShellViewClient
+import app.xodos2.TerminalSessionIds
 import app.xodos2.wayland.input.InputRouteState
 import com.termux.view.TerminalView
 import org.json.JSONArray
@@ -64,10 +62,6 @@ import org.json.JSONObject
 import app.xodos2.ui.glass.GlassButton
 import app.xodos2.ui.glassDialogStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.Alignment
@@ -91,27 +85,9 @@ private class ViewCache(
     val keysContainer: LinearLayout,
     val fixedContainer: LinearLayout,
     val viewClient: ShellViewClient,
-    var appliedExtraKeysJson: String? = null
+    var appliedExtraKeysJson: String? = null,
+    var appliedTermuxPropsFile: String? = null
 )
-
-/**
- * TerminalView subclass that enables IME text suggestions / autocorrect.
- * Termux's default TerminalView sets inputType = TYPE_NULL, which disables
- * suggestions in most soft keyboards. We override onCreateInputConnection
- * to expose TYPE_CLASS_TEXT while keeping the parent InputConnection intact
- * so commitText still writes to the PTY.
- */
-class SuggestiveTerminalView(context: Context) : TerminalView(context, null) {
-    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
-        val ic = super.onCreateInputConnection(outAttrs)
-        outAttrs.inputType = EditorInfo.TYPE_CLASS_TEXT or
-                EditorInfo.TYPE_TEXT_FLAG_CAP_SENTENCES
-        outAttrs.imeOptions = EditorInfo.IME_ACTION_NONE or
-                EditorInfo.IME_FLAG_NO_FULLSCREEN or
-                EditorInfo.IME_FLAG_NO_ENTER_ACTION
-        return ic
-    }
-}
 
 @Composable
 fun ShellScreen(
@@ -140,11 +116,28 @@ fun ShellScreen(
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Container ID for the currently active session (used for termux.properties lookup)
+    val activeContainerId = remember(activeSessionId) {
+        when (TerminalSessionIds.namespaceOf(activeSessionId)) {
+            TerminalSessionIds.NS_ARCH   -> 1
+            TerminalSessionIds.NS_DEBIAN -> 2
+            TerminalSessionIds.NS_WINE   -> 3
+            else -> 1
+        }
+    }
+
+    // Initial extra keys: prefer the file (per-container), fall back to prefs / default
+    var extraKeysJson by remember(activeContainerId) {
+        val fromFile = TermuxPropertiesLoader.load(context, activeContainerId).extraKeys
+        mutableStateOf(
+            fromFile
+                ?: sharedPrefs.getString("extra_keys_layout", DEFAULT_EXTRA_KEYS_JSON)
+                ?: DEFAULT_EXTRA_KEYS_JSON
+        )
+    }
+
     var showCloseSessionDialog by remember { mutableStateOf(false) }
     var showExtraKeysEditor by remember { mutableStateOf(false) }
-    var extraKeysJson by remember {
-        mutableStateOf(sharedPrefs.getString("extra_keys_layout", DEFAULT_EXTRA_KEYS_JSON) ?: DEFAULT_EXTRA_KEYS_JSON)
-    }
 
     if (showCloseSessionDialog) {
         AlertDialog(
@@ -162,15 +155,19 @@ fun ShellScreen(
             confirmButton = {
                 GlassButton(onClick = {
                     showCloseSessionDialog = false
-                    if (terminalSessionIds.size <= 1) {
-                        onExitRequested()
-                    } else {
-                        onCloseCurrentSession()
-                    }
-                }) { Text(if (terminalSessionIds.size <= 1) "Exit" else "Close", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
+                    if (terminalSessionIds.size <= 1) onExitRequested() else onCloseCurrentSession()
+                }) {
+                    Text(
+                        if (terminalSessionIds.size <= 1) "Exit" else "Close",
+                        color = ComposeColor(0xFFC3B6F9),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             },
             dismissButton = {
-                GlassButton(onClick = { showCloseSessionDialog = false }) { Text("Cancel", color = ComposeColor.White.copy(alpha = 0.8f)) }
+                GlassButton(onClick = { showCloseSessionDialog = false }) {
+                    Text("Cancel", color = ComposeColor.White.copy(alpha = 0.8f))
+                }
             }
         )
     }
@@ -178,7 +175,7 @@ fun ShellScreen(
     if (showExtraKeysEditor) {
         var editingJson by remember { mutableStateOf(extraKeysJson) }
         var errorText by remember { mutableStateOf("") }
-        
+
         AlertDialog(
             onDismissRequest = { showExtraKeysEditor = false },
             containerColor = ComposeColor.Transparent,
@@ -188,13 +185,11 @@ fun ShellScreen(
                 Column {
                     OutlinedTextField(
                         value = editingJson,
-                        onValueChange = { 
+                        onValueChange = {
                             editingJson = it
-                            errorText = "" 
+                            errorText = ""
                         },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(180.dp),
+                        modifier = Modifier.fillMaxWidth().height(180.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = ComposeColor.White,
                             unfocusedTextColor = ComposeColor.White.copy(alpha = 0.8f),
@@ -212,8 +207,8 @@ fun ShellScreen(
                     )
                     if (errorText.isNotEmpty()) {
                         Text(
-                            text = errorText, 
-                            color = ComposeColor(0xFFFF6B6B), 
+                            text = errorText,
+                            color = ComposeColor(0xFFFF6B6B),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(top = 4.dp)
                         )
@@ -223,7 +218,7 @@ fun ShellScreen(
             confirmButton = {
                 GlassButton(onClick = {
                     try {
-                        JSONArray(editingJson) 
+                        JSONArray(editingJson)
                         extraKeysJson = editingJson
                         sharedPrefs.edit().putString("extra_keys_layout", editingJson).apply()
                         showExtraKeysEditor = false
@@ -237,24 +232,24 @@ fun ShellScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    GlassButton(onClick = {
-                        editingJson = DEFAULT_EXTRA_KEYS_JSON
-                    }) { Text("Reset", color = ComposeColor.White.copy(alpha = 0.8f)) }
-                    GlassButton(onClick = { showExtraKeysEditor = false }) { Text("Close", color = ComposeColor.White.copy(alpha = 0.8f)) }
+                    GlassButton(onClick = { editingJson = DEFAULT_EXTRA_KEYS_JSON }) {
+                        Text("Reset", color = ComposeColor.White.copy(alpha = 0.8f))
+                    }
+                    GlassButton(onClick = { showExtraKeysEditor = false }) {
+                        Text("Close", color = ComposeColor.White.copy(alpha = 0.8f))
+                    }
                 }
             }
         )
     }
 
     val defaultTextSizePx = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_SP,
-        14f,
-        context.resources.displayMetrics
+        TypedValue.COMPLEX_UNIT_SP, 14f, context.resources.displayMetrics
     ).toInt().coerceAtLeast(1)
 
     var currentTextSize by remember { mutableIntStateOf(defaultTextSizePx) }
     val saveHandler = remember { Handler(Looper.getMainLooper()) }
-    
+
     val saveRunnable = remember {
         Runnable { sharedPrefs.edit().putInt("terminal_zoom_size", currentTextSize).apply() }
     }
@@ -276,7 +271,6 @@ fun ShellScreen(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             saveZoomImmediately()
@@ -286,10 +280,7 @@ fun ShellScreen(
     }
 
     AndroidView(
-        modifier = modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .imePadding(),
+        modifier = modifier.fillMaxSize().statusBarsPadding().imePadding(),
         factory = { ctx ->
             val root = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
@@ -302,7 +293,10 @@ fun ShellScreen(
                 )
             }
 
-            val tv = SuggestiveTerminalView(ctx)
+            // TerminalView is final in this bundle; instead of subclassing we override
+            // shouldEnforceCharBasedInput() = false in the view client to enable IME
+            // suggestions (TerminalView already wires TYPE_CLASS_TEXT + AUTO_CORRECT).
+            val tv = TerminalView(ctx, null)
             val controller = ShellSessionController(ctx, tv)
             val viewClient = ShellViewClient(tv)
 
@@ -313,6 +307,10 @@ fun ShellScreen(
                     scheduleZoomSave()
                     return newScale
                 }
+
+                // ── KEY FIX: enable IME suggestions / autocorrect ──
+                override fun shouldEnforceCharBasedInput(): Boolean = false
+                override fun isTerminalViewSelected(): Boolean = true
             }
             tv.setTerminalViewClient(wrappedClient)
 
@@ -330,7 +328,7 @@ fun ShellScreen(
 
             tv.setBackgroundColor(Color.BLACK)
 
-            // ---------- CONTEXT MENU FIX ----------
+            // Context menu
             tv.setOnCreateContextMenuListener { menu, _, _ ->
                 menu.setHeaderTitle("Terminal Options")
                 menu.add(0, 1, 0, "Copy Transcript").setOnMenuItemClickListener {
@@ -342,38 +340,34 @@ fun ShellScreen(
                     true
                 }
                 menu.add(0, 2, 0, "Reset Terminal").setOnMenuItemClickListener {
-                    tv.currentSession?.write("\u001Bc") // ANSI Reset Sequence
+                    tv.currentSession?.write("\u001Bc")
                     true
                 }
             }
 
             val terminalFrame = FrameLayout(ctx).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
-                )
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
             }
             terminalFrame.addView(
                 tv,
-                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
             )
             root.addView(terminalFrame)
 
-            // ---------- Extra keys bar (tight fit) ----------
+            // Extra keys bar
             val bottomBarLayout = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT 
+                    ViewGroup.LayoutParams.WRAP_CONTENT
                 )
                 val barDrawable = GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(
-                        Color.parseColor("#E6080512"),
-                        Color.parseColor("#FA030207")
-                    )
-                ).apply {
-                    setStroke(1.dpToPx(ctx), Color.parseColor("#22FFFFFF"))
-                }
+                    intArrayOf(Color.parseColor("#E6080512"), Color.parseColor("#FA030207"))
+                ).apply { setStroke(1.dpToPx(ctx), Color.parseColor("#22FFFFFF")) }
                 background = barDrawable
                 setPadding(0, 4.dpToPx(ctx), 0, 4.dpToPx(ctx))
             }
@@ -384,7 +378,7 @@ fun ShellScreen(
                 isFillViewport = true
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             }
-            
+
             val keysContainer = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = FrameLayout.LayoutParams(
@@ -409,13 +403,13 @@ fun ShellScreen(
             val cache = ViewCache(controller, keysContainer, fixedContainer, viewClient)
             root.tag = cache
             root.setTag(R.id.xodos2_shell_controller, controller)
-            
+
             root
         },
         update = { root ->
             val cache = root.tag as ViewCache
             val controller = cache.controller
-            
+
             val prevEpoch = root.getTag(R.id.xodos2_renderer_session_epoch) as? Int ?: 0
             if (rendererSessionResetEpoch != prevEpoch) {
                 root.setTag(R.id.xodos2_renderer_session_epoch, rendererSessionResetEpoch)
@@ -427,24 +421,34 @@ fun ShellScreen(
             val terminalFrame = root.getChildAt(0) as FrameLayout
             val tv = terminalFrame.getChildAt(0) as TerminalView
 
+            // ── Apply termux.properties for this container ──
+            val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
+            val propsFileKey = props.sourceFile?.absolutePath
+            if (cache.appliedTermuxPropsFile != propsFileKey) {
+                cache.appliedTermuxPropsFile = propsFileKey
+                TermuxPropertiesLoader.apply(tv, props)
+            } else {
+                // Re-apply on every update so colors/font survive session resets
+                TermuxPropertiesLoader.apply(tv, props)
+            }
+
+            // Apply font preference (explicit user setting wins over termux.properties font.ttf)
             val appliedFont = root.getTag(R.id.xodos2_terminal_font_applied) as? String
             if (appliedFont != terminalFontKey) {
                 root.setTag(R.id.xodos2_terminal_font_applied, terminalFontKey)
                 tv.setTypeface(ShellFonts.typefaceForPref(tv.context, terminalFontKey))
             }
-            
+
             if (cache.appliedExtraKeysJson != extraKeysJson) {
                 cache.appliedExtraKeysJson = extraKeysJson
                 rebuildExtraKeys(
-                    tv.context, 
-                    tv, 
-                    cache.viewClient, 
-                    cache.keysContainer, 
+                    tv.context,
+                    tv,
+                    cache.viewClient,
+                    cache.keysContainer,
                     cache.fixedContainer,
                     extraKeysJson
-                ) {
-                    showExtraKeysEditor = true
-                }
+                ) { showExtraKeysEditor = true }
             }
 
             if (showKeyboardTrigger > 0) {
@@ -548,17 +552,14 @@ private fun rebuildExtraKeys(
 
     fun createActiveDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(
-            Color.parseColor("#E67C3AED"),
-            Color.parseColor("#CC4C1D95")
-        )
+        intArrayOf(Color.parseColor("#E67C3AED"), Color.parseColor("#CC4C1D95"))
     ).apply {
         shape = GradientDrawable.RECTANGLE
         setStroke(1.dpToPx(context), Color.parseColor("#FFD700"))
         cornerRadius = 8f * context.resources.displayMetrics.density
     }
 
-    fun createDefaultStateList(): android.graphics.drawable.StateListDrawable = 
+    fun createDefaultStateList(): android.graphics.drawable.StateListDrawable =
         android.graphics.drawable.StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_pressed), createPressedDrawable())
             addState(intArrayOf(), createNormalDrawable())
@@ -582,16 +583,14 @@ private fun rebuildExtraKeys(
         val scaledTextSize = when {
             label.length <= 3 -> baseTextSize
             label.length <= 5 -> baseTextSize * 0.85f
-            else            -> baseTextSize * 0.7f
+            else -> baseTextSize * 0.7f
         }
 
         val drawable = if (label == "CTRL") {
             if (viewClient.ctrlActive) createActiveDrawable() else createDefaultStateList()
         } else if (label == "ALT") {
             if (viewClient.altActive) createActiveDrawable() else createDefaultStateList()
-        } else {
-            createDefaultStateList()
-        }
+        } else createDefaultStateList()
 
         return TextView(context).apply {
             text = label
@@ -602,25 +601,17 @@ private fun rebuildExtraKeys(
             isAllCaps = false
             isClickable = !isTransparent
             isFocusable = false
-            
-            if (isTransparent) {
-                visibility = android.view.View.INVISIBLE
-            }
+            if (isTransparent) visibility = android.view.View.INVISIBLE
 
             layoutParams = LinearLayout.LayoutParams(
                 if (isFixed) ViewGroup.LayoutParams.WRAP_CONTENT else 0,
-                ViewGroup.LayoutParams.MATCH_PARENT, 
+                ViewGroup.LayoutParams.MATCH_PARENT,
                 if (isFixed) 0f else 1f
-            ).apply {
-                setMargins(2.dpToPx(context), 0, 2.dpToPx(context), 0)
-            }
-            
-            if (isFixed) {
-                setPadding(8.dpToPx(context), 4.dpToPx(context), 8.dpToPx(context), 4.dpToPx(context))
-            } else {
-                setPadding(0, 4.dpToPx(context), 0, 4.dpToPx(context))
-            }
-            
+            ).apply { setMargins(2.dpToPx(context), 0, 2.dpToPx(context), 0) }
+
+            if (isFixed) setPadding(8.dpToPx(context), 4.dpToPx(context), 8.dpToPx(context), 4.dpToPx(context))
+            else setPadding(0, 4.dpToPx(context), 0, 4.dpToPx(context))
+
             gravity = Gravity.CENTER
         }
     }
@@ -636,35 +627,31 @@ private fun rebuildExtraKeys(
             }
         }
     }
-    
-    fun getActionFor(key: String): String {
-        return when (key.uppercase()) {
-            "CTRL" -> "CTRL_MOD"
-            "ALT" -> "ALT_MOD"
-            "ESC" -> "\u001B"
-            "TAB" -> "\u0009"
-            "HOME" -> "\u001B[H"
-            "END" -> "\u001B[F"
-            "UP" -> "\u001B[A"
-            "DOWN" -> "\u001B[B"
-            "LEFT" -> "\u001B[D"
-            "RIGHT" -> "\u001B[C"
-            "PGUP" -> "\u001B[5~"
-            "PGDN" -> "\u001B[6~"
-            "COPY" -> "SPECIAL_COPY"
-            "PASTE" -> "SPECIAL_PASTE"
-            else -> key
-        }
+
+    fun getActionFor(key: String): String = when (key.uppercase()) {
+        "CTRL" -> "CTRL_MOD"
+        "ALT" -> "ALT_MOD"
+        "ESC" -> "\u001B"
+        "TAB" -> "\u0009"
+        "HOME" -> "\u001B[H"
+        "END" -> "\u001B[F"
+        "UP" -> "\u001B[A"
+        "DOWN" -> "\u001B[B"
+        "LEFT" -> "\u001B[D"
+        "RIGHT" -> "\u001B[C"
+        "PGUP" -> "\u001B[5~"
+        "PGDN" -> "\u001B[6~"
+        "COPY" -> "SPECIAL_COPY"
+        "PASTE" -> "SPECIAL_PASTE"
+        else -> key
     }
 
-    fun getDisplayLabel(key: String): String {
-        return when (key.uppercase()) {
-            "UP" -> "↑"
-            "DOWN" -> "↓"
-            "LEFT" -> "←"
-            "RIGHT" -> "→"
-            else -> key
-        }
+    fun getDisplayLabel(key: String): String = when (key.uppercase()) {
+        "UP" -> "↑"
+        "DOWN" -> "↓"
+        "LEFT" -> "←"
+        "RIGHT" -> "→"
+        else -> key
     }
 
     val rowHeight = 44.dpToPx(context)
@@ -673,24 +660,15 @@ private fun rebuildExtraKeys(
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, rowHeight
-            )
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowHeight)
         }
-        
+
         for (item in keys) {
-            val displayLabel = if (item.display.isNotEmpty()) {
-                item.display
-            } else {
-                getDisplayLabel(item.key)
-            }
-            
+            val displayLabel = if (item.display.isNotEmpty()) item.display else getDisplayLabel(item.key)
             val btn = makeButton(displayLabel)
-            
+
             if (item.macro.isNotEmpty()) {
-                btn.setOnClickListener {
-                    terminalView.currentSession?.write(item.macro)
-                }
+                btn.setOnClickListener { terminalView.currentSession?.write(item.macro) }
             } else {
                 val action = getActionFor(item.key)
                 when (action) {
@@ -711,14 +689,12 @@ private fun rebuildExtraKeys(
                         }
                     }
                     "SPECIAL_COPY" -> btn.setOnClickListener { terminalView.showContextMenu() }
-                    "SPECIAL_PASTE" -> {
-                        btn.setOnClickListener {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.primaryClip?.let { clip ->
-                                if (clip.itemCount > 0) {
-                                    val textToPaste = clip.getItemAt(0).text?.toString() ?: ""
-                                    terminalView.currentSession?.write(textToPaste)
-                                }
+                    "SPECIAL_PASTE" -> btn.setOnClickListener {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.primaryClip?.let { clip ->
+                            if (clip.itemCount > 0) {
+                                val textToPaste = clip.getItemAt(0).text?.toString() ?: ""
+                                terminalView.currentSession?.write(textToPaste)
                             }
                         }
                     }
@@ -733,7 +709,6 @@ private fun rebuildExtraKeys(
                                 }
                             )
                         }
-
                         if (item.key.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
                             setRepeatClickListener(btn, fireAction)
                         } else {
@@ -752,62 +727,53 @@ private fun rebuildExtraKeys(
         for (i in 0 until jsonArray.length()) {
             val rowArray = jsonArray.getJSONArray(i)
             val rowKeys = mutableListOf<ExtraKeyItem>()
-            
+
             for (j in 0 until rowArray.length()) {
-                val item = rowArray.get(j)
-                when (item) {
-                    is String -> {
-                        rowKeys.add(ExtraKeyItem(key = item))
-                    }
-                    is JSONObject -> {
-                        rowKeys.add(ExtraKeyItem(
+                when (val item = rowArray.get(j)) {
+                    is String -> rowKeys.add(ExtraKeyItem(key = item))
+                    is JSONObject -> rowKeys.add(
+                        ExtraKeyItem(
                             key = item.optString("key", ""),
                             macro = item.optString("macro", ""),
                             display = item.optString("display", "")
-                        ))
-                    }
+                        )
+                    )
                 }
             }
-            
+
             scrollParent.addView(addScrollRow(rowKeys))
-            
+
             val fixedRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
-                )
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
             }
-            
+
             when {
-                // Second-to-last row: keyboard toggle
                 i == jsonArray.length() - 2 -> {
+                    // Second-to-last row: keyboard toggle
                     val kbBtn = makeButton("⌨️", isTransparent = false, isFixed = true)
                     kbBtn.setOnClickListener { toggleKeyboard() }
                     fixedRow.addView(kbBtn)
                 }
-                // Last row: gear button
                 i == jsonArray.length() - 1 -> {
+                    // Last row: gear
                     val editBtn = makeButton("⚙️", isTransparent = false, isFixed = true)
                     editBtn.setOnClickListener { onEditClicked() }
                     fixedRow.addView(editBtn)
                 }
-                // Any other row: transparent placeholder for alignment
                 else -> {
                     val placeholderText = if (rowKeys.isNotEmpty()) {
                         if (rowKeys.first().display.isNotEmpty()) rowKeys.first().display
                         else getDisplayLabel(rowKeys.first().key)
-                    } else {
-                        "ESC"
-                    }
-                    val spaceBtn = makeButton(placeholderText, isTransparent = true, isFixed = true)
-                    fixedRow.addView(spaceBtn)
+                    } else "ESC"
+                    fixedRow.addView(makeButton(placeholderText, isTransparent = true, isFixed = true))
                 }
             }
             fixedParent.addView(fixedRow)
         }
 
-        // Edge cases: ensure keyboard + gear always appear
+        // Edge cases so users can always reach keyboard + gear
         when (jsonArray.length()) {
             0 -> {
                 val kbRow = LinearLayout(context).apply {
@@ -831,7 +797,7 @@ private fun rebuildExtraKeys(
                 fixedParent.addView(gearRow)
             }
             1 -> {
-                // Only gear was added (as the last row). Insert keyboard row above it.
+                // Insert keyboard row above the gear row
                 val kbRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_HORIZONTAL
@@ -861,9 +827,7 @@ private fun sendModifiedSequence(
         if (ctrlActive && baseSequence.length == 1) {
             val ch = baseSequence[0]
             append((ch.code and 0x1F).toChar())
-        } else {
-            append(baseSequence)
-        }
+        } else append(baseSequence)
     }
     session.write(text)
     onConsumed()
@@ -889,7 +853,7 @@ private class ShellSessionController(
 
     fun attachSessionIfNeeded(id: Int) {
         if (id == attachedId) return
-        
+
         val attachLogic = {
             attachedId = id
             val s = sessionFor(id)
@@ -921,9 +885,7 @@ private class ShellSessionController(
             clients.remove(id)
             PtyOutputRelay.discardSessionQueue(id)
         }
-        if (attachedId !in keep) {
-            attachedId = -1
-        }
+        if (attachedId !in keep) attachedId = -1
     }
 
     fun invalidateAllSessions() {
