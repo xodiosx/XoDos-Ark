@@ -436,7 +436,7 @@ fun ShellScreen(
                         val overlay = props.backgroundImageOverlayColor ?: 0x80000000.toInt()
                         bgOverlay.setBackgroundColor(overlay)
                         bgOverlay.visibility = View.VISIBLE
-                        terminalFrame.setBackgroundColor(Color.BLACK)
+                        terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
                     } else {
                         bgImageView.visibility = View.GONE
                         bgOverlay.visibility = View.GONE
@@ -445,7 +445,7 @@ fun ShellScreen(
                     bgImageView.visibility = View.GONE
                     bgOverlay.visibility = View.GONE
                     // Keep frame black so default background cells have something behind
-                    terminalFrame.setBackgroundColor(Color.BLACK)
+                    terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
                 }
 
                 // Extra keys from file override

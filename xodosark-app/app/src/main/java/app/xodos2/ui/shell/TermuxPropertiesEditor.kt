@@ -73,9 +73,12 @@ fun TermuxPropertiesEditorDialog(
     }
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    var bg by remember { mutableStateOf(intToHex(initial.backgroundColor ?: 0x00000000)) }
-    var fg by remember { mutableStateOf(intToHex(initial.foregroundColor ?: 0xFFE9D5FF.toInt())) }
-    var cursor by remember { mutableStateOf(intToHex(initial.cursorColor ?: 0xFFFFD700.toInt())) }
+
+    // ── IMPORTANT: empty string = "not set", so we never overwrite a good value
+    //    with a forced default. Only user-typed values get saved.
+    var bg by remember { mutableStateOf(initial.backgroundColor?.let { intToHex(it) } ?: "") }
+    var fg by remember { mutableStateOf(initial.foregroundColor?.let { intToHex(it) } ?: "") }
+    var cursor by remember { mutableStateOf(initial.cursorColor?.let { intToHex(it) } ?: "") }
     var blink by remember { mutableStateOf(initial.cursorBlinkRate?.toString() ?: "500") }
     var extraKeys by remember { mutableStateOf(initial.extraKeys ?: EDITOR_DEFAULT_EXTRA_KEYS) }
     var ansi by remember {
@@ -88,11 +91,15 @@ fun TermuxPropertiesEditorDialog(
     }
     var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
     var overlayColor by remember {
-        mutableStateOf(intToHex(initial.backgroundImageOverlayColor ?: 0x80000000.toInt()))
+        mutableStateOf(
+            initial.backgroundImageOverlayColor?.let { intToHex(it) }
+                ?: "#80000000"
+        )
     }
     var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
+    // ── Image picker ──
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -113,7 +120,7 @@ fun TermuxPropertiesEditorDialog(
         listOf(
             ColorField("Background", "background", bg) { bg = it },
             ColorField("Foreground", "foreground", fg) { fg = it },
-            ColorField("Cursor", "cursor", cursor) { cursor = it },
+            ColorField("Cursor",     "cursor",     cursor) { cursor = it },
             ColorField("color0",  "color0",  ansi[0])  { ansi = ansi.toMutableList().also { l -> l[0]  = it } },
             ColorField("color1",  "color1",  ansi[1])  { ansi = ansi.toMutableList().also { l -> l[1]  = it } },
             ColorField("color2",  "color2",  ansi[2])  { ansi = ansi.toMutableList().also { l -> l[2]  = it } },
@@ -141,7 +148,11 @@ fun TermuxPropertiesEditorDialog(
             .fillMaxWidth(0.95f)
             .heightIn(max = 760.dp),
         title = {
-            Text("Terminal Properties", color = ComposeColor.White, fontWeight = FontWeight.Bold)
+            Text(
+                "Terminal Properties",
+                color = ComposeColor.White,
+                fontWeight = FontWeight.Bold
+            )
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -195,7 +206,8 @@ fun TermuxPropertiesEditorDialog(
                     JSONArray(extraKeys)
 
                     val values = mutableMapOf<String, String?>()
-                    values["background"] = bg.takeIf { it.isNotBlank() && it != "#00000000" }
+                    // Only save what the user actually typed (empty = not set)
+                    values["background"] = bg.takeIf { it.isNotBlank() }
                     values["foreground"] = fg.takeIf { it.isNotBlank() }
                     values["cursor"]     = cursor.takeIf { it.isNotBlank() }
                     values["terminal-cursor-blink-rate"] = blink.takeIf { it.isNotBlank() }
@@ -332,28 +344,7 @@ private fun ExtraKeysTab(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = {
-                onChange(it)
-                jsonValid = try { JSONArray(it); true } catch (_: Exception) { false }
-            },
-            modifier = Modifier.fillMaxWidth().height(320.dp),
-            isError = !jsonValid,
-            colors = editorTextFieldColors()
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Text(
-            if (jsonValid) "✓ Valid JSON" else "✗ Invalid JSON — fix before saving",
-            color = if (jsonValid) ComposeColor(0xFF10B981) else ComposeColor(0xFFFF6B6B),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-
-        Spacer(Modifier.height(12.dp))
-
+        // ── Action bar: reset button + validation status at the TOP (never clipped) ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -367,32 +358,53 @@ private fun ExtraKeysTab(
                 )
             }
             Text(
-                "Restores 2 rows of Termux-style keys",
-                color = ComposeColor.White.copy(alpha = 0.55f),
-                fontSize = 11.sp
+                if (jsonValid) "✓ Valid" else "✗ Invalid",
+                color = if (jsonValid) ComposeColor(0xFF10B981) else ComposeColor(0xFFFF6B6B),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
             )
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
 
-        Text(
-            "Strings or {\"key\":\"…\",\"macro\":\"…\",\"display\":\"…\"}. Must be a valid 2D JSON array.",
-            color = ComposeColor.White.copy(alpha = 0.55f),
-            style = MaterialTheme.typography.bodySmall
-        )
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Default:",
-            color = ComposeColor.White.copy(alpha = 0.55f),
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            EDITOR_DEFAULT_EXTRA_KEYS,
-            color = ComposeColor(0xFFC3B6F9),
-            fontSize = 10.sp,
-            fontFamily = FontFamily.Monospace
-        )
+        // ── Scrollable body ──
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 420.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = {
+                    onChange(it)
+                    jsonValid = try { JSONArray(it); true } catch (_: Exception) { false }
+                },
+                modifier = Modifier.fillMaxWidth().height(280.dp),
+                isError = !jsonValid,
+                colors = editorTextFieldColors()
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Strings or {\"key\":\"…\",\"macro\":\"…\",\"display\":\"…\",\"meta\":\"CTRL\"}. " +
+                        "Must be valid 2D JSON. Use \\n for newline, not a real line break.",
+                color = ComposeColor.White.copy(alpha = 0.55f),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Default layout:",
+                color = ComposeColor.White.copy(alpha = 0.55f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                EDITOR_DEFAULT_EXTRA_KEYS,
+                color = ComposeColor(0xFFC3B6F9),
+                fontSize = 10.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
     }
 }
 
@@ -411,12 +423,20 @@ private fun ImageTab(
         if (imagePath.isNotBlank() && File(imagePath).exists()) {
             Text(imagePath, color = ComposeColor.White.copy(alpha = 0.6f), fontSize = 11.sp)
         } else {
-            Text("No image selected", color = ComposeColor.White.copy(alpha = 0.6f), fontSize = 13.sp)
+            Text(
+                "No image selected",
+                color = ComposeColor.White.copy(alpha = 0.6f),
+                fontSize = 13.sp
+            )
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassButton(onClick = onPickImage) {
-                Text("Choose Image", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                Text(
+                    "Choose Image",
+                    color = ComposeColor(0xFFC3B6F9),
+                    fontWeight = FontWeight.Bold
+                )
             }
             if (imagePath.isNotBlank()) {
                 GlassButton(onClick = onRemoveImage) {
@@ -429,7 +449,8 @@ private fun ImageTab(
         Text("Overlay tint", color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text(
-            "Adds a color on top of the image so text stays readable.",
+            "Adds a color on top of the image so text stays readable. " +
+                    "Set alpha to 00 for no tint, 80 for 50% tint.",
             color = ComposeColor.White.copy(alpha = 0.55f),
             fontSize = 11.sp
         )
@@ -452,7 +473,11 @@ private fun ImageTab(
                     .border(1.dp, ComposeColor.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
             )
             Spacer(Modifier.width(12.dp))
-            Text(overlayColor, color = ComposeColor.White, modifier = Modifier.weight(1f))
+            Text(
+                overlayColor,
+                color = ComposeColor.White,
+                modifier = Modifier.weight(1f)
+            )
             Text(
                 "Edit",
                 color = ComposeColor(0xFFC3B6F9),
@@ -489,8 +514,10 @@ private fun AdvancedTab(blink: String, onBlink: (String) -> Unit, filePath: Stri
         Text(filePath, color = ComposeColor(0xFFC3B6F9), fontSize = 11.sp)
         Spacer(Modifier.height(16.dp))
         Text(
-            "Colors use #AARRGGBB. First two hex digits are alpha (00 = transparent, FF = opaque).\n" +
-            "Setting only foreground/cursor will NOT clear the ANSI palette — bash colors stay intact.",
+            "Colors use #AARRGGBB. First two hex digits are alpha " +
+                    "(00 = transparent, FF = opaque).\n" +
+                    "Setting only foreground/cursor will NOT clear the ANSI palette — " +
+                    "bash colors stay intact.",
             color = ComposeColor.White.copy(alpha = 0.55f),
             style = MaterialTheme.typography.bodySmall
         )
