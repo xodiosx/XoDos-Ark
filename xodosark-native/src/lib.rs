@@ -13,7 +13,7 @@ mod combined {
         container_rootfs_dir, has_container_rootfs, installed_containers, first_installed_container,
         spawn_host_pulseaudio_if_present,
         stop_if_running, start_if_possible,
-        start_virgl_servers,        // <-- new import
+        start_virgl_servers,
     };
 
     use anyhow::{Context, Result};
@@ -102,6 +102,32 @@ mod combined {
         Ok(())
     }
 
+    /// Spawn the native (Termux‑style) Android shell with no proot.
+    /// Used when no container is installed, or a container has no usable shell.
+    fn spawn_native_shell(session_id: i32, rows: u16, cols: u16) -> Result<()> {
+        let mut map = SESSIONS
+            .lock()
+            .map_err(|e| anyhow::anyhow!("SESSIONS lock: {:?}", e))?;
+        if map.contains_key(&session_id) {
+            return Ok(());
+        }
+        let (child, read_file, stdin, master_fd) =
+            proot::fork_pty_native_shell(rows, cols)?;
+        map.insert(
+            session_id,
+            PtySession {
+                _child: child,
+                stdin,
+                master_fd,
+            },
+        );
+        drop(map);
+        thread::spawn(move || {
+            pty_master_reader_loop(session_id, read_file);
+        });
+        Ok(())
+    }
+
     fn pty_master_reader_loop(session_id: i32, mut master_read: std::fs::File) {
         let mut buf = [0u8; 4096];
         loop {
@@ -118,9 +144,15 @@ mod combined {
     fn post_pty_chunk_to_java(session_id: i32, bytes: &[u8]) {
         let Some(vm) = JAVA_VM.get() else { return };
         let Some(class_ref) = PTY_RELAY_CLASS.get() else { return };
-        let Ok(mut env) = vm.attach_current_thread_as_daemon() else { return };
-        let Ok(arr) = env.byte_array_from_slice(bytes) else { return };
-        let Ok(local_cls) = env.new_local_ref(class_ref.as_obj()) else { return };
+        let Ok(mut env) = vm.attach_current_thread_as_daemon() else {
+            return;
+        };
+        let Ok(arr) = env.byte_array_from_slice(bytes) else {
+            return;
+        };
+        let Ok(local_cls) = env.new_local_ref(class_ref.as_obj()) else {
+            return;
+        };
         let cls = JClass::from(local_cls);
         if let Err(e) = env.call_static_method(
             cls,
@@ -155,8 +187,12 @@ mod combined {
         let s = map
             .get_mut(&session_id)
             .ok_or_else(|| anyhow::anyhow!("no session {}", session_id))?;
-        s.stdin.write_all(bytes).map_err(|e| anyhow::anyhow!("stdin write: {}", e))?;
-        s.stdin.flush().map_err(|e| anyhow::anyhow!("stdin flush: {}", e))?;
+        s.stdin
+            .write_all(bytes)
+            .map_err(|e| anyhow::anyhow!("stdin write: {}", e))?;
+        s.stdin
+            .flush()
+            .map_err(|e| anyhow::anyhow!("stdin flush: {}", e))?;
         Ok(())
     }
 
@@ -205,15 +241,26 @@ mod combined {
             log::error!("xodos2: panic: {:?}", info);
         }));
 
-        let data_dir: String = env.get_string(&data_dir).map(|s| s.into()).unwrap_or_default();
-        let cache_dir: String = env.get_string(&cache_dir).map(|s| s.into()).unwrap_or_default();
-        let native_library_dir: String = env.get_string(&native_library_dir).map(|s| s.into()).unwrap_or_default();
+        let data_dir: String = env
+            .get_string(&data_dir)
+            .map(|s| s.into())
+            .unwrap_or_default();
+        let cache_dir: String = env
+            .get_string(&cache_dir)
+            .map(|s| s.into())
+            .unwrap_or_default();
+        let native_library_dir: String = env
+            .get_string(&native_library_dir)
+            .map(|s| s.into())
+            .unwrap_or_default();
 
         let external_storage_path: Option<PathBuf> = if external_storage_dir.is_null() {
             None
         } else {
             let jstr = unsafe { JString::from_raw(external_storage_dir) };
-            env.get_string(&jstr).ok().map(|s| PathBuf::from(String::from(s)))
+            env.get_string(&jstr)
+                .ok()
+                .map(|s| PathBuf::from(String::from(s)))
         };
 
         if let Err(e) = init(
@@ -236,16 +283,21 @@ mod combined {
     }
 
     #[no_mangle]
-    pub extern "system" fn Java_app_xodos2_NativeBridge_stopVirglHost(_env: JNIEnv, _: JObject) {
+    pub extern "system" fn Java_app_xodos2_NativeBridge_stopVirglHost(
+        _env: JNIEnv,
+        _: JObject,
+    ) {
         stop_if_running();
     }
 
     #[no_mangle]
-    pub extern "system" fn Java_app_xodos2_NativeBridge_startVirglHostIfPossible(_env: JNIEnv, _: JObject) {
+    pub extern "system" fn Java_app_xodos2_NativeBridge_startVirglHostIfPossible(
+        _env: JNIEnv,
+        _: JObject,
+    ) {
         start_if_possible();
     }
 
-    // ---------- NEW: startVirglServers (mask: int) ----------
     #[no_mangle]
     pub extern "system" fn Java_app_xodos2_NativeBridge_startVirglServers(
         _env: JNIEnv,
@@ -296,10 +348,18 @@ mod combined {
         callback: JObject,
     ) -> jboolean {
         let vm = env.get_java_vm().expect("get JavaVM");
-        let callback_global = env.new_global_ref(callback).expect("global ref for callback");
+        let callback_global = env
+            .new_global_ref(callback)
+            .expect("global ref for callback");
 
-        let url: String = env.get_string(&url).map(|s| s.into()).unwrap_or_default();
-        let tarball_name: String = env.get_string(&tarball_name).map(|s| s.into()).unwrap_or_default();
+        let url: String = env
+            .get_string(&url)
+            .map(|s| s.into())
+            .unwrap_or_default();
+        let tarball_name: String = env
+            .get_string(&tarball_name)
+            .map(|s| s.into())
+            .unwrap_or_default();
         let cid = container_id as u32;
 
         let rootfs_path = match container_rootfs_dir(cid) {
@@ -317,7 +377,12 @@ mod combined {
                 let msg_j = env.new_string(msg).expect("new string");
                 let msg_obj: JObject = msg_j.into();
                 let args = [JValue::Int(pct as jint), JValue::Object(&msg_obj)];
-                let _ = env.call_method(callback, "onProgress", "(ILjava/lang/String;)V", &args);
+                let _ = env.call_method(
+                    callback,
+                    "onProgress",
+                    "(ILjava/lang/String;)V",
+                    &args,
+                );
             });
             rootfs_fetch::ensure_rootfs_with_progress(
                 &url,
@@ -369,7 +434,11 @@ mod combined {
         let path = match container_rootfs_dir(container_id as u32) {
             Ok(p) => p,
             Err(e) => {
-                log::error!("spawnSessionInContainer: invalid container {}: {:?}", container_id, e);
+                log::error!(
+                    "spawnSessionInContainer: invalid container {}: {:?}",
+                    container_id,
+                    e
+                );
                 return 0;
             }
         };
@@ -392,21 +461,29 @@ mod combined {
     ) -> jboolean {
         let r = rows.max(1).min(i32::from(u16::MAX)) as u16;
         let c = cols.max(1).min(i32::from(u16::MAX)) as u16;
-        let container_id = match first_installed_container() {
-            Some(id) => id,
+
+        let result = match first_installed_container() {
+            Some(container_id) => match container_rootfs_dir(container_id) {
+                Ok(path) => spawn_shell_in_rootfs(session_id, r, c, &path),
+                Err(e) => {
+                    log::error!(
+                        "spawnDefaultSession: container {} path error: {:?} — \
+                         falling back to native shell",
+                        container_id,
+                        e
+                    );
+                    spawn_native_shell(session_id, r, c)
+                }
+            },
             None => {
-                log::error!("spawnDefaultSession: no installed container found");
-                return 0;
+                log::warn!(
+                    "spawnDefaultSession: no installed container — using native Android shell"
+                );
+                spawn_native_shell(session_id, r, c)
             }
         };
-        let path = match container_rootfs_dir(container_id) {
-            Ok(p) => p,
-            Err(e) => {
-                log::error!("spawnDefaultSession: path error: {:?}", e);
-                return 0;
-            }
-        };
-        match spawn_shell_in_rootfs(session_id, r, c, &path) {
+
+        match result {
             Ok(()) => 1,
             Err(e) => {
                 log::error!("spawnDefaultSession failed: {:?}", e);
