@@ -51,7 +51,7 @@ object TermuxPropertiesLoader {
 
         val props = Properties()
         try {
-            file.inputStream().use { props.load(it) }
+            file.reader(Charsets.UTF_8).use { props.load(it) }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read $file", e)
             return TermuxProperties(sourceFile = file)
