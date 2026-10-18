@@ -395,7 +395,7 @@ xfce4-session
                 export XDG_SESSION_TYPE='wayland'
                 unset DISPLAY
             fi
-            source $PREFIX/opt/drv
+            source {'$'}PREFIX/opt/drv
 
             killall -9 dbus-daemon dbus-launch 2>/dev/null || true
         """.trimIndent()
