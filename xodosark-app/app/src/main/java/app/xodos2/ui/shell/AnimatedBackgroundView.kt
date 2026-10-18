@@ -15,6 +15,14 @@ import android.util.Log
 import android.view.View
 import java.io.File
 
+/**
+ * Background view that renders static images AND animated GIF / WebP / APNG.
+ *
+ *  • API 28+  → ImageDecoder → AnimatedImageDrawable (handles ALL GIF variants)
+ *  • API < 28 → Movie (limited GIF support — only fallback when we can't do better)
+ *
+ * Scaling: **STRETCH** — image fills the whole view (no crop, no letterbox).
+ */
 class AnimatedBackgroundView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
@@ -23,34 +31,25 @@ class AnimatedBackgroundView @JvmOverloads constructor(
     private var movie: Movie? = null
     private var drawable: Drawable? = null
     private var movieStartTime: Long = 0L
+    private var currentSource: String? = null     // idempotence guard
 
     fun setSource(path: String?) {
+        // Cheap guard: update() calls us on every recomposition.
+        // Re-decoding the same file resets the GIF frame and looks frozen.
+        if (currentSource == path) return
+
         clear()
+        currentSource = path
         if (path.isNullOrBlank()) return
 
         val file = File(path)
         if (!file.isFile) {
             Log.w(TAG, "setSource: not a file — $path")
+            currentSource = null
             return
         }
 
-        // ── GIF: prefer Movie (proven manual animation on all APIs) ──
-        if (isGif(file)) {
-            try {
-                val m = Movie.decodeFile(path)
-                if (m != null && m.width() > 0 && m.height() > 0) {
-                    movie = m
-                    movieStartTime = SystemClock.uptimeMillis()
-                    Log.i(TAG, "Movie: ${m.width()}x${m.height()} $path")
-                    invalidate()
-                    return
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Movie failed, will try ImageDecoder", e)
-            }
-        }
-
-        // ── Static images + animated WebP/APNG (API 28+) ──
+        // ── API 28+: ImageDecoder handles ALL animated formats correctly ──
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
                 val source = ImageDecoder.createSource(file)
@@ -60,22 +59,41 @@ class AnimatedBackgroundView @JvmOverloads constructor(
                     d.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
                 }
                 drawable = d
-                // CRITICAL: AnimatedImageDrawable only advances frames when visible
-                d.setVisible(true, false)
-                if (d is AnimatedImageDrawable) d.start()
+
+                // Only mark visible/start when actually attached & shown —
+                // calling setVisible(true) before attachment makes the
+                // platform discard the animation state.
+                val visible = isAttachedToWindow && isShown
+                d.setVisible(visible, false)
+                if (d is AnimatedImageDrawable && visible) d.start()
+
                 Log.i(TAG, "ImageDecoder: ${d.javaClass.simpleName} $path")
                 invalidate()
                 return
             } catch (e: Exception) {
-                Log.w(TAG, "ImageDecoder failed, falling back", e)
+                Log.w(TAG, "ImageDecoder failed, trying Movie/Bitmap", e)
             }
         }
 
-        // ── Last resort: static bitmap ──
+        // ── Fallback: Movie (API < 28, or when ImageDecoder fails) ──
+        try {
+            val m = Movie.decodeFile(path)
+            if (m != null && m.width() > 0 && m.height() > 0) {
+                movie = m
+                movieStartTime = SystemClock.uptimeMillis()
+                Log.i(TAG, "Movie: ${m.width()}x${m.height()} $path")
+                invalidate()
+                return
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Movie failed", e)
+        }
+
+        // ── Static bitmap fallback ──
         BitmapFactory.decodeFile(path)?.let { bmp ->
             val d = BitmapDrawable(resources, bmp).also {
                 it.callback = this
-                it.setVisible(true, false)
+                it.setVisible(isAttachedToWindow && isShown, false)
             }
             drawable = d
             Log.i(TAG, "Bitmap: ${bmp.width}x${bmp.height} $path")
@@ -88,20 +106,21 @@ class AnimatedBackgroundView @JvmOverloads constructor(
         drawable?.setVisible(false, false)
         drawable = null
         movie = null
+        currentSource = null
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // ── Drawable path ──
+        // ── Drawable path (static + AnimatedImageDrawable) ──
         drawable?.let { d ->
-            d.setBounds(0, 0, width, height)
+            d.setBounds(0, 0, width, height)   // STRETCH
             d.draw(canvas)
 
             if (d is AnimatedImageDrawable) {
-                // Safety net: keep the animation loop driving even if the
-                // internal scheduling hiccups (e.g. on some OEM ROMs).
+                // Safety net: if the internal scheduler hiccups (common on
+                // some OEM ROMs), force the animation back to life.
                 if (!d.isVisible) d.setVisible(true, false)
                 if (!d.isRunning) d.start()
                 postInvalidateOnAnimation()
@@ -109,7 +128,7 @@ class AnimatedBackgroundView @JvmOverloads constructor(
             return
         }
 
-        // ── Movie path — manual animation, works on every API ──
+        // ── Movie path ──
         movie?.let { m ->
             val now = SystemClock.uptimeMillis()
             val duration = if (m.duration() > 0) m.duration() else 1000
@@ -117,7 +136,6 @@ class AnimatedBackgroundView @JvmOverloads constructor(
             m.setTime(relTime)
 
             if (m.width() > 0 && m.height() > 0 && width > 0 && height > 0) {
-                // STRETCH to fill the view exactly
                 val scaleX = width.toFloat() / m.width()
                 val scaleY = height.toFloat() / m.height()
                 canvas.save()
@@ -132,12 +150,11 @@ class AnimatedBackgroundView @JvmOverloads constructor(
 
     override fun onVisibilityChanged(changedView: View, visibility: Int) {
         super.onVisibilityChanged(changedView, visibility)
-        val visible = visibility == View.VISIBLE
+        val visible = visibility == View.VISIBLE && isAttachedToWindow
         drawable?.setVisible(visible, false)
-        if (visible) {
-            (drawable as? AnimatedImageDrawable)?.start()
-        } else {
-            (drawable as? AnimatedImageDrawable)?.stop()
+        if (drawable is AnimatedImageDrawable) {
+            if (visible) (drawable as AnimatedImageDrawable).start()
+            else (drawable as AnimatedImageDrawable).stop()
         }
         if (movie != null && visible) {
             movieStartTime = SystemClock.uptimeMillis()
@@ -160,14 +177,6 @@ class AnimatedBackgroundView @JvmOverloads constructor(
         drawable?.setVisible(false, false)
         (drawable as? AnimatedImageDrawable)?.stop()
     }
-
-    private fun isGif(file: File): Boolean = try {
-        file.inputStream().use { s ->
-            val h = ByteArray(6)
-            val n = s.read(h)
-            n == 6 && h[0].toInt() == 0x47 && h[1].toInt() == 0x49 && h[2].toInt() == 0x46
-        }
-    } catch (_: Exception) { false }
 
     private companion object {
         const val TAG = "AnimatedBg"
