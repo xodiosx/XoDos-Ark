@@ -22,6 +22,8 @@ import java.io.File
  *  • API < 28 → Movie (limited GIF support — only fallback when we can't do better)
  *
  * Scaling: **STRETCH** — image fills the whole view (no crop, no letterbox).
+ * Implementation: canvas.scale() (reliable for all drawable types, including
+ * AnimatedImageDrawable which some devices refuse to stretch via setBounds()).
  */
 class AnimatedBackgroundView @JvmOverloads constructor(
     context: Context,
@@ -31,11 +33,9 @@ class AnimatedBackgroundView @JvmOverloads constructor(
     private var movie: Movie? = null
     private var drawable: Drawable? = null
     private var movieStartTime: Long = 0L
-    private var currentSource: String? = null     // idempotence guard
+    private var currentSource: String? = null   // idempotence guard
 
     fun setSource(path: String?) {
-        // Cheap guard: update() calls us on every recomposition.
-        // Re-decoding the same file resets the GIF frame and looks frozen.
         if (currentSource == path) return
 
         clear()
@@ -60,14 +60,11 @@ class AnimatedBackgroundView @JvmOverloads constructor(
                 }
                 drawable = d
 
-                // Only mark visible/start when actually attached & shown —
-                // calling setVisible(true) before attachment makes the
-                // platform discard the animation state.
                 val visible = isAttachedToWindow && isShown
                 d.setVisible(visible, false)
                 if (d is AnimatedImageDrawable && visible) d.start()
 
-                Log.i(TAG, "ImageDecoder: ${d.javaClass.simpleName} $path")
+                Log.i(TAG, "ImageDecoder: ${d.javaClass.simpleName} ${d.intrinsicWidth}x${d.intrinsicHeight} $path")
                 invalidate()
                 return
             } catch (e: Exception) {
@@ -115,12 +112,23 @@ class AnimatedBackgroundView @JvmOverloads constructor(
 
         // ── Drawable path (static + AnimatedImageDrawable) ──
         drawable?.let { d ->
-            d.setBounds(0, 0, width, height)   // STRETCH
-            d.draw(canvas)
+            val iw = d.intrinsicWidth
+            val ih = d.intrinsicHeight
+            if (iw > 0 && ih > 0 && width > 0 && height > 0) {
+                // Explicit canvas.scale = reliable STRETCH for all drawable types.
+                // AnimatedImageDrawable ignores non-intrinsic setBounds() on some
+                // devices, so we scale the canvas and draw at intrinsic size.
+                canvas.save()
+                canvas.scale(width.toFloat() / iw, height.toFloat() / ih)
+                d.setBounds(0, 0, iw, ih)
+                d.draw(canvas)
+                canvas.restore()
+            } else {
+                d.setBounds(0, 0, width, height)
+                d.draw(canvas)
+            }
 
             if (d is AnimatedImageDrawable) {
-                // Safety net: if the internal scheduler hiccups (common on
-                // some OEM ROMs), force the animation back to life.
                 if (!d.isVisible) d.setVisible(true, false)
                 if (!d.isRunning) d.start()
                 postInvalidateOnAnimation()
@@ -128,7 +136,7 @@ class AnimatedBackgroundView @JvmOverloads constructor(
             return
         }
 
-        // ── Movie path ──
+        // ── Movie path — manual animation + canvas stretch ──
         movie?.let { m ->
             val now = SystemClock.uptimeMillis()
             val duration = if (m.duration() > 0) m.duration() else 1000
