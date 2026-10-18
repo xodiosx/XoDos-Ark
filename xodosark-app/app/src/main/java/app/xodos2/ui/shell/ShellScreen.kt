@@ -319,11 +319,9 @@ fun ShellScreen(
                 setBackgroundColor(Color.BLACK)
             }
 
-            val bgImageView = AnimatedBackgroundView(ctx).apply {
+val bgImageView = AnimatedBackgroundView(ctx).apply {
     visibility = View.GONE
 }
-                visibility = View.GONE
-            }
             terminalFrame.addView(
                 bgImageView,
                 FrameLayout.LayoutParams(
@@ -418,7 +416,7 @@ fun ShellScreen(
 
             val terminalFrame = root.getChildAt(0) as FrameLayout
             // Layer order: 0 = image, 1 = overlay, 2 = terminal
-            val bgImageView = terminalFrame.getChildAt(0) as ImageView
+            val bgImageView = terminalFrame.getChildAt(0) as AnimatedBackgroundView
             val bgOverlay   = terminalFrame.getChildAt(1) as View
             val tv          = terminalFrame.getChildAt(2) as TerminalView
 

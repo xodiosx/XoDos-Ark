@@ -53,7 +53,6 @@ private val EDITOR_DEFAULT_EXTRA_KEYS = """
 ]
 """.trimIndent()
 
-/** Internal descriptor used by the Colors tab. */
 private data class ColorField(
     val label: String,
     val key: String,
@@ -75,7 +74,6 @@ fun TermuxPropertiesEditorDialog(
 
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // Empty = "not set" so untouched values are never written back as defaults
     var bg by remember { mutableStateOf(initial.backgroundColor?.let { intToHex(it) } ?: "") }
     var fg by remember { mutableStateOf(initial.foregroundColor?.let { intToHex(it) } ?: "") }
     var cursor by remember { mutableStateOf(initial.cursorColor?.let { intToHex(it) } ?: "") }
@@ -98,7 +96,7 @@ fun TermuxPropertiesEditorDialog(
     var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    // ── Image picker (keeps extension so GIFs stay .gif) ──
+    // Image picker — keeps extension so GIF stays .gif
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -186,7 +184,7 @@ fun TermuxPropertiesEditorDialog(
                     2 -> ImageTab(
                         imagePath = backgroundImagePath,
                         overlayColor = overlayColor,
-                        // ⬇ Uses the SAME background color from the Colors tab
+                        // Uses SAME bg color from Colors tab as background layer
                         backgroundColorHex = bg,
                         onPickImage = { imagePicker.launch(arrayOf("image/*")) },
                         onRemoveImage = {
@@ -353,7 +351,6 @@ private fun ExtraKeysTab(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // Reset + validation status at TOP — never clipped
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -427,7 +424,7 @@ private fun ImageTab(
 ) {
     val overlayPreview = remember(overlayColor) { parseColor(overlayColor) }
     val bgPreview = remember(backgroundColorHex) {
-        parseColor(backgroundColorHex) ?: 0xFF000000.toInt() // fall back to black if unset
+        parseColor(backgroundColorHex) ?: 0xFF000000.toInt()
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -479,8 +476,7 @@ private fun ImageTab(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Preview swatch = current Background colour ⊕ overlay tint,
-            // exactly what you'll see over the image in the terminal.
+            // Swatch = Background ⊕ Overlay — exactly what's shown over the image
             Box(
                 modifier = Modifier
                     .size(36.dp)
