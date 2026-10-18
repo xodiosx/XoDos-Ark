@@ -2,7 +2,91 @@ package app.xodos2.ui.drawer.pages
 
 object DesktopInstallScripts {
 
-    fun buildDesktopInstallScript(distro: String, envName: String): String {
+    /**
+     * Builds a shell script that installs [envName].
+     *
+     * @param distro   distro id (used only for proot containers).
+     * @param envName  human-readable desktop environment name.
+     * @param isNative when true → generates a Termux-style apt script using
+     *                 wildcards (safe: x11-repo has no -dev packages).
+     *                 When false → original per-distro PRoot script.
+     */
+    fun buildDesktopInstallScript(
+        distro: String,
+        envName: String,
+        isNative: Boolean = false
+    ): String {
+        if (isNative) return buildNativeInstallScript(envName)
+        return buildDistroInstallScript(distro, envName)
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // NATIVE XoDos-Ark (Termux-style) install — wildcard based
+    // ──────────────────────────────────────────────────────────────
+    private fun buildNativeInstallScript(envName: String): String {
+        // Every DE available from Termux's x11-repo is expressible as a
+        // wildcard prefix. Because x11-repo ships no -dev / -debug split
+        // packages, `apt install -y 'prefix*'` is safe and concise.
+        val packagePattern: String = when (envName) {
+            "XFCE Desktop"   -> "xfce4*"
+            "LXQt Desktop"   -> "lxqt*"
+            "MATE"           -> "mate*"
+            "Cinnamon"       -> "cinnamon*"
+            "KDE Plasma"     -> "plasma*"
+            "GNOME"          -> "gnome*"
+            "Budgie"         -> "budgie*"
+            "LXDE"           -> "lxde*"
+            "Enlightenment"  -> "enlightenment*"
+            "Openbox"        -> "openbox*"
+            "i3"             -> "i3*"
+            "Fluxbox"        -> "fluxbox*"
+            "IceWM"          -> "icewm*"
+            else             -> ""
+        }
+
+        if (packagePattern.isEmpty()) {
+            return "echo 'Unknown desktop environment: $envName'; exit 1\n"
+        }
+
+        val body = """
+            #!/data/data/app.xodos2/files/usr/bin/sh
+            set -e
+
+            echo "Installing $envName in native XoDos-Ark (Termux-style) environment..."
+
+            # ── Native (Termux-style) environment ──
+            export PREFIX="/data/data/app.xodos2/files/usr"
+            export HOME="/data/data/app.xodos2/files/home"
+            export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
+            export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
+            export PULSE_SERVER=127.0.0.1
+            export DEBIAN_FRONTEND=noninteractive
+
+            mkdir -p "${'$'}HOME"
+
+            # ── Enable x11-repo (all desktop packages live there) ──
+            # Idempotent: apt install succeeds silently if already present.
+            apt install -y x11-repo || pkg install -y x11-repo
+            apt update -y
+
+            # ── Desktop environment (wildcard) ──
+            # Safe: x11-repo publishes no -dev/-debug variants, so
+            # '$packagePattern' only matches runtime DE components.
+            apt install -y '$packagePattern'
+
+            # ── Audio stack (same for every DE in Termux) ──
+            apt install -y pulseaudio pavucontrol
+
+            echo "Native $envName installation completed successfully."
+        """.trimIndent()
+
+        return "sh <<'EOF'\n$body\nEOF"
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // DISTRO (PRoot) install — original implementation, unchanged
+    // ──────────────────────────────────────────────────────────────
+    private fun buildDistroInstallScript(distro: String, envName: String): String {
         val cleanDistro = distro.lowercase().trim()
 
         // Nix environment
