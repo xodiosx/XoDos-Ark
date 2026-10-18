@@ -365,8 +365,8 @@ xfce4-session
             export PREFIX="$prefix"
             export HOME="$home"
             export PATH="$prefix/bin:/system/bin:/system/xbin"
-            export LD_LIBRARY_PATH="$prefix/lib"
-            export SHELL="$prefix/bin/bash"
+            #export LD_LIBRARY_PATH="$prefix/lib"
+            #export SHELL="$prefix/bin/bash"
             export PULSE_SERVER=127.0.0.1
             export XDG_RUNTIME_DIR="$prefix/tmp"
             export TMPDIR="$prefix/tmp"

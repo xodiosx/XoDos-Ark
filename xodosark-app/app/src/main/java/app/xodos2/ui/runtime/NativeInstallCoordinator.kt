@@ -1062,6 +1062,12 @@ suspend fun initNativeAndSyncAssets(
 
 val pkgFile = File(context.filesDir, "usr/bin/pkg")
 
+//   because nativeLibraryDir changed) or missing.
+if (symlinksNeedRefresh(context)) {
+    Log.i("NativeInstall", "Refreshing helper symlinks → ${context.applicationInfo.nativeLibraryDir}")
+    setupNativeEnvironment(context)
+}
+
 if (!pkgFile.exists()) {
     // 1. Create the helper symlinks needed to unpack bootstrap.tar.xz
     setupNativeEnvironment(context)
@@ -1139,6 +1145,19 @@ private fun refreshNativeBinariesAndAssets(context: Context) {
 
     Log.i("NativeInstall", "Refreshed native wrapper + container assets")
 }
+
+/**
+ * True if any helper symlink is missing or dangling.
+ * File.exists() follows symlinks, so a link pointing at a stale
+ * nativeLibraryDir (old APK hash) returns false → we refresh.
+ */
+private fun symlinksNeedRefresh(context: Context): Boolean {
+    val usrBin = File(context.filesDir, "usr/bin")
+    return listOf("busybox", "tar", "xz", "pv", "proot", "gzip", "xodos-host")
+        .any { !File(usrBin, it).exists() }
+}
+
+
 
     private fun setupNativeEnvironment(context: Context) {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir

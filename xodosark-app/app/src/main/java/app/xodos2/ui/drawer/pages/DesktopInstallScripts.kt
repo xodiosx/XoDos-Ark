@@ -1,31 +1,66 @@
 package app.xodos2.ui.drawer.pages
 
+import android.content.Context
+
 object DesktopInstallScripts {
 
     /**
      * Builds a shell script that installs [envName].
      *
-     * @param distro   distro id (used only for proot containers).
-     * @param envName  human-readable desktop environment name.
-     * @param isNative when true → Termux-style apt script using wildcards.
-     *                 When false → original per-distro PRoot script.
+     * Native detection is *automatic*: if [isNative] is true OR [distro] is
+     * the native marker ("XoDos-Ark", "native", "termux", …), a Termux-style
+     * apt script is generated. Otherwise the original per-distro PRoot script
+     * is returned unchanged.
      */
     fun buildDesktopInstallScript(
         distro: String,
         envName: String,
         isNative: Boolean = false
     ): String {
-        if (isNative) return buildNativeInstallScript(envName)
-        return buildDistroInstallScript(distro, envName)
+        val native = isNative || looksNative(distro)
+        return if (native) buildNativeInstallScript(envName)
+               else        buildDistroInstallScript(distro, envName)
+    }
+
+    /**
+     * Context-aware overload — the safest way to call this. Resolves the
+     * container's real distro id, then delegates. Use this from any UI that
+     * has the container id available.
+     */
+    fun buildDesktopInstallScript(
+        context: Context,
+        containerId: Int,
+        envName: String
+    ): String {
+        val isNative = DesktopDetector.isNativeContainer(context, containerId)
+        val distro   = NativeInstallCoordinatorDistro.resolve(context, containerId)
+        return buildDesktopInstallScript(distro, envName, isNative)
+    }
+
+    // ── helpers ───────────────────────────────────────────────
+    private fun looksNative(distro: String): Boolean {
+        val d = distro.trim()
+        if (d.isEmpty()) return false
+        return d.equals(DesktopDetector.NATIVE_DISTRO_ID, ignoreCase = true) ||
+               d.contains("xodos-ark", ignoreCase = true) ||
+               d.contains("xodos2",    ignoreCase = true) ||
+               d.contains("native",    ignoreCase = true) ||
+               d.contains("termux",    ignoreCase = true)
+    }
+
+    /** Tiny shim so we don't need an import cycle on the long class name. */
+    private object NativeInstallCoordinatorDistro {
+        fun resolve(context: Context, containerId: Int): String =
+            app.xodos2.ui.runtime.NativeInstallCoordinator
+                .getContainerDistro(context, containerId)
+                ?: "linux"
     }
 
     // ──────────────────────────────────────────────────────────────
-    // NATIVE XoDos-Ark (Termux-style) install — wildcard based
+    // NATIVE XoDos-Ark (Termux-style) install — wildcard + GPU stack
     // ──────────────────────────────────────────────────────────────
     private fun buildNativeInstallScript(envName: String): String {
         // Every DE in Termux's x11-repo is expressible as a wildcard prefix.
-        // x11-repo ships no -dev / -debug split packages, so `apt install
-        // 'prefix*'` is safe and concise.
         val packagePattern: String = when (envName) {
             "XFCE Desktop"   -> "xfce4*"
             "LXQt Desktop"   -> "lxqt*"
@@ -47,9 +82,22 @@ object DesktopInstallScripts {
             return "echo 'Unknown desktop environment: $envName'; exit 1\n"
         }
 
-        val prefix = "/data/data/app.xodos2/files/usr"
-        val home   = "/data/data/app.xodos2/files/home"
-        val sd     = "\u0024"   // literal shell dollar sign
+        val sd = "\u0024"   // literal shell dollar sign
+
+        // Hardware acceleration stack — always installed with every native DE.
+        //   mesa                           → userspace Mesa GL/EGL/gbm
+        //   vulkan-loader-generic          → system Vulkan loader
+        //   angle-android                  → ANGLE GLES backend (Adreno/Bifrost)
+        //   mesa-vulkan-icd-freedreno      → Turnip (Adreno Vulkan)
+        //   virglrenderer                  → VirGL renderer (host GPU offload)
+        //   vulkan-wrapper                 → ICD dispatcher / wrapper
+        //   mesa-vulkan-icd-virtio-dri3    → Venus (VirtIO Vulkan)
+        //   pulseaudio                     → audio server
+        val gpuStack =
+            "mesa vulkan-loader-generic angle-android " +
+            "mesa-vulkan-icd-freedreno virglrenderer " +
+            "vulkan-wrapper mesa-vulkan-icd-virtio-dri3 " +
+            "pulseaudio"
 
         val body = """
             #!/data/data/app.xodos2/files/usr/bin/sh
@@ -57,24 +105,29 @@ object DesktopInstallScripts {
 
             echo "Installing $envName in native XoDos-Ark (Termux-style) environment..."
 
-            export PREFIX="$prefix"
-            export HOME="$home"
-            export PATH="$prefix/bin:/system/bin:/system/xbin"
-            export LD_LIBRARY_PATH="$prefix/lib"
+            export PREFIX="/data/data/app.xodos2/files/usr"
+            export HOME="/data/data/app.xodos2/files/home"
+            export PATH="${sd}PREFIX/bin:/system/bin:/system/xbin"
+            export LD_LIBRARY_PATH="${sd}PREFIX/lib"
             export PULSE_SERVER=127.0.0.1
             export DEBIAN_FRONTEND=noninteractive
 
-            mkdir -p "$home"
+            mkdir -p "${sd}HOME"
 
             # Enable x11-repo (all desktop packages live there)
             apt install -y x11-repo || pkg install -y x11-repo
-            apt update -y
+            apt update
 
-            # Desktop environment (wildcard, safe because x11-repo has no -dev)
+            # ── Hardware acceleration stack (always) ──
+            echo "Installing GPU / Vulkan / Mesa stack..."
+            pkg install -y --no-install-recommends $gpuStack || \
+                apt install -y --no-install-recommends $gpuStack || true
+
+            # ── Desktop environment (wildcard; x11-repo has no -dev packages) ──
             apt install -y '$packagePattern'
 
-            # Audio stack (same for every DE in Termux)
-            apt install -y pulseaudio pavucontrol
+            # Audio front-end
+            apt install -y pavucontrol || true
 
             echo "Native $envName installation completed successfully."
         """.trimIndent()
@@ -83,12 +136,11 @@ object DesktopInstallScripts {
     }
 
     // ──────────────────────────────────────────────────────────────
-    // DISTRO (PRoot) install — original implementation, unchanged
+    // DISTRO (PRoot) install — original, unchanged
     // ──────────────────────────────────────────────────────────────
     private fun buildDistroInstallScript(distro: String, envName: String): String {
         val cleanDistro = distro.lowercase().trim()
 
-        // Nix environment
         if (cleanDistro.contains("nix")) {
             return "source /nix/var/nix/profiles/default/etc/profile.d/nix.sh 2>/dev/null || true\n" +
                    "nix-channel --update && nix-env -u\n" +
@@ -96,7 +148,6 @@ object DesktopInstallScripts {
                    "echo 'Nix profile packages updated successfully!'\n"
         }
 
-        // Package manager & base deps – aggressive, force‑overwrite versions
         val (managerCmd, baseDeps) = when {
             cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") ||
             cleanDistro.contains("kali") || cleanDistro.contains("trisquel") ->
@@ -143,7 +194,6 @@ object DesktopInstallScripts {
                 )
         }
 
-        // ─── Kali‑specific setup (improved) ───
         val gpgSetup = if (cleanDistro.contains("kali")) {
             """
 
