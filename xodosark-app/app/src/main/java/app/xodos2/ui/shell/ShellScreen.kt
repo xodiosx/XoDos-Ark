@@ -19,7 +19,7 @@ import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
-import android.widget.ImageView
+//import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
@@ -78,7 +78,8 @@ private val DEFAULT_EXTRA_KEYS_JSON = """
 private data class ExtraKeyItem(
     val key: String = "",
     val macro: String = "",
-    val display: String = ""
+    val display: String = "",
+    val meta: String = ""
 )
 
 private class ViewCache(
@@ -318,8 +319,9 @@ fun ShellScreen(
                 setBackgroundColor(Color.BLACK)
             }
 
-            val bgImageView = ImageView(ctx).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
+            val bgImageView = AnimatedBackgroundView(ctx).apply {
+    visibility = View.GONE
+}
                 visibility = View.GONE
             }
             terminalFrame.addView(
@@ -427,26 +429,19 @@ fun ShellScreen(
 
                 // ── Background image ──
                 val imgPath = props.backgroundImagePath
-                if (!imgPath.isNullOrBlank()) {
-                    val bmp = android.graphics.BitmapFactory.decodeFile(imgPath)
-                    if (bmp != null) {
-                        bgImageView.setImageBitmap(bmp)
-                        bgImageView.visibility = View.VISIBLE
-
-                        val overlay = props.backgroundImageOverlayColor ?: 0x80000000.toInt()
-                        bgOverlay.setBackgroundColor(overlay)
-                        bgOverlay.visibility = View.VISIBLE
-                        terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
-                    } else {
-                        bgImageView.visibility = View.GONE
-                        bgOverlay.visibility = View.GONE
-                    }
-                } else {
-                    bgImageView.visibility = View.GONE
-                    bgOverlay.visibility = View.GONE
-                    // Keep frame black so default background cells have something behind
-                    terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
-                }
+if (!imgPath.isNullOrBlank()) {
+    bgImageView.setSource(imgPath)              // ← handles static + GIF
+    bgImageView.visibility = View.VISIBLE
+    val overlay = props.backgroundImageOverlayColor ?: 0x80000000.toInt()
+    bgOverlay.setBackgroundColor(overlay)
+    bgOverlay.visibility = View.VISIBLE
+    terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
+} else {
+    bgImageView.clear()
+    bgImageView.visibility = View.GONE
+    bgOverlay.visibility = View.GONE
+    terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
+}
 
                 // Extra keys from file override
                 props.extraKeys?.let { fileJson ->
@@ -712,21 +707,31 @@ private fun rebuildExtraKeys(
                         }
                     }
                     else -> {
-                        val fireAction = {
-                            sendModifiedSequence(
-                                terminalView, action, viewClient.ctrlActive, viewClient.altActive
-                            ) {
-                                viewClient.ctrlActive = false
-                                viewClient.altActive = false
-                                updateButtonColors()
-                            }
-                        }
-                        if (item.key.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
-                            setRepeatClickListener(btn, fireAction)
-                        } else {
-                            btn.setOnClickListener { fireAction() }
-                        }
-                    }
+    val metaUpper = item.meta.uppercase()
+    val metaCtrl = "CTRL" in metaUpper || "C-" in metaUpper
+    val metaAlt  = "ALT" in metaUpper  || "M-" in metaUpper
+
+    val fireAction = {
+        sendModifiedSequence(
+            terminalView, action,
+            viewClient.ctrlActive || metaCtrl,
+            viewClient.altActive  || metaAlt,
+            onConsumed = {
+                viewClient.ctrlActive = false
+                viewClient.altActive = false
+                updateButtonColors()
+            }
+        )
+    }
+
+    if (item.key.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
+        setRepeatClickListener(btn, fireAction)
+    } else {
+        btn.setOnClickListener { fireAction() }
+    }
+}
+                    
+                    
                 }
             }
             row.addView(btn)
@@ -743,13 +748,14 @@ private fun rebuildExtraKeys(
             for (j in 0 until rowArray.length()) {
                 when (val item = rowArray.get(j)) {
                     is String -> rowKeys.add(ExtraKeyItem(key = item))
-                    is JSONObject -> rowKeys.add(
-                        ExtraKeyItem(
-                            key = item.optString("key", ""),
-                            macro = item.optString("macro", ""),
-                            display = item.optString("display", "")
-                        )
-                    )
+                   is JSONObject -> rowKeys.add(
+    ExtraKeyItem(
+        key = item.optString("key", ""),
+        macro = item.optString("macro", ""),
+        display = item.optString("display", ""),
+        meta = item.optString("meta", "")
+    )
+)
                 }
             }
 

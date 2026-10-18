@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -74,8 +75,7 @@ fun TermuxPropertiesEditorDialog(
 
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    // ── IMPORTANT: empty string = "not set", so we never overwrite a good value
-    //    with a forced default. Only user-typed values get saved.
+    // Empty = "not set" so untouched values are never written back as defaults
     var bg by remember { mutableStateOf(initial.backgroundColor?.let { intToHex(it) } ?: "") }
     var fg by remember { mutableStateOf(initial.foregroundColor?.let { intToHex(it) } ?: "") }
     var cursor by remember { mutableStateOf(initial.cursorColor?.let { intToHex(it) } ?: "") }
@@ -92,20 +92,32 @@ fun TermuxPropertiesEditorDialog(
     var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
     var overlayColor by remember {
         mutableStateOf(
-            initial.backgroundImageOverlayColor?.let { intToHex(it) }
-                ?: "#80000000"
+            initial.backgroundImageOverlayColor?.let { intToHex(it) } ?: "#80000000"
         )
     }
     var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    // ── Image picker ──
+    // ── Image picker (keeps extension so GIFs stay .gif) ──
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         if (uri != null) {
             try {
-                val dest = File(context.filesDir, "terminal_background.png")
+                val mime = context.contentResolver.getType(uri).orEmpty().lowercase()
+                val ext = when (mime) {
+                    "image/gif"  -> "gif"
+                    "image/webp" -> "webp"
+                    "image/jpeg" -> "jpg"
+                    "image/png"  -> "png"
+                    "image/apng" -> "apng"
+                    else -> uri.lastPathSegment.orEmpty()
+                        .substringAfterLast('.', "img").lowercase()
+                }
+                listOf("png", "gif", "webp", "jpg", "apng", "img").forEach { e ->
+                    File(context.filesDir, "terminal_background.$e").delete()
+                }
+                val dest = File(context.filesDir, "terminal_background.$ext")
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     dest.outputStream().use { output -> input.copyTo(output) }
                 }
@@ -174,6 +186,8 @@ fun TermuxPropertiesEditorDialog(
                     2 -> ImageTab(
                         imagePath = backgroundImagePath,
                         overlayColor = overlayColor,
+                        // ⬇ Uses the SAME background color from the Colors tab
+                        backgroundColorHex = bg,
                         onPickImage = { imagePicker.launch(arrayOf("image/*")) },
                         onRemoveImage = {
                             backgroundImagePath = ""
@@ -206,7 +220,6 @@ fun TermuxPropertiesEditorDialog(
                     JSONArray(extraKeys)
 
                     val values = mutableMapOf<String, String?>()
-                    // Only save what the user actually typed (empty = not set)
                     values["background"] = bg.takeIf { it.isNotBlank() }
                     values["foreground"] = fg.takeIf { it.isNotBlank() }
                     values["cursor"]     = cursor.takeIf { it.isNotBlank() }
@@ -302,11 +315,7 @@ private fun ColorRow(field: ColorField, onClick: () -> Unit) {
                     preview?.let { ComposeColor(it) } ?: ComposeColor.Transparent,
                     RoundedCornerShape(8.dp)
                 )
-                .border(
-                    1.dp,
-                    ComposeColor.White.copy(alpha = 0.3f),
-                    RoundedCornerShape(8.dp)
-                )
+                .border(1.dp, ComposeColor.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
         )
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -344,7 +353,7 @@ private fun ExtraKeysTab(
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // ── Action bar: reset button + validation status at the TOP (never clipped) ──
+        // Reset + validation status at TOP — never clipped
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -367,7 +376,6 @@ private fun ExtraKeysTab(
 
         Spacer(Modifier.height(8.dp))
 
-        // ── Scrollable body ──
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -412,24 +420,31 @@ private fun ExtraKeysTab(
 private fun ImageTab(
     imagePath: String,
     overlayColor: String,
+    backgroundColorHex: String,
     onPickImage: () -> Unit,
     onRemoveImage: () -> Unit,
     onOverlayClick: () -> Unit
 ) {
-    val preview = remember(overlayColor) { parseColor(overlayColor) }
+    val overlayPreview = remember(overlayColor) { parseColor(overlayColor) }
+    val bgPreview = remember(backgroundColorHex) {
+        parseColor(backgroundColorHex) ?: 0xFF000000.toInt() // fall back to black if unset
+    }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Text("Background image", color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
+
         if (imagePath.isNotBlank() && File(imagePath).exists()) {
             Text(imagePath, color = ComposeColor.White.copy(alpha = 0.6f), fontSize = 11.sp)
         } else {
             Text(
-                "No image selected",
+                "No image selected — pick PNG, JPG, WebP or GIF",
                 color = ComposeColor.White.copy(alpha = 0.6f),
                 fontSize = 13.sp
             )
         }
         Spacer(Modifier.height(12.dp))
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassButton(onClick = onPickImage) {
                 Text(
@@ -449,12 +464,13 @@ private fun ImageTab(
         Text("Overlay tint", color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text(
-            "Adds a color on top of the image so text stays readable. " +
-                    "Set alpha to 00 for no tint, 80 for 50% tint.",
+            "Shown stacked on top of your Background color. " +
+                    "Alpha 00 = no tint, 80 = 50%, FF = fully covering.",
             color = ComposeColor.White.copy(alpha = 0.55f),
             fontSize = 11.sp
         )
         Spacer(Modifier.height(8.dp))
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -463,21 +479,31 @@ private fun ImageTab(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Preview swatch = current Background colour ⊕ overlay tint,
+            // exactly what you'll see over the image in the terminal.
             Box(
                 modifier = Modifier
                     .size(36.dp)
-                    .background(
-                        preview?.let { ComposeColor(it) } ?: ComposeColor.Transparent,
-                        RoundedCornerShape(8.dp)
-                    )
+                    .background(ComposeColor(bgPreview), RoundedCornerShape(8.dp))
                     .border(1.dp, ComposeColor.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-            )
+            ) {
+                overlayPreview?.let { ov ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(ComposeColor(ov), RoundedCornerShape(8.dp))
+                    )
+                }
+            }
             Spacer(Modifier.width(12.dp))
-            Text(
-                overlayColor,
-                color = ComposeColor.White,
-                modifier = Modifier.weight(1f)
-            )
+            Column(Modifier.weight(1f)) {
+                Text(overlayColor, color = ComposeColor.White, fontSize = 13.sp)
+                Text(
+                    "over background ${if (backgroundColorHex.isBlank()) "default black" else backgroundColorHex}",
+                    color = ComposeColor.White.copy(alpha = 0.5f),
+                    fontSize = 10.sp
+                )
+            }
             Text(
                 "Edit",
                 color = ComposeColor(0xFFC3B6F9),
@@ -514,10 +540,8 @@ private fun AdvancedTab(blink: String, onBlink: (String) -> Unit, filePath: Stri
         Text(filePath, color = ComposeColor(0xFFC3B6F9), fontSize = 11.sp)
         Spacer(Modifier.height(16.dp))
         Text(
-            "Colors use #AARRGGBB. First two hex digits are alpha " +
-                    "(00 = transparent, FF = opaque).\n" +
-                    "Setting only foreground/cursor will NOT clear the ANSI palette — " +
-                    "bash colors stay intact.",
+            "Colors use #AARRGGBB. First two hex digits are alpha (00 = transparent, FF = opaque).\n" +
+                    "Setting only foreground/cursor will NOT clear the ANSI palette — bash colors stay intact.",
             color = ComposeColor.White.copy(alpha = 0.55f),
             style = MaterialTheme.typography.bodySmall
         )
