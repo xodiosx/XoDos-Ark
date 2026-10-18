@@ -352,34 +352,37 @@ xfce4-session
      * Termux-style native launch script. Runs in the app's own PREFIX.
      * Detects X11 vs Wayland from the app's container markers.
      *
-     * The generic `else` branch handles every DE / WM without a special
-     * case: Openbox, i3, Fluxbox, IceWM, Budgie, LXDE, etc.
+     * Uses a Kotlin `sd` variable for the shell `$` so no fragile
+     * `${'$'}` sequences need to survive copy-paste.
      */
     private fun nativeLaunchScript(binary: String): String {
+        val prefix = "/data/data/app.xodos2/files/usr"
+        val home   = "/data/data/app.xodos2/files/home"
+        val sd     = "\u0024"   // literal shell dollar sign
+
         val common = """
-            # ── Native XoDos-Ark (Termux-style) environment ──
-            export PREFIX="/data/data/app.xodos2/files/usr"
-            export HOME="/data/data/app.xodos2/files/home"
-            export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
-            export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
-            export SHELL="${'$'}PREFIX/bin/bash"
+            # Native XoDos-Ark (Termux-style) environment
+            export PREFIX="$prefix"
+            export HOME="$home"
+            export PATH="$prefix/bin:/system/bin:/system/xbin"
+            export LD_LIBRARY_PATH="$prefix/lib"
+            export SHELL="$prefix/bin/bash"
             export PULSE_SERVER=127.0.0.1
-            export XDG_RUNTIME_DIR="${'$'}PREFIX/tmp"
-            export TMPDIR="${'$'}PREFIX/tmp"
+            export XDG_RUNTIME_DIR="$prefix/tmp"
+            export TMPDIR="$prefix/tmp"
             export MOZ_FAKE_NO_SANDBOX=1
 
-            mkdir -p "${'$'}HOME" "${'$'}XDG_RUNTIME_DIR"
+            mkdir -p "$home" "$prefix/tmp"
 
-            # Session type detection from the app's container markers
             _XODOS_SESSION="x11"
             for _cid in 1 2 3; do
-                if [ -f "/data/data/app.xodos2/files/containers/${'$'}_cid/.wayland" ]; then
+                if [ -f "/data/data/app.xodos2/files/containers/${sd}_cid/.wayland" ]; then
                     _XODOS_SESSION="wayland"
                     break
                 fi
             done
 
-            if [ "${'$'}_XODOS_SESSION" = "x11" ]; then
+            if [ "${sd}_XODOS_SESSION" = "x11" ]; then
                 export DISPLAY=:0
                 export GDK_BACKEND='x11'
                 export QT_QPA_PLATFORM='xcb'
@@ -392,9 +395,8 @@ xfce4-session
                 export XDG_SESSION_TYPE='wayland'
                 unset DISPLAY
             fi
-
-            # Cleanup stale dbus
             source $PREFIX/opt/drv
+
             killall -9 dbus-daemon dbus-launch 2>/dev/null || true
         """.trimIndent()
 
@@ -405,7 +407,7 @@ xfce4-session
                 export DESKTOP_SESSION=gnome
                 export XDG_SESSION_DESKTOP=gnome
 
-                if [ "${'$'}XDG_SESSION_TYPE" = "wayland" ]; then
+                if [ "${sd}XDG_SESSION_TYPE" = "wayland" ]; then
                     dbus-run-session gnome-shell --wayland &
                 else
                     dbus-run-session gnome-shell --x11 &

@@ -3,7 +3,6 @@ package app.xodos2.ui.shell
 import android.app.Activity
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
@@ -19,7 +18,6 @@ import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
-//import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.compose.foundation.layout.Arrangement
@@ -112,11 +110,9 @@ fun ShellScreen(
     val imm = remember(context) {
         context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     }
-
     val sharedPrefs = remember {
         context.getSharedPreferences("xodos2_terminal_prefs", Context.MODE_PRIVATE)
     }
-
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val activeContainerId = remember(activeSessionId) {
@@ -128,7 +124,6 @@ fun ShellScreen(
         }
     }
 
-    // Extra keys: prefer file, fall back to prefs, then default
     var extraKeysJson by remember(activeContainerId) {
         val fromFile = TermuxPropertiesLoader.load(context, activeContainerId).extraKeys
         mutableStateOf(
@@ -138,9 +133,7 @@ fun ShellScreen(
         )
     }
 
-    // Bumped after every properties save to force update() to re-apply
     var propertiesEpoch by remember { mutableIntStateOf(0) }
-
     var showCloseSessionDialog by remember { mutableStateOf(false) }
     var showPropertiesEditor by remember { mutableStateOf(false) }
 
@@ -149,9 +142,7 @@ fun ShellScreen(
             onDismissRequest = { showCloseSessionDialog = false },
             containerColor = ComposeColor.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = {
-                Text("Close terminal", fontWeight = FontWeight.Bold, color = ComposeColor.White)
-            },
+            title = { Text("Close terminal", fontWeight = FontWeight.Bold, color = ComposeColor.White) },
             text = {
                 Text(
                     if (terminalSessionIds.size <= 1) "Are you sure you want to exit?"
@@ -166,8 +157,7 @@ fun ShellScreen(
                 }) {
                     Text(
                         if (terminalSessionIds.size <= 1) "Exit" else "Close",
-                        color = ComposeColor(0xFFC3B6F9),
-                        fontWeight = FontWeight.Bold
+                        color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold
                     )
                 }
             },
@@ -201,16 +191,13 @@ fun ShellScreen(
 
     var currentTextSize by remember { mutableIntStateOf(defaultTextSizePx) }
     val saveHandler = remember { Handler(Looper.getMainLooper()) }
-
     val saveRunnable = remember {
         Runnable { sharedPrefs.edit().putInt("terminal_zoom_size", currentTextSize).apply() }
     }
-
     fun scheduleZoomSave() {
         saveHandler.removeCallbacks(saveRunnable)
         saveHandler.postDelayed(saveRunnable, 500L)
     }
-
     fun saveZoomImmediately() {
         saveHandler.removeCallbacks(saveRunnable)
         sharedPrefs.edit().putInt("terminal_zoom_size", currentTextSize).apply()
@@ -231,7 +218,6 @@ fun ShellScreen(
         }
     }
 
-    // Seed the native template on first run so the user has a file to edit
     remember(activeContainerId) {
         TermuxPropertiesLoader.seedNativeDefault(context)
     }
@@ -239,14 +225,41 @@ fun ShellScreen(
     AndroidView(
         modifier = modifier.fillMaxSize().statusBarsPadding().imePadding(),
         factory = { ctx ->
-            val root = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                isClickable = false
-                isFocusable = false
-                descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            // ── Root is a FrameLayout so image covers the whole screen ──
+            val root = FrameLayout(ctx).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
+                )
+                descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
+            }
+
+            // LAYER 0 — background image, full screen (incl. behind bar)
+            val bgImageView = AnimatedBackgroundView(ctx).apply { visibility = View.GONE }
+            root.addView(
+                bgImageView,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+
+            // LAYER 1 — tint overlay, full screen
+            val bgOverlay = View(ctx).apply { visibility = View.GONE }
+            root.addView(
+                bgOverlay,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
+
+            // LAYER 2 — foreground content (terminal + extra keys bar)
+            val contentColumn = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
                 )
             }
 
@@ -261,11 +274,9 @@ fun ShellScreen(
                     scheduleZoomSave()
                     return newScale
                 }
-                // Enable IME suggestions
                 override fun shouldEnforceCharBasedInput(): Boolean = false
                 override fun isTerminalViewSelected(): Boolean = true
 
-                // Re-apply termux.properties whenever the emulator is created
                 override fun onEmulatorSet() {
                     val session = tv.currentSession
                     if (session is RustPtySession) {
@@ -293,9 +304,8 @@ fun ShellScreen(
             tv.isFocusable = true
             tv.isFocusableInTouchMode = true
             tv.keepScreenOn = true
-            tv.setBackgroundColor(Color.TRANSPARENT)   // image layer shows through
+            tv.setBackgroundColor(Color.TRANSPARENT)
 
-            // Context menu
             tv.setOnCreateContextMenuListener { menu, _, _ ->
                 menu.setHeaderTitle("Terminal Options")
                 menu.add(0, 1, 0, "Copy Transcript").setOnMenuItemClickListener {
@@ -312,33 +322,13 @@ fun ShellScreen(
                 }
             }
 
-            // ── Terminal container with layered background ──
-            // Layer 0: image, Layer 1: tint overlay, Layer 2: terminal
+            // Terminal area — transparent so full-screen image shows through
             val terminalFrame = FrameLayout(ctx).apply {
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
-                setBackgroundColor(Color.BLACK)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+                )
+                setBackgroundColor(Color.TRANSPARENT)
             }
-
-val bgImageView = AnimatedBackgroundView(ctx).apply {
-    visibility = View.GONE
-}
-            terminalFrame.addView(
-                bgImageView,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            )
-
-            val bgOverlay = View(ctx).apply { visibility = View.GONE }
-            terminalFrame.addView(
-                bgOverlay,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            )
-
             terminalFrame.addView(
                 tv,
                 FrameLayout.LayoutParams(
@@ -346,10 +336,9 @@ val bgImageView = AnimatedBackgroundView(ctx).apply {
                     FrameLayout.LayoutParams.MATCH_PARENT
                 )
             )
+            contentColumn.addView(terminalFrame)
 
-            root.addView(terminalFrame)
-
-            // Extra keys bar
+            // ── Extra keys bar — semi-transparent so image shows through ──
             val bottomBarLayout = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
@@ -358,7 +347,10 @@ val bgImageView = AnimatedBackgroundView(ctx).apply {
                 )
                 val barDrawable = GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(Color.parseColor("#E6080512"), Color.parseColor("#FA030207"))
+                    intArrayOf(
+                        Color.parseColor("#99080512"),   // ~60% opacity
+                        Color.parseColor("#CC030207")    // ~80% opacity
+                    )
                 ).apply { setStroke(1.dpToPx(ctx), Color.parseColor("#22FFFFFF")) }
                 background = barDrawable
                 setPadding(0, 4.dpToPx(ctx), 0, 4.dpToPx(ctx))
@@ -370,7 +362,6 @@ val bgImageView = AnimatedBackgroundView(ctx).apply {
                 isFillViewport = true
                 layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             }
-
             val keysContainer = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = FrameLayout.LayoutParams(
@@ -390,7 +381,16 @@ val bgImageView = AnimatedBackgroundView(ctx).apply {
             }
             bottomBarLayout.addView(fixedContainer)
 
-            root.addView(bottomBarLayout)
+            contentColumn.addView(bottomBarLayout)
+
+            // Foreground content on top of image + overlay
+            root.addView(
+                contentColumn,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            )
 
             val cache = ViewCache(controller, keysContainer, fixedContainer, viewClient)
             root.tag = cache
@@ -399,7 +399,6 @@ val bgImageView = AnimatedBackgroundView(ctx).apply {
             root
         },
         update = { root ->
-            // Subscribe to propertiesEpoch so save() triggers re-apply
             @Suppress("UNUSED_VARIABLE")
             val epoch = propertiesEpoch
 
@@ -414,34 +413,43 @@ val bgImageView = AnimatedBackgroundView(ctx).apply {
             controller.pruneSessionsExcept(terminalSessionIds.toSet())
             controller.attachSessionIfNeeded(activeSessionId)
 
-            val terminalFrame = root.getChildAt(0) as FrameLayout
-            // Layer order: 0 = image, 1 = overlay, 2 = terminal
-            val bgImageView = terminalFrame.getChildAt(0) as AnimatedBackgroundView
-            val bgOverlay   = terminalFrame.getChildAt(1) as View
-            val tv          = terminalFrame.getChildAt(2) as TerminalView
+            // New layer layout:
+            //   0 = bg image (AnimatedBackgroundView)
+            //   1 = overlay (View)
+            //   2 = contentColumn (LinearLayout)
+            //       0 = terminalFrame (FrameLayout) → 0 = tv
+            //       1 = bottomBarLayout
+            val bgImageView   = root.getChildAt(0) as AnimatedBackgroundView
+            val bgOverlay     = root.getChildAt(1) as View
+            val contentColumn = root.getChildAt(2) as LinearLayout
+            val terminalFrame = contentColumn.getChildAt(0) as FrameLayout
+            val tv            = terminalFrame.getChildAt(0) as TerminalView
 
-            // Apply termux.properties + background image on every update
             tv.post {
                 val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
                 TermuxPropertiesLoader.apply(tv, props)
 
-                // ── Background image ──
+                // ── Full-screen background image ──
                 val imgPath = props.backgroundImagePath
-if (!imgPath.isNullOrBlank()) {
-    bgImageView.setSource(imgPath)              // ← handles static + GIF
-    bgImageView.visibility = View.VISIBLE
-    val overlay = props.backgroundImageOverlayColor ?: 0x80000000.toInt()
-    bgOverlay.setBackgroundColor(overlay)
-    bgOverlay.visibility = View.VISIBLE
-    terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
-} else {
-    bgImageView.clear()
-    bgImageView.visibility = View.GONE
-    bgOverlay.visibility = View.GONE
-    terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
-}
+                if (!imgPath.isNullOrBlank()) {
+                    bgImageView.setSource(imgPath)
+                    bgImageView.visibility = View.VISIBLE
+                    bgOverlay.setBackgroundColor(
+                        props.backgroundImageOverlayColor ?: 0x80000000.toInt()
+                    )
+                    bgOverlay.visibility = View.VISIBLE
+                } else {
+                    bgImageView.clear()
+                    bgImageView.visibility = View.GONE
+                    bgOverlay.visibility = View.GONE
+                }
 
-                // Extra keys from file override
+                // Background colour goes on the terminal frame only
+                // (bar keeps its own semi-transparent gradient so the image
+                //  shows through the whole screen).
+                terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
+
+                // Extra keys from file
                 props.extraKeys?.let { fileJson ->
                     if (cache.appliedExtraKeysJson != fileJson) {
                         cache.appliedExtraKeysJson = fileJson
@@ -488,7 +496,7 @@ if (!imgPath.isNullOrBlank()) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Keyboard visibility — window-visible-frame based, not IMM-based
+// Keyboard visibility — window-visible-frame based
 // ─────────────────────────────────────────────────────────────
 private fun isKeyboardVisible(view: View): Boolean {
     if (view.rootView == null) return false
@@ -545,7 +553,11 @@ private fun rebuildExtraKeys(
 
     fun createNormalDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(Color.parseColor("#22FFFFFF"), Color.parseColor("#08FFFFFF"), Color.parseColor("#15000000"))
+        intArrayOf(
+            Color.parseColor("#22FFFFFF"),
+            Color.parseColor("#08FFFFFF"),
+            Color.parseColor("#15000000")
+        )
     ).apply {
         shape = GradientDrawable.RECTANGLE
         setStroke(1.dpToPx(context), Color.parseColor("#3BFFFFFF"))
@@ -554,7 +566,11 @@ private fun rebuildExtraKeys(
 
     fun createPressedDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(Color.parseColor("#5AFFFFFF"), Color.parseColor("#1EFFFFFF"), Color.parseColor("#00000000"))
+        intArrayOf(
+            Color.parseColor("#5AFFFFFF"),
+            Color.parseColor("#1EFFFFFF"),
+            Color.parseColor("#00000000")
+        )
     ).apply {
         shape = GradientDrawable.RECTANGLE
         setStroke(1.dpToPx(context), Color.parseColor("#80FFFFFF"))
@@ -620,14 +636,19 @@ private fun rebuildExtraKeys(
                 if (isFixed) 0f else 1f
             ).apply { setMargins(2.dpToPx(context), 0, 2.dpToPx(context), 0) }
 
-            if (isFixed) setPadding(8.dpToPx(context), 4.dpToPx(context), 8.dpToPx(context), 4.dpToPx(context))
-            else setPadding(0, 4.dpToPx(context), 0, 4.dpToPx(context))
+            if (isFixed) {
+                setPadding(
+                    8.dpToPx(context), 4.dpToPx(context),
+                    8.dpToPx(context), 4.dpToPx(context)
+                )
+            } else {
+                setPadding(0, 4.dpToPx(context), 0, 4.dpToPx(context))
+            }
 
             gravity = Gravity.CENTER
         }
     }
 
-    // Reliable keyboard toggle (frame-based detection)
     fun toggleKeyboard() {
         val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         if (isKeyboardVisible(terminalView)) {
@@ -668,10 +689,13 @@ private fun rebuildExtraKeys(
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_HORIZONTAL
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, rowHeight)
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, rowHeight
+            )
         }
         for (item in keys) {
-            val displayLabel = if (item.display.isNotEmpty()) item.display else getDisplayLabel(item.key)
+            val displayLabel =
+                if (item.display.isNotEmpty()) item.display else getDisplayLabel(item.key)
             val btn = makeButton(displayLabel)
 
             if (item.macro.isNotEmpty()) {
@@ -700,36 +724,36 @@ private fun rebuildExtraKeys(
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cm.primaryClip?.let { clip ->
                             if (clip.itemCount > 0) {
-                                terminalView.currentSession?.write(clip.getItemAt(0).text?.toString() ?: "")
+                                terminalView.currentSession?.write(
+                                    clip.getItemAt(0).text?.toString() ?: ""
+                                )
                             }
                         }
                     }
                     else -> {
-    val metaUpper = item.meta.uppercase()
-    val metaCtrl = "CTRL" in metaUpper || "C-" in metaUpper
-    val metaAlt  = "ALT" in metaUpper  || "M-" in metaUpper
+                        val metaUpper = item.meta.uppercase()
+                        val metaCtrl = "CTRL" in metaUpper || "C-" in metaUpper
+                        val metaAlt  = "ALT" in metaUpper  || "M-" in metaUpper
 
-    val fireAction = {
-        sendModifiedSequence(
-            terminalView, action,
-            viewClient.ctrlActive || metaCtrl,
-            viewClient.altActive  || metaAlt,
-            onConsumed = {
-                viewClient.ctrlActive = false
-                viewClient.altActive = false
-                updateButtonColors()
-            }
-        )
-    }
+                        val fireAction = {
+                            sendModifiedSequence(
+                                terminalView, action,
+                                viewClient.ctrlActive || metaCtrl,
+                                viewClient.altActive  || metaAlt,
+                                onConsumed = {
+                                    viewClient.ctrlActive = false
+                                    viewClient.altActive = false
+                                    updateButtonColors()
+                                }
+                            )
+                        }
 
-    if (item.key.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
-        setRepeatClickListener(btn, fireAction)
-    } else {
-        btn.setOnClickListener { fireAction() }
-    }
-}
-                    
-                    
+                        if (item.key.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
+                            setRepeatClickListener(btn, fireAction)
+                        } else {
+                            btn.setOnClickListener { fireAction() }
+                        }
+                    }
                 }
             }
             row.addView(btn)
@@ -746,14 +770,14 @@ private fun rebuildExtraKeys(
             for (j in 0 until rowArray.length()) {
                 when (val item = rowArray.get(j)) {
                     is String -> rowKeys.add(ExtraKeyItem(key = item))
-                   is JSONObject -> rowKeys.add(
-    ExtraKeyItem(
-        key = item.optString("key", ""),
-        macro = item.optString("macro", ""),
-        display = item.optString("display", ""),
-        meta = item.optString("meta", "")
-    )
-)
+                    is JSONObject -> rowKeys.add(
+                        ExtraKeyItem(
+                            key = item.optString("key", ""),
+                            macro = item.optString("macro", ""),
+                            display = item.optString("display", ""),
+                            meta = item.optString("meta", "")
+                        )
+                    )
                 }
             }
 
@@ -762,41 +786,43 @@ private fun rebuildExtraKeys(
             val fixedRow = LinearLayout(context).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_HORIZONTAL
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
+                )
             }
 
             when {
-                // Second-to-last row: keyboard toggle
                 i == jsonArray.length() - 2 -> {
                     val kbBtn = makeButton("⌨️", isFixed = true)
                     kbBtn.setOnClickListener { toggleKeyboard() }
                     fixedRow.addView(kbBtn)
                 }
-                // Last row: properties editor gear
                 i == jsonArray.length() - 1 -> {
                     val editBtn = makeButton("⚙️", isFixed = true)
                     editBtn.setOnClickListener { onEditClicked() }
                     fixedRow.addView(editBtn)
                 }
-                // All others: transparent placeholder for alignment
                 else -> {
                     val placeholderText = if (rowKeys.isNotEmpty()) {
                         if (rowKeys.first().display.isNotEmpty()) rowKeys.first().display
                         else getDisplayLabel(rowKeys.first().key)
                     } else "ESC"
-                    fixedRow.addView(makeButton(placeholderText, isTransparent = true, isFixed = true))
+                    fixedRow.addView(
+                        makeButton(placeholderText, isTransparent = true, isFixed = true)
+                    )
                 }
             }
             fixedParent.addView(fixedRow)
         }
 
-        // Edge cases: ensure keyboard + gear are always reachable
         when (jsonArray.length()) {
             0 -> {
                 val kbRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_HORIZONTAL
-                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
+                    )
                 }
                 val kbBtn = makeButton("⌨️", isFixed = true)
                 kbBtn.setOnClickListener { toggleKeyboard() }
@@ -806,7 +832,9 @@ private fun rebuildExtraKeys(
                 val gearRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_HORIZONTAL
-                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
+                    )
                 }
                 val editBtn = makeButton("⚙️", isFixed = true)
                 editBtn.setOnClickListener { onEditClicked() }
@@ -814,11 +842,12 @@ private fun rebuildExtraKeys(
                 fixedParent.addView(gearRow)
             }
             1 -> {
-                // Insert keyboard row above gear
                 val kbRow = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_HORIZONTAL
-                    layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight)
+                    layoutParams = LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
+                    )
                 }
                 val kbBtn = makeButton("⌨️", isFixed = true)
                 kbBtn.setOnClickListener { toggleKeyboard() }

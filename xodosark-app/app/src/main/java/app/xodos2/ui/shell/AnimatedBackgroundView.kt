@@ -18,10 +18,12 @@ import java.io.File
 /**
  * Background view that renders static images AND animated GIF / WebP / APNG.
  *
+ * Scaling behaviour: **STRETCH** — the image is scaled to fill the entire view
+ * exactly (aspect ratio is NOT preserved, no cropping, no letterboxing).
+ * This matches the "force stretch full screen" requirement.
+ *
  *  • API 28+  → ImageDecoder → AnimatedImageDrawable (GIF, animated WebP, APNG)
  *  • API < 28 → Movie (GIF only; static formats still work via BitmapDrawable)
- *
- * CENTER_CROP scaling is applied so the image fills the terminal area.
  */
 class AnimatedBackgroundView @JvmOverloads constructor(
     context: Context,
@@ -37,9 +39,12 @@ class AnimatedBackgroundView @JvmOverloads constructor(
         if (path.isNullOrBlank()) return
 
         val file = File(path)
-        if (!file.isFile) return
+        if (!file.isFile) {
+            Log.w(TAG, "setSource: not a file — $path")
+            return
+        }
 
-        // ── 1) ImageDecoder → animated (API 28+) ──
+        // ── 1) ImageDecoder → supports animated GIF/WebP/APNG on API 28+ ──
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             try {
                 val source = ImageDecoder.createSource(file)
@@ -51,6 +56,7 @@ class AnimatedBackgroundView @JvmOverloads constructor(
                 }
                 drawable = d
                 invalidate()
+                Log.i(TAG, "ImageDecoder: ${d.javaClass.simpleName} for $path")
                 return
             } catch (e: Exception) {
                 Log.w(TAG, "ImageDecoder failed, falling back to Movie/Bitmap", e)
@@ -64,6 +70,7 @@ class AnimatedBackgroundView @JvmOverloads constructor(
                 movie = m
                 movieStartTime = SystemClock.uptimeMillis()
                 invalidate()
+                Log.i(TAG, "Movie: ${m.width()}x${m.height()} for $path")
                 return
             }
         } catch (e: Exception) {
@@ -74,7 +81,8 @@ class AnimatedBackgroundView @JvmOverloads constructor(
         BitmapFactory.decodeFile(path)?.let { bmp ->
             drawable = BitmapDrawable(resources, bmp).also { it.callback = this }
             invalidate()
-        }
+            Log.i(TAG, "Bitmap fallback: ${bmp.width}x${bmp.height} for $path")
+        } ?: Log.e(TAG, "Could not decode $path with any method")
     }
 
     fun clear() {
@@ -87,60 +95,48 @@ class AnimatedBackgroundView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
+        // ── Drawable path (static + AnimatedImageDrawable) ──
         drawable?.let { d ->
-            drawCenterCrop(canvas, d)
-            // AnimatedImageDrawable: keep redrawing next frame
+            // STRETCH to fill the whole view — no cropping, no aspect preservation
+            d.setBounds(0, 0, width, height)
+            d.draw(canvas)
+
+            // If it's animated, keep redrawing for the next frame
             if (d is AnimatedImageDrawable && d.isRunning) {
                 postInvalidateOnAnimation()
             }
             return
         }
 
+        // ── Movie path (animated GIF on pre-API-28) ──
         movie?.let { m ->
             val now = SystemClock.uptimeMillis()
             val duration = if (m.duration() > 0) m.duration() else 1000
             val relTime = ((now - movieStartTime) % duration).toInt()
             m.setTime(relTime)
 
-            val scale = maxOf(
-                width.toFloat() / m.width(),
-                height.toFloat() / m.height()
-            )
-            val dx = (width - m.width() * scale) / 2f
-            val dy = (height - m.height() * scale) / 2f
+            if (m.width() > 0 && m.height() > 0 && width > 0 && height > 0) {
+                // STRETCH: independent X/Y scales so the image fills the view exactly
+                val scaleX = width.toFloat() / m.width()
+                val scaleY = height.toFloat() / m.height()
 
-            canvas.save()
-            canvas.translate(dx, dy)
-            canvas.scale(scale, scale)
-            m.draw(canvas, 0f, 0f)
-            canvas.restore()
+                canvas.save()
+                canvas.scale(scaleX, scaleY)
+                m.draw(canvas, 0f, 0f)
+                canvas.restore()
+            }
 
             postInvalidateOnAnimation()
         }
     }
 
-    private fun drawCenterCrop(canvas: Canvas, d: Drawable) {
-        val iw = d.intrinsicWidth
-        val ih = d.intrinsicHeight
-
-        if (iw <= 0 || ih <= 0) {
-            d.setBounds(0, 0, width, height)
-            d.draw(canvas)
-            return
-        }
-
-        val scale = maxOf(width.toFloat() / iw, height.toFloat() / ih)
-        val dw = (iw * scale).toInt()
-        val dh = (ih * scale).toInt()
-        val dx = (width - dw) / 2
-        val dy = (height - dh) / 2
-        d.setBounds(dx, dy, dx + dw, dy + dh)
-        d.draw(canvas)
-    }
-
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         (drawable as? AnimatedImageDrawable)?.start()
+        if (movie != null) {
+            movieStartTime = SystemClock.uptimeMillis()
+            invalidate()
+        }
     }
 
     override fun onDetachedFromWindow() {
@@ -149,6 +145,6 @@ class AnimatedBackgroundView @JvmOverloads constructor(
     }
 
     private companion object {
-        const val TAG = "BgView"
+        const val TAG = "AnimatedBg"
     }
 }

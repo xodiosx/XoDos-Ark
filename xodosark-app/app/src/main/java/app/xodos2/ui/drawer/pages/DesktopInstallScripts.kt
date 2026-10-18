@@ -7,8 +7,7 @@ object DesktopInstallScripts {
      *
      * @param distro   distro id (used only for proot containers).
      * @param envName  human-readable desktop environment name.
-     * @param isNative when true → generates a Termux-style apt script using
-     *                 wildcards (safe: x11-repo has no -dev packages).
+     * @param isNative when true → Termux-style apt script using wildcards.
      *                 When false → original per-distro PRoot script.
      */
     fun buildDesktopInstallScript(
@@ -24,9 +23,9 @@ object DesktopInstallScripts {
     // NATIVE XoDos-Ark (Termux-style) install — wildcard based
     // ──────────────────────────────────────────────────────────────
     private fun buildNativeInstallScript(envName: String): String {
-        // Every DE available from Termux's x11-repo is expressible as a
-        // wildcard prefix. Because x11-repo ships no -dev / -debug split
-        // packages, `apt install -y 'prefix*'` is safe and concise.
+        // Every DE in Termux's x11-repo is expressible as a wildcard prefix.
+        // x11-repo ships no -dev / -debug split packages, so `apt install
+        // 'prefix*'` is safe and concise.
         val packagePattern: String = when (envName) {
             "XFCE Desktop"   -> "xfce4*"
             "LXQt Desktop"   -> "lxqt*"
@@ -48,33 +47,33 @@ object DesktopInstallScripts {
             return "echo 'Unknown desktop environment: $envName'; exit 1\n"
         }
 
+        val prefix = "/data/data/app.xodos2/files/usr"
+        val home   = "/data/data/app.xodos2/files/home"
+        val sd     = "\u0024"   // literal shell dollar sign
+
         val body = """
             #!/data/data/app.xodos2/files/usr/bin/sh
             set -e
 
             echo "Installing $envName in native XoDos-Ark (Termux-style) environment..."
 
-            # ── Native (Termux-style) environment ──
-            export PREFIX="/data/data/app.xodos2/files/usr"
-            export HOME="/data/data/app.xodos2/files/home"
-            export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
-            export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
+            export PREFIX="$prefix"
+            export HOME="$home"
+            export PATH="$prefix/bin:/system/bin:/system/xbin"
+            export LD_LIBRARY_PATH="$prefix/lib"
             export PULSE_SERVER=127.0.0.1
             export DEBIAN_FRONTEND=noninteractive
 
-            mkdir -p "${'$'}HOME"
+            mkdir -p "$home"
 
-            # ── Enable x11-repo (all desktop packages live there) ──
-            # Idempotent: apt install succeeds silently if already present.
+            # Enable x11-repo (all desktop packages live there)
             apt install -y x11-repo || pkg install -y x11-repo
             apt update -y
 
-            # ── Desktop environment (wildcard) ──
-            # Safe: x11-repo publishes no -dev/-debug variants, so
-            # '$packagePattern' only matches runtime DE components.
+            # Desktop environment (wildcard, safe because x11-repo has no -dev)
             apt install -y '$packagePattern'
 
-            # ── Audio stack (same for every DE in Termux) ──
+            # Audio stack (same for every DE in Termux)
             apt install -y pulseaudio pavucontrol
 
             echo "Native $envName installation completed successfully."
@@ -154,12 +153,9 @@ object DesktopInstallScripts {
 
 echo "Creating container compatibility stubs..."
 
-# 1. Provide an empty machine-id file if missing
 mkdir -p /etc
 touch /etc/machine-id
 
-# 2. HARD-STUB the failing configuration engines 
-# This handles systemd 260+ sysusers and tmpfiles verification errors
 for engine in /usr/bin/systemd-sysusers /usr/bin/systemd-tmpfiles /usr/sbin/dpkg-preconfigure /usr/sbin/pam-auth-update /usr/bin/linux-version /usr/sbin/update-initramfs /usr/share/debconf/frontend; do
     rm -f "${'$'}engine"
     echo '#!/bin/sh' > "${'$'}engine"
@@ -167,7 +163,6 @@ for engine in /usr/bin/systemd-sysusers /usr/bin/systemd-tmpfiles /usr/sbin/dpkg
     chmod 777 "${'$'}engine"
 done
 
-# 3. Purge existing post-install files causing dependency log jams
 echo "Neutralizing hardware package maintainer scripts..."
 rm -f /var/lib/dpkg/info/systemd*.postinst
 rm -f /var/lib/dpkg/info/udev*.postinst
@@ -179,12 +174,10 @@ rm -f /var/lib/dpkg/info/cron*.postinst
 rm -f /var/lib/dpkg/info/dhcpcd*.postinst
 rm -f /var/lib/dpkg/info/openssh*.postinst
 
-# Force dpkg to mark the previously failing packages as configured
 export DEBIAN_FRONTEND=noninteractive
 export DEBCONF_NONINTERACTIVE_SEEN=true
 dpkg --configure -a --force-all
 
-# 4. Set clean software repository targets
 echo "deb http://kali.download/kali kali-rolling main non-free contrib non-free-firmware" > /etc/apt/sources.list
 rm -rf /etc/apt/sources.list.d/
 mkdir -p /etc/apt/sources.list.d/
@@ -193,7 +186,6 @@ apt-get update -y
 apt-get install -y --no-install-recommends gnupg curl || true
 curl -fsSL --connect-timeout 30 https://archive.kali.org/archive-key.asc | gpg --yes --dearmor -o /etc/apt/trusted.gpg.d/kali-archive-keyring.gpg || true
 
-# Force dependency fixes clear before pulling down target desktop environments
 apt-get install -f -y --allow-downgrades
 echo "Kali base environment aligned."
             """.trimIndent() + "\n"
@@ -201,15 +193,12 @@ echo "Kali base environment aligned."
 
         val libc6Setup = if (cleanDistro.contains("kali")) {
             """
-                
-                
                 dpkg --configure -a --force-all
                 apt-get install -f -y --allow-downgrades
                 echo "Kali libc6 fixed."
             """.trimIndent() + "\n"
         } else ""
 
-        // Audio dependencies
         val isModernDE = envName == "GNOME" || envName == "KDE Plasma"
         val audioDeps = if (isModernDE) {
             when {
@@ -231,7 +220,6 @@ echo "Kali base environment aligned."
             "pulseaudio pavucontrol"
         }
 
-        // Desktop environment packages
         val desktopPackages = when (envName) {
             "XFCE Desktop" -> when {
                 cleanDistro.contains("arch") || cleanDistro.contains("manjaro") -> "xfce4 xfce4-goodies"
@@ -274,13 +262,11 @@ echo "Kali base environment aligned."
             else -> ""
         }
 
-        // KDE kwin PRoot downgrade fix for Arch
         val kdeArchProotFix = if (envName == "KDE Plasma" && (cleanDistro.contains("arch") || cleanDistro.contains("manjaro"))) {
             """
                 echo "Downgrading kwin to fix PRoot Wayland crashing bug..."
                 curl -L -o ~/kwin-6.6.5-4-aarch64.pkg.tar.xz https://github.com/xodiosx/XoDos-Ark/releases/download/4.18.1-1fix/kwin-6.6.5-4-aarch64.pkg.tar.xz
                 pacman -U --noconfirm ~/kwin-6.6.5-4-aarch64.pkg.tar.xz
-                # tags:/ path fix 
                 balooctl6 status
                 balooctl6 purge
                 balooctl6 suspend
@@ -289,7 +275,6 @@ echo "Kali base environment aligned."
             """.trimIndent() + "\n"
         } else ""
 
-        // Build script body
         var scriptBody = gpgSetup +
                 "$managerCmd $desktopPackages $baseDeps $audioDeps\n" +
                 kdeArchProotFix +
@@ -297,13 +282,11 @@ echo "Kali base environment aligned."
                 libc6Setup +
                 "echo 'Installation completed!'\n"
 
-        // gnome fix for Debian‑based
         if (envName == "GNOME" &&
             (cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") ||
              cleanDistro.contains("kali") || cleanDistro.contains("trisquel"))) {
             scriptBody += """
-                # Apply GNOME 
-               rm -f /usr/share/dbus-1/system-services/org.freedesktop.login1.service
+                rm -f /usr/share/dbus-1/system-services/org.freedesktop.login1.service
                 echo 'fixed try using those commands to start desktop'
                 rm -f /usr/share/dbus-1/system-services/org.freedesktop.login1.service
 
@@ -313,24 +296,19 @@ rm -f /run/dbus/pid && mkdir -p /run/dbus
 export XDG_CURRENT_DESKTOP=GNOME
 export DESKTOP_SESSION=gnome
 export XDG_SESSION_DESKTOP=gnome
-
-
             """.trimIndent() + "\n"
         }
-        
-         if (envName == "MATE" &&
+
+        if (envName == "MATE" &&
             (cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") ||
              cleanDistro.contains("kali") || cleanDistro.contains("trisquel"))) {
             scriptBody += """
-                # Apply MATE  fix by @HARSH_VIBEDEV
-                
                mkdir -p ~/Desktop 
                chmod 755 ~/Desktop 
                mv /usr/bin/caja /usr/bin/caja-disabled
-
             """.trimIndent() + "\n"
         }
-        
+
         if (envName == "LXQt Desktop" &&
             (cleanDistro.contains("debian") || cleanDistro.contains("ubuntu") ||
              cleanDistro.contains("kali") || cleanDistro.contains("alpine"))) {
@@ -341,11 +319,9 @@ echo "Applying PRoot optimizations..."
                     rm -f "${'$'}file"
                 fi
             done
-
             """.trimIndent() + "\n"
         }
 
-        // Always wrap in a heredoc
         return "sh <<'EOF'\n${scriptBody}\nEOF"
     }
 }
