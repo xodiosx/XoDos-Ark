@@ -148,23 +148,30 @@ printf '}\n'
     }
 
     // ── Native ────────────────────────────────────────────────
-    private fun detectNativeInstalled(context: Context): List<Pair<String, String>> {
-        val binDirs = listOf("usr/bin", "bin").mapNotNull { sub ->
-            val dir = File(context.filesDir, sub)
-            if (dir.isDirectory) dir else null
-        }
-        Log.d("DesktopDetector", "Native bin dirs: ${binDirs.map { it.absolutePath }}")
-        if (binDirs.isEmpty()) return emptyList()
+  private fun detectNativeInstalled(context: Context): List<Pair<String, String>> {
+    val binDirs = listOf("usr/bin", "bin").mapNotNull { sub ->
+        val dir = File(context.filesDir, sub)
+        if (dir.isDirectory) dir else null
+    }
+    Log.d("DesktopDetector", "Native bin dirs: ${binDirs.map { it.absolutePath }}")
+    if (binDirs.isEmpty()) return emptyList()
 
-        return knownBinaries.mapNotNull { (binary, name) ->
-            val exists = binDirs.any { File(it, binary).exists() }
-            if (exists) {
-                Log.d("DesktopDetector", "Native: found $binary -> $name")
-                name to binary
-            } else null
-        }
+    val detected = knownBinaries.mapNotNull { (binary, name) ->
+        val exists = binDirs.any { File(it, binary).exists() }
+        if (exists) {
+            Log.d("DesktopDetector", "Native: found $binary -> $name")
+            name to binary
+        } else null
     }
 
+    // Native XFCE installed → make sure termux-battery-status shim is present.
+    // Idempotent: rewrites the script only when XFCE is actually detected.
+    if (detected.any { it.second == "xfce4-session" }) {
+        writeBatteryStatusScript(context)
+    }
+
+    return detected
+}
     // ── Proot container ───────────────────────────────────────
     private fun detectProotInstalled(context: Context, containerId: Int): List<Pair<String, String>> {
         val rootfs = NativeInstallCoordinator.containerPath(context, containerId)
