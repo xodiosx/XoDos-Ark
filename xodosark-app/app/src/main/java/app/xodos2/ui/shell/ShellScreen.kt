@@ -13,8 +13,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
-import android.view.SurfaceHolder
-import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
@@ -48,7 +46,6 @@ import app.xodos2.PtyOutputRelay
 import app.xodos2.R
 import app.xodos2.RustPtySession
 import app.xodos2.TerminalSessionIds
-import app.xodos2.WaylandBridge
 import app.xodos2.X11Runtime
 import app.xodos2.shell.ShellFonts
 import app.xodos2.shell.ShellSessionClient
@@ -65,7 +62,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import androidx.compose.ui.graphics.Color as ComposeColor
 
 private val DEFAULT_EXTRA_KEYS_JSON = """
@@ -87,46 +83,31 @@ private class ViewCache(
     val keysContainer: LinearLayout,
     val fixedContainer: LinearLayout,
     val viewClient: ShellViewClient,
-    val bgDisplayContainer: FrameLayout,
-    var currentDisplayMode: String? = null,
-    var displaySetupJob: Job? = null,
-    var waylandServerId: Long = 0L,
-    var waylandSurface: SurfaceView? = null,
-    var x11Controller: EmbeddedX11Controller? = null,
-    var x11Frame: FrameLayout? = null
+    // Solid background view (bottom of stack)
+    val solidBgView: FrameLayout,
+    // Image / GIF view
+    val bgImageView: AnimatedBackgroundView,
+    // Container for the X11 LorieView — persistent across mode toggles
+    val x11Container: FrameLayout,
+    // Reference to the terminal's backing frame so we can tint it
+    val terminalFrame: FrameLayout
 ) {
     var appliedExtraKeysJson: String? = null
 
-    // ── Cached props so we don't re-read the file on every recompose ──
     var cachedProps: TermuxProperties? = null
     var cachedPropsEpoch: Int = -1
     var cachedPropsContainerId: Int = -1
+
+    // X11 plumbing — created once, attached once
+    var x11Controller: EmbeddedX11Controller? = null
+    var x11Lorie: BackgroundLorieView? = null
+    var x11Attached: Boolean = false
 }
 
 private const val TAG = "ShellScreen"
-private const val BG_WAYLAND_SOCKET = "wayland-terminal-bg"
 
-/**
- * Background LorieView — total no-op for input.
- *
- * The stock com.termux.x11.LorieView overrides several key-dispatch methods
- * and forwards them to its host MainActivity / TouchInputHandler. Inside
- * the app's normal activity that means:
- *   • back key → opens the X11 drawer
- *   • back key → opens X11 preferences
- *   • back key → NPEs inside TouchInputHandler.refreshInputDevices
- *
- * Because this LorieView sits behind the terminal purely as a render surface,
- * we intercept every input-dispatch method and return false, meaning "I don't
- * handle this, pass it on". That lets the back key reach the terminal's
- * onKeyListener (and then the activity) as expected.
- */
 private class BackgroundLorieView(ctx: Context) : LorieView(ctx) {
-
-    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
-        // intentionally no-op
-    }
-
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) { /* no-op */ }
     override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean = false
     override fun onKeyPreIme(keyCode: Int, event: KeyEvent): Boolean = false
     override fun dispatchKeyEvent(event: KeyEvent): Boolean = false
@@ -162,10 +143,9 @@ fun ShellScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val ioScope = rememberCoroutineScope()
 
-    // Tracks which sessions have had props applied already, so onEmulatorSet
-    // doesn't re-run apply() on every re-attach (which visibly refreshes the
-    // terminal). Cleared when sessions are invalidated.
     val propsAppliedSessions = remember { mutableSetOf<Int>() }
+    // Kept in a @Composable remember so we can null it out on dispose
+    val x11CacheRef = remember { mutableStateOf<ViewCache?>(null) }
 
     val activeContainerId = remember(activeSessionId) {
         when (TerminalSessionIds.namespaceOf(activeSessionId)) {
@@ -268,6 +248,11 @@ fun ShellScreen(
             PtyOutputRelay.unbind()
             InputRouteState.shellTerminalView = null
             propsAppliedSessions.clear()
+            // Only detach X11 controller when we truly leave the screen.
+            x11CacheRef.value?.x11Controller?.let { ctl ->
+                try { ctl.detach() } catch (_: Throwable) {}
+            }
+            x11CacheRef.value = null
         }
     }
 
@@ -278,6 +263,12 @@ fun ShellScreen(
     AndroidView(
         modifier = modifier.fillMaxSize().statusBarsPadding().imePadding(),
         factory = { ctx ->
+            // Root is a FrameLayout with FOUR layers so transparent surfaces
+            // always have a backing colour:
+            //   [0] solidBgView         — solid background colour (never removed)
+            //   [1] bgImageView         — optional image / GIF
+            //   [2] x11Container        — LorieView for X11 background (persistent)
+            //   [3] contentColumn       — terminal + bottom bar (overlays everything)
             val root = FrameLayout(ctx).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -286,29 +277,43 @@ fun ShellScreen(
                 descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             }
 
-            // [0] Native background display container (X11 / Wayland)
-            val bgDisplayContainer = FrameLayout(ctx).apply {
+            // [0] Solid colour
+            val solidBgView = FrameLayout(ctx).apply {
+                setBackgroundColor(Color.BLACK)
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            }
+            root.addView(solidBgView)
+
+            // [1] Image / GIF
+            val bgImageView = AnimatedBackgroundView(ctx).apply {
                 visibility = View.GONE
                 layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
                 )
+            }
+            root.addView(bgImageView)
+
+            // [2] X11 surface container — created now, populated on demand.
+            // It stays at index 2 forever, so we never disturb the WMS / EGL
+            // surface between mode toggles.
+            val x11Container = FrameLayout(ctx).apply {
+                setBackgroundColor(Color.TRANSPARENT)
                 isClickable = false
                 isFocusable = false
-            }
-            root.addView(bgDisplayContainer)
-
-            // [1] Static / animated image background
-            val bgImageView = AnimatedBackgroundView(ctx).apply { visibility = View.GONE }
-            root.addView(
-                bgImageView,
-                FrameLayout.LayoutParams(
+                descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                layoutParams = FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
                 )
-            )
+                visibility = View.GONE
+            }
+            root.addView(x11Container)
 
-            // [2] Content column (terminal + bar)
+            // [3] Content column
             val contentColumn = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = FrameLayout.LayoutParams(
@@ -334,13 +339,9 @@ fun ShellScreen(
                 override fun onEmulatorSet() {
                     val session = tv.currentSession ?: return
                     if (session !is RustPtySession) return
+                    if (!propsAppliedSessions.add(session.sessionId)) return
 
-                    // Only apply props once per session id — otherwise every
-                    // re-attach re-runs apply() and visibly refreshes the UI.
-                    val sessionId = session.sessionId
-                    if (!propsAppliedSessions.add(sessionId)) return
-
-                    val cid = when (TerminalSessionIds.namespaceOf(sessionId)) {
+                    val cid = when (TerminalSessionIds.namespaceOf(session.sessionId)) {
                         TerminalSessionIds.NS_ARCH   -> 1
                         TerminalSessionIds.NS_DEBIAN -> 2
                         TerminalSessionIds.NS_WINE   -> 3
@@ -445,10 +446,14 @@ fun ShellScreen(
                 keysContainer = keysContainer,
                 fixedContainer = fixedContainer,
                 viewClient = viewClient,
-                bgDisplayContainer = bgDisplayContainer
+                solidBgView = solidBgView,
+                bgImageView = bgImageView,
+                x11Container = x11Container,
+                terminalFrame = terminalFrame
             )
             root.tag = cache
             root.setTag(R.id.xodos2_shell_controller, controller)
+            x11CacheRef.value = cache
 
             root
         },
@@ -471,12 +476,7 @@ fun ShellScreen(
             controller.pruneSessionsExcept(terminalSessionIds.toSet())
             controller.attachSessionIfNeeded(activeSessionId)
 
-            val bgDisplayContainer = root.getChildAt(0) as FrameLayout
-            val bgImageView        = root.getChildAt(1) as AnimatedBackgroundView
-            val contentColumn      = root.getChildAt(2) as LinearLayout
-            val terminalFrame      = contentColumn.getChildAt(0) as FrameLayout
-            val bottomBar          = contentColumn.getChildAt(1) as LinearLayout
-            val tv                 = terminalFrame.getChildAt(0) as TerminalView
+            val tv = cache.terminalFrame.getChildAt(0) as TerminalView
 
             tv.post {
                 val props = if (
@@ -492,41 +492,47 @@ fun ShellScreen(
                     }
                 } else cache.cachedProps!!
 
-                // ── Background display (X11 / Wayland) ──
-                val desiredMode = props.backgroundDisplay
-                if (cache.currentDisplayMode != desiredMode) {
-                    teardownBackgroundDisplay(cache)
-                    cache.currentDisplayMode = desiredMode
-                    if (desiredMode != null) {
-                        val modeToSetup = desiredMode
-                        cache.displaySetupJob = ioScope.launch {
-                            setupBackgroundDisplay(
-                                cache = cache,
-                                mode = modeToSetup,
-                                context = root.context,
-                                activity = activity,
-                                container = bgDisplayContainer
-                            )
-                        }
-                    }
-                }
+                // "wayland" is no longer supported as a background — treat
+                // it as null so an old saved value doesn't try to run.
+                val desiredMode = props.backgroundDisplay.takeIf { it == "x11" }
 
-                // ── Static image background ──
+                // ── Solid colour layer [0] ──
+                // This is the terminal's real background — always visible
+                // behind everything. When X11 is on, we keep it black so the
+                // LorieView has a backing colour even before it draws.
+                val bgColor: Int = props.backgroundColor ?: Color.BLACK
+                cache.solidBgView.setBackgroundColor(bgColor)
+
+                // ── Image layer [1] ──
+                // Hidden whenever X11 is on, so it doesn't sit on top of the
+                // display surface. Also hidden when there's no image.
                 val imgPath = props.backgroundImagePath
                 if (!imgPath.isNullOrBlank() && desiredMode == null) {
-                    bgImageView.setSource(imgPath)
-                    bgImageView.visibility = View.VISIBLE
+                    cache.bgImageView.setSource(imgPath)
+                    cache.bgImageView.visibility = View.VISIBLE
                 } else {
-                    bgImageView.clear()
-                    bgImageView.visibility = View.GONE
+                    cache.bgImageView.clear()
+                    cache.bgImageView.visibility = View.GONE
                 }
 
-                // ── Background colour ──
-                val bgColor: Int = props.backgroundColor
-                    ?: if (!imgPath.isNullOrBlank() || desiredMode != null) 0x3B000000
-                       else Color.BLACK
-                terminalFrame.setBackgroundColor(bgColor)
+                // ── Terminal frame ──
+                // When X11 is off, apply the user's bg color here so alpha
+                // tint over images works as before. When X11 is on, use
+                // transparent so the surface shows through unimpeded.
+                cache.terminalFrame.setBackgroundColor(
+                    if (desiredMode == null) bgColor else Color.TRANSPARENT
+                )
 
+                // ── X11 layer [2] ──
+                ensureX11Background(
+                    cache = cache,
+                    enabled = desiredMode == "x11",
+                    context = root.context,
+                    activity = activity,
+                    scope = ioScope
+                )
+
+                // ── Extra-keys bar alpha ──
                 val bgAlpha = (bgColor ushr 24) and 0xFF
                 val barTop    = (bgAlpha shl 24) or 0x080512
                 val barBottom = (bgAlpha shl 24) or 0x030207
@@ -534,7 +540,7 @@ fun ShellScreen(
                     GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(barTop, barBottom)
                 ).apply { setStroke(1.dpToPx(root.context), Color.parseColor("#22FFFFFF")) }
-                bottomBar.background = barDrawable
+                (cache.keysContainer.parent?.parent as? LinearLayout)?.background = barDrawable
 
                 props.extraKeys?.let { fileJson ->
                     if (cache.appliedExtraKeysJson != fileJson) {
@@ -581,153 +587,73 @@ fun ShellScreen(
     )
 }
 
-// ─────────────────────────────────────────────────────────────
-// Background display (X11 / Wayland) — helpers
-// ─────────────────────────────────────────────────────────────
-
-private suspend fun setupBackgroundDisplay(
+/**
+ * Idempotent: enables / disables the X11 background surface WITHOUT tearing
+ * down the underlying EmbeddedX11Controller or the LorieView. This is what
+ * keeps the X11 server process alive across mode toggles and re-attaches
+ * cheaply next time the user selects X11 again.
+ */
+private fun ensureX11Background(
     cache: ViewCache,
-    mode: String,
+    enabled: Boolean,
     context: Context,
     activity: Activity,
-    container: FrameLayout
+    scope: kotlinx.coroutines.CoroutineScope
 ) {
-    try {
-        when (mode) {
-            "x11" -> withContext(Dispatchers.IO) {
-                X11Runtime.ensureX11ServerProcessStarted(context)
-            }
-            "wayland" -> withContext(Dispatchers.IO) {
-                val runtimeDir = File(context.filesDir, "usr/tmp").apply { mkdirs() }.absolutePath
-                if (cache.waylandServerId == 0L) {
-                    cache.waylandServerId = try {
-                        WaylandBridge.nativeCreateServer(runtimeDir, BG_WAYLAND_SOCKET)
-                    } catch (t: Throwable) {
-                        Log.e(TAG, "nativeCreateServer failed", t); 0L
-                    }
-                }
-                if (cache.waylandServerId != 0L) {
-                    try { WaylandBridge.nativeSetActiveServer(cache.waylandServerId) }
-                    catch (t: Throwable) { Log.w(TAG, "nativeSetActiveServer", t) }
-                }
-            }
-        }
-
-        withContext(Dispatchers.Main) {
-            container.removeAllViews()
-            when (mode) {
-                "x11" -> {
-                    val frame = FrameLayout(context).apply {
-                        setBackgroundColor(Color.BLACK)
-                        isClickable = false
-                        isFocusable = false
-                        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                    }
-                    // ✅ BackgroundLorieView — no-op on every key/touch/focus
-                    // callback, so back key never reaches X11's drawer/prefs.
-                    val lv = BackgroundLorieView(context).apply {
-                        isClickable = false
-                        isFocusable = false
-                        isFocusableInTouchMode = false
-                    }
-                    frame.addView(
-                        lv,
-                        FrameLayout.LayoutParams(
-                            FrameLayout.LayoutParams.MATCH_PARENT,
-                            FrameLayout.LayoutParams.MATCH_PARENT
-                        )
-                    )
-                    val x11Controller = EmbeddedX11Controller()
-                    try { x11Controller.setMouseMode(EmbeddedX11Controller.MouseMode.TOUCHPAD) }
-                    catch (_: Throwable) {}
-                    try { x11Controller.attach(activity, frame, lv) }
-                    catch (t: Throwable) { Log.e(TAG, "X11 attach failed", t) }
-
-                    cache.x11Controller = x11Controller
-                    cache.x11Frame = frame
-                    container.addView(
-                        frame,
-                        FrameLayout.LayoutParams(
-                            FrameLayout.LayoutParams.MATCH_PARENT,
-                            FrameLayout.LayoutParams.MATCH_PARENT
-                        )
-                    )
-                    container.visibility = View.VISIBLE
-                }
-                "wayland" -> {
-                    if (cache.waylandServerId == 0L) {
-                        Log.w(TAG, "Wayland server not ready, skipping background view")
-                        container.visibility = View.GONE
-                        return@withContext
-                    }
-                    val runtimeDir = File(context.filesDir, "usr/tmp").apply { mkdirs() }.absolutePath
-                    val sv = SurfaceView(context).apply {
-                        isClickable = false
-                        isFocusable = false
-                        isFocusableInTouchMode = false
-                        holder.addCallback(object : SurfaceHolder.Callback {
-                            override fun surfaceCreated(h: SurfaceHolder) {
-                                val surface = h.surface ?: return
-                                try {
-                                    WaylandBridge.nativeSurfaceCreated(
-                                        surface, runtimeDir, 100, 100, false
-                                    )
-                                } catch (t: Throwable) {
-                                    Log.e(TAG, "nativeSurfaceCreated(bg)", t)
-                                }
-                            }
-                            override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) {
-                                if (w <= 0 || ht <= 0) return
-                                try {
-                                    WaylandBridge.nativeOutputSizeChanged(w, ht, 100, 100)
-                                } catch (t: Throwable) {
-                                    Log.w(TAG, "nativeOutputSizeChanged(bg)", t)
-                                }
-                            }
-                            override fun surfaceDestroyed(h: SurfaceHolder) {
-                                try { WaylandBridge.nativeSurfaceDestroyed() }
-                                catch (t: Throwable) { Log.w(TAG, "nativeSurfaceDestroyed(bg)", t) }
-                            }
-                        })
-                    }
-                    cache.waylandSurface = sv
-                    container.addView(
-                        sv,
-                        FrameLayout.LayoutParams(
-                            FrameLayout.LayoutParams.MATCH_PARENT,
-                            FrameLayout.LayoutParams.MATCH_PARENT
-                        )
-                    )
-                    container.visibility = View.VISIBLE
-                }
-                else -> {
-                    container.visibility = View.GONE
-                }
-            }
-        }
-    } catch (t: Throwable) {
-        Log.e(TAG, "setupBackgroundDisplay($mode) failed", t)
-        withContext(Dispatchers.Main) {
-            container.visibility = View.GONE
-            cache.currentDisplayMode = mode
-        }
+    if (!enabled) {
+        // Just hide the container; controller + LorieView stay attached.
+        cache.x11Container.visibility = View.GONE
+        return
     }
-}
 
-private fun teardownBackgroundDisplay(cache: ViewCache) {
-    cache.displaySetupJob?.cancel()
-    cache.displaySetupJob = null
+    // Show the container immediately so the LorieView renders as soon as
+    // the server connection is up.
+    cache.x11Container.visibility = View.VISIBLE
 
-    cache.x11Controller?.let { ctl ->
-        try { ctl.detach() } catch (_: Throwable) {}
+    if (cache.x11Attached) return   // already attached, nothing to do
+
+    // First-time X11 setup
+    scope.launch(Dispatchers.IO) {
+        X11Runtime.ensureX11ServerProcessStarted(context)
     }
-    cache.x11Controller = null
-    cache.x11Frame = null
 
-    cache.waylandSurface = null
+    val lv = BackgroundLorieView(context).apply {
+        isClickable = false
+        isFocusable = false
+        isFocusableInTouchMode = false
+    }
+    cache.x11Lorie = lv
 
-    cache.bgDisplayContainer.removeAllViews()
-    cache.bgDisplayContainer.visibility = View.GONE
+    val frame = FrameLayout(context).apply {
+        setBackgroundColor(Color.TRANSPARENT)
+        isClickable = false
+        isFocusable = false
+        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+    }
+    frame.addView(
+        lv,
+        FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+    )
+
+    val x11Controller = EmbeddedX11Controller()
+    try { x11Controller.setMouseMode(EmbeddedX11Controller.MouseMode.TOUCHPAD) }
+    catch (_: Throwable) {}
+    try { x11Controller.attach(activity, frame, lv) }
+    catch (t: Throwable) { Log.e(TAG, "X11 attach failed", t) }
+
+    cache.x11Controller = x11Controller
+    cache.x11Container.removeAllViews()
+    cache.x11Container.addView(
+        frame,
+        FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+    )
+    cache.x11Attached = true
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1099,8 +1025,6 @@ private class ShellSessionController(
         val attachLogic = {
             attachedId = id
             val s = sessionFor(id)
-            // Always unbind first — prevents stacked output relays if
-            // a prior bind slipped through (e.g. after invalidateAllSessions).
             runCatching { PtyOutputRelay.unbind() }
             terminalView.attachSession(s)
             PtyOutputRelay.bind(s, terminalView)

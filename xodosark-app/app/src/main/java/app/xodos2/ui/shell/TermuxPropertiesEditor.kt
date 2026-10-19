@@ -72,7 +72,12 @@ fun TermuxPropertiesEditorDialog(
     }
 
     var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
-    var backgroundDisplay by remember { mutableStateOf(initial.backgroundDisplay ?: "") } // "", "x11", "wayland"
+    // Only "" (off) and "x11" are supported. Wayland is intentionally absent
+    // because WaylandBridge's single-active-server model can't host two
+    // surfaces in the same process.
+    var backgroundDisplay by remember {
+        mutableStateOf(if (initial.backgroundDisplay == "x11") "x11" else "")
+    }
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var bg by remember { mutableStateOf(initial.backgroundColor?.let { intToHex(it) } ?: "") }
@@ -91,8 +96,6 @@ fun TermuxPropertiesEditorDialog(
     var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    // Image picker — auto-sets background alpha to 59 (~23%) so it acts as a
-    // subtle tint over the image for readability.
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -116,7 +119,6 @@ fun TermuxPropertiesEditorDialog(
                     dest.outputStream().use { output -> input.copyTo(output) }
                 }
                 backgroundImagePath = dest.absolutePath
-                // Auto-tint: 0x3B = 59/255 ≈ 23 % opacity
                 bg = withAlpha(bg, 0x3B)
             } catch (e: Exception) {
                 error = "Failed to copy image: ${e.message}"
@@ -196,7 +198,7 @@ fun TermuxPropertiesEditorDialog(
                         displayMode = backgroundDisplay,
                         onDisplayModeChange = { backgroundDisplay = it }
                     )
-                }   // ← closes `when` (this was the missing line)
+                }
 
                 error?.let { msg ->
                     Spacer(Modifier.height(8.dp))
@@ -223,8 +225,10 @@ fun TermuxPropertiesEditorDialog(
                     values["background_image"] = backgroundImagePath.takeIf { it.isNotBlank() }
                     values["background_image_overlay"] = null
 
+                    // Only x11 accepted now. Any previously-saved "wayland"
+                    // value is cleared automatically because it won't match.
                     values["background_display"] =
-                        backgroundDisplay.trim().lowercase().takeIf { it == "x11" || it == "wayland" }
+                        backgroundDisplay.trim().lowercase().takeIf { it == "x11" }
 
                     TermuxPropertiesWriter.save(targetFile, values)
                     onSaved()
@@ -501,7 +505,6 @@ private fun AdvancedTab(
             .heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // ── Terminal background display ─────────────────────
         Text(
             "Terminal background display",
             color = ComposeColor.White,
@@ -510,9 +513,11 @@ private fun AdvancedTab(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Run a live X11 or Wayland surface behind the terminal text. " +
+            "Run a live X11 surface behind the terminal text. " +
             "Use it to watch GUI apps (glmark2, xterm, etc.) render while you keep " +
-            "typing in the shell. Input still goes to the terminal, not the display.",
+            "typing in the shell. Input still goes to the terminal, not the display.\n\n" +
+            "Wayland background is not available because the Wayland bridge only " +
+            "supports one active server per process — use it from the drawer instead.",
             color = ComposeColor.White.copy(alpha = 0.55f),
             fontSize = 11.sp
         )
@@ -530,8 +535,7 @@ private fun AdvancedTab(
         ) {
             val options = listOf(
                 "" to "None",
-                "x11" to "X11",
-                "wayland" to "Wayland"
+                "x11" to "X11"
             )
             options.forEach { (key, label) ->
                 val active = displayMode == key
@@ -566,19 +570,10 @@ private fun AdvancedTab(
                 color = ComposeColor(0xFFC3B6F9).copy(alpha = 0.8f),
                 fontSize = 10.sp
             )
-        } else if (displayMode == "wayland") {
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Tip: the Wayland socket name is  wayland-terminal-bg  — " +
-                "export WAYLAND_DISPLAY=wayland-terminal-bg  then run e.g.  weston-simple-egl.",
-                color = ComposeColor(0xFFC3B6F9).copy(alpha = 0.8f),
-                fontSize = 10.sp
-            )
         }
 
         Spacer(Modifier.height(20.dp))
 
-        // ── Existing cursor blink rate field ────────────────
         OutlinedTextField(
             value = blink,
             onValueChange = onBlink,
@@ -633,13 +628,12 @@ private fun parseColor(raw: String): Int? {
     }
 }
 
-/** Replaces the alpha byte of [currentHex] with [newAlpha] (0–255), keeping RGB. */
 private fun withAlpha(currentHex: String, newAlpha: Int): String {
     val clean = currentHex.trim().removePrefix("#").removePrefix("0x").uppercase()
     val rgb = when (clean.length) {
-        8 -> clean.substring(2)   // strip existing AA
+        8 -> clean.substring(2)
         6 -> clean
-        else -> "000000"          // default black if empty
+        else -> "000000"
     }
     return "#%02X%s".format(newAlpha.coerceIn(0, 255), rgb)
 }
