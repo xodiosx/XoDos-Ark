@@ -13,6 +13,8 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
@@ -20,19 +22,10 @@ import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -40,8 +33,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -55,6 +48,8 @@ import app.xodos2.PtyOutputRelay
 import app.xodos2.R
 import app.xodos2.RustPtySession
 import app.xodos2.TerminalSessionIds
+import app.xodos2.WaylandBridge
+import app.xodos2.X11Runtime
 import app.xodos2.shell.ShellFonts
 import app.xodos2.shell.ShellSessionClient
 import app.xodos2.shell.ShellViewClient
@@ -62,8 +57,15 @@ import app.xodos2.ui.glass.GlassButton
 import app.xodos2.ui.glassDialogStyle
 import app.xodos2.wayland.input.InputRouteState
 import com.termux.view.TerminalView
+import com.termux.x11.EmbeddedX11Controller
+import com.termux.x11.LorieView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import androidx.compose.ui.graphics.Color as ComposeColor
 
 private val DEFAULT_EXTRA_KEYS_JSON = """
@@ -85,10 +87,20 @@ private class ViewCache(
     val keysContainer: LinearLayout,
     val fixedContainer: LinearLayout,
     val viewClient: ShellViewClient,
+    // New: background display plumbing
+    val bgDisplayContainer: FrameLayout,
+    var currentDisplayMode: String? = null,
+    var displaySetupJob: Job? = null,
+    var waylandServerId: Long = 0L,
+    var waylandSurface: SurfaceView? = null,
+    var x11Controller: EmbeddedX11Controller? = null,
+    var x11Frame: FrameLayout? = null
+) {
     var appliedExtraKeysJson: String? = null
-)
+}
 
 private const val TAG = "ShellScreen"
+private const val BG_WAYLAND_SOCKET = "wayland-terminal-bg"
 
 @Composable
 fun ShellScreen(
@@ -114,6 +126,7 @@ fun ShellScreen(
         context.getSharedPreferences("xodos2_terminal_prefs", Context.MODE_PRIVATE)
     }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val ioScope = rememberCoroutineScope()
 
     val activeContainerId = remember(activeSessionId) {
         when (TerminalSessionIds.namespaceOf(activeSessionId)) {
@@ -137,6 +150,7 @@ fun ShellScreen(
     var showCloseSessionDialog by remember { mutableStateOf(false) }
     var showPropertiesEditor by remember { mutableStateOf(false) }
 
+    // Dialog: close/exit confirmation
     if (showCloseSessionDialog) {
         AlertDialog(
             onDismissRequest = { showCloseSessionDialog = false },
@@ -180,7 +194,7 @@ fun ShellScreen(
                     ?: sharedPrefs.getString("extra_keys_layout", DEFAULT_EXTRA_KEYS_JSON)
                     ?: DEFAULT_EXTRA_KEYS_JSON
                 showPropertiesEditor = false
-                propertiesEpoch++   // triggers update() re-run → re-applies image, colors, bar
+                propertiesEpoch++
             }
         )
     }
@@ -225,7 +239,6 @@ fun ShellScreen(
     AndroidView(
         modifier = modifier.fillMaxSize().statusBarsPadding().imePadding(),
         factory = { ctx ->
-            // Root = FrameLayout so the background image covers the WHOLE screen
             val root = FrameLayout(ctx).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -234,7 +247,19 @@ fun ShellScreen(
                 descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             }
 
-            // [0] Background image (full screen — behind terminal AND bar)
+            // [0] Native background display container (X11 / Wayland) — hidden until needed
+            val bgDisplayContainer = FrameLayout(ctx).apply {
+                visibility = View.GONE
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                isClickable = false
+                isFocusable = false
+            }
+            root.addView(bgDisplayContainer)
+
+            // [1] Static / animated image background
             val bgImageView = AnimatedBackgroundView(ctx).apply { visibility = View.GONE }
             root.addView(
                 bgImageView,
@@ -244,7 +269,7 @@ fun ShellScreen(
                 )
             )
 
-            // [1] Content column (terminal + bar)
+            // [2] Content column (terminal + bar)
             val contentColumn = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = FrameLayout.LayoutParams(
@@ -312,10 +337,6 @@ fun ShellScreen(
                 }
             }
 
-            // [contentColumn][0] Terminal area — transparent so the image shows
-            // through. The user's background color (with its alpha) is applied
-            // here on each update; when alpha < 255 it acts as a tint over the
-            // image, when alpha = 0 it's fully transparent.
             val terminalFrame = FrameLayout(ctx).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
@@ -331,7 +352,6 @@ fun ShellScreen(
             )
             contentColumn.addView(terminalFrame)
 
-            // [contentColumn][1] Extra keys bar
             val bottomBarLayout = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
@@ -376,7 +396,13 @@ fun ShellScreen(
                 )
             )
 
-            val cache = ViewCache(controller, keysContainer, fixedContainer, viewClient)
+            val cache = ViewCache(
+                controller = controller,
+                keysContainer = keysContainer,
+                fixedContainer = fixedContainer,
+                viewClient = viewClient,
+                bgDisplayContainer = bgDisplayContainer
+            )
             root.tag = cache
             root.setTag(R.id.xodos2_shell_controller, controller)
 
@@ -384,7 +410,7 @@ fun ShellScreen(
         },
         update = { root ->
             @Suppress("UNUSED_VARIABLE")
-            val epoch = propertiesEpoch   // subscribes to save-driven refresh
+            val epoch = propertiesEpoch
 
             val cache = root.tag as ViewCache
             val controller = cache.controller
@@ -397,24 +423,46 @@ fun ShellScreen(
             controller.pruneSessionsExcept(terminalSessionIds.toSet())
             controller.attachSessionIfNeeded(activeSessionId)
 
-            // New layer order after overlay removal:
-            //   [0] bgImageView (AnimatedBackgroundView)
-            //   [1] contentColumn (LinearLayout)
+            // New layer order:
+            //   [0] bgDisplayContainer (FrameLayout — X11/Wayland surface)
+            //   [1] bgImageView (AnimatedBackgroundView)
+            //   [2] contentColumn
             //       [0] terminalFrame → [0] tv
             //       [1] bottomBarLayout
-            val bgImageView   = root.getChildAt(0) as AnimatedBackgroundView
-            val contentColumn = root.getChildAt(1) as LinearLayout
-            val terminalFrame = contentColumn.getChildAt(0) as FrameLayout
-            val bottomBar     = contentColumn.getChildAt(1) as LinearLayout
-            val tv            = terminalFrame.getChildAt(0) as TerminalView
+            val bgDisplayContainer = root.getChildAt(0) as FrameLayout
+            val bgImageView        = root.getChildAt(1) as AnimatedBackgroundView
+            val contentColumn      = root.getChildAt(2) as LinearLayout
+            val terminalFrame      = contentColumn.getChildAt(0) as FrameLayout
+            val bottomBar          = contentColumn.getChildAt(1) as LinearLayout
+            val tv                 = terminalFrame.getChildAt(0) as TerminalView
 
             tv.post {
                 val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
                 TermuxPropertiesLoader.apply(tv, props)
 
-                // ── Background image ──
+                // ── Background display (X11 / Wayland) ──
+              // 
+val desiredMode = props.backgroundDisplay
+if (cache.currentDisplayMode != desiredMode) {
+    teardownBackgroundDisplay(cache)
+    cache.currentDisplayMode = desiredMode
+    if (desiredMode != null) {
+        val modeToSetup = desiredMode   // capture before launch
+        cache.displaySetupJob = ioScope.launch {
+            setupBackgroundDisplay(
+                cache = cache,
+                mode = modeToSetup,
+                context = root.context,
+                activity = activity,
+                container = bgDisplayContainer
+            )
+        }
+    }
+}
+
+                // ── Static image background ──
                 val imgPath = props.backgroundImagePath
-                if (!imgPath.isNullOrBlank()) {
+                if (!imgPath.isNullOrBlank() && desiredMode == null) {
                     bgImageView.setSource(imgPath)
                     bgImageView.visibility = View.VISIBLE
                 } else {
@@ -422,26 +470,21 @@ fun ShellScreen(
                     bgImageView.visibility = View.GONE
                 }
 
-                // ── Background colour (also acts as the image tint) ──
-                // Fallback: if there's an image but no colour set, use a subtle
-                // 23% black tint so the image stays readable out of the box.
+                // ── Background colour ──
                 val bgColor: Int = props.backgroundColor
-                    ?: if (!imgPath.isNullOrBlank()) 0x3B000000 else Color.BLACK
+                    ?: if (!imgPath.isNullOrBlank() || desiredMode != null) 0x3B000000
+                       else Color.BLACK
                 terminalFrame.setBackgroundColor(bgColor)
 
-                // ── Extra keys bar — alpha follows the background color ──
                 val bgAlpha = (bgColor ushr 24) and 0xFF
                 val barTop    = (bgAlpha shl 24) or 0x080512
                 val barBottom = (bgAlpha shl 24) or 0x030207
                 val barDrawable = GradientDrawable(
                     GradientDrawable.Orientation.TOP_BOTTOM,
                     intArrayOf(barTop, barBottom)
-                ).apply {
-                    setStroke(1.dpToPx(root.context), Color.parseColor("#22FFFFFF"))
-                }
+                ).apply { setStroke(1.dpToPx(root.context), Color.parseColor("#22FFFFFF")) }
                 bottomBar.background = barDrawable
 
-                // ── Extra keys from file ──
                 props.extraKeys?.let { fileJson ->
                     if (cache.appliedExtraKeysJson != fileJson) {
                         cache.appliedExtraKeysJson = fileJson
@@ -488,8 +531,158 @@ fun ShellScreen(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Keyboard visibility — window-visible-frame based
+// Background display (X11 / Wayland) — helpers
 // ─────────────────────────────────────────────────────────────
+
+private suspend fun setupBackgroundDisplay(
+    cache: ViewCache,
+    mode: String,
+    context: Context,
+    activity: Activity,
+    container: FrameLayout
+) {
+    try {
+        when (mode) {
+            "x11" -> withContext(Dispatchers.IO) {
+                X11Runtime.ensureX11ServerProcessStarted(context)
+            }
+            "wayland" -> withContext(Dispatchers.IO) {
+                val runtimeDir = File(context.filesDir, "usr/tmp").apply { mkdirs() }.absolutePath
+                if (cache.waylandServerId == 0L) {
+                    cache.waylandServerId = try {
+                        WaylandBridge.nativeCreateServer(runtimeDir, BG_WAYLAND_SOCKET)
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "nativeCreateServer failed", t); 0L
+                    }
+                }
+                if (cache.waylandServerId != 0L) {
+                    try { WaylandBridge.nativeSetActiveServer(cache.waylandServerId) }
+                    catch (t: Throwable) { Log.w(TAG, "nativeSetActiveServer", t) }
+                }
+            }
+        }
+
+        withContext(Dispatchers.Main) {
+            container.removeAllViews()
+            when (mode) {
+                "x11" -> {
+                    val frame = FrameLayout(context).apply {
+                        setBackgroundColor(Color.BLACK)
+                        isClickable = false
+                        isFocusable = false
+                        descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                    }
+                    val lv = LorieView(context).apply {
+                        isClickable = false
+                        isFocusable = false
+                        isFocusableInTouchMode = false
+                    }
+                    frame.addView(
+                        lv,
+                        FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                    )
+                    val x11Controller = EmbeddedX11Controller()
+                    try { x11Controller.setMouseMode(EmbeddedX11Controller.MouseMode.TOUCHPAD) }
+                    catch (_: Throwable) {}
+                    try { x11Controller.attach(activity, frame, lv) }
+                    catch (t: Throwable) { Log.e(TAG, "X11 attach failed", t) }
+
+                    cache.x11Controller = x11Controller
+                    cache.x11Frame = frame
+                    container.addView(
+                        frame,
+                        FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                    )
+                    container.visibility = View.VISIBLE
+                }
+                "wayland" -> {
+                    if (cache.waylandServerId == 0L) {
+                        Log.w(TAG, "Wayland server not ready, skipping background view")
+                        container.visibility = View.GONE
+                        return@withContext
+                    }
+                    val runtimeDir = File(context.filesDir, "usr/tmp").apply { mkdirs() }.absolutePath
+                    val sv = SurfaceView(context).apply {
+                        isClickable = false
+                        isFocusable = false
+                        isFocusableInTouchMode = false
+                        holder.addCallback(object : SurfaceHolder.Callback {
+                            override fun surfaceCreated(h: SurfaceHolder) {
+                                val surface = h.surface ?: return
+                                try {
+                                    WaylandBridge.nativeSurfaceCreated(
+                                        surface, runtimeDir, 100, 100, false
+                                    )
+                                } catch (t: Throwable) {
+                                    Log.e(TAG, "nativeSurfaceCreated(bg)", t)
+                                }
+                            }
+                            override fun surfaceChanged(h: SurfaceHolder, f: Int, w: Int, ht: Int) {
+                                if (w <= 0 || ht <= 0) return
+                                try {
+                                    WaylandBridge.nativeOutputSizeChanged(w, ht, 100, 100)
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "nativeOutputSizeChanged(bg)", t)
+                                }
+                            }
+                            override fun surfaceDestroyed(h: SurfaceHolder) {
+                                try { WaylandBridge.nativeSurfaceDestroyed() }
+                                catch (t: Throwable) { Log.w(TAG, "nativeSurfaceDestroyed(bg)", t) }
+                            }
+                        })
+                    }
+                    cache.waylandSurface = sv
+                    container.addView(
+                        sv,
+                        FrameLayout.LayoutParams(
+                            FrameLayout.LayoutParams.MATCH_PARENT,
+                            FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                    )
+                    container.visibility = View.VISIBLE
+                }
+                else -> {
+                    container.visibility = View.GONE
+                }
+            }
+        }
+    } catch (t: Throwable) {
+        Log.e(TAG, "setupBackgroundDisplay($mode) failed", t)
+        withContext(Dispatchers.Main) { container.visibility = View.GONE }
+        cache.currentDisplayMode = null 
+    }
+}
+
+private fun teardownBackgroundDisplay(cache: ViewCache) {
+    cache.displaySetupJob?.cancel()
+    cache.displaySetupJob = null
+
+    cache.x11Controller?.let { ctl ->
+        try { ctl.detach() } catch (_: Throwable) {}
+    }
+    cache.x11Controller = null
+    cache.x11Frame = null
+
+    cache.waylandSurface = null
+    // nativeSurfaceDestroyed is called by the SurfaceHolder callback.
+    // We intentionally keep cache.waylandServerId alive so the server can be
+    // re-used if the user toggles the same mode back on. It is cleaned up
+    // by the OS when the app process dies.
+
+    cache.bgDisplayContainer.removeAllViews()
+    cache.bgDisplayContainer.visibility = View.GONE
+}
+
+// ─────────────────────────────────────────────────────────────
+// Existing helpers (unchanged)
+// ─────────────────────────────────────────────────────────────
+
 private fun isKeyboardVisible(view: View): Boolean {
     if (view.rootView == null) return false
     val rect = Rect()
@@ -545,11 +738,7 @@ private fun rebuildExtraKeys(
 
     fun createNormalDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(
-            Color.parseColor("#22FFFFFF"),
-            Color.parseColor("#08FFFFFF"),
-            Color.parseColor("#15000000")
-        )
+        intArrayOf(Color.parseColor("#22FFFFFF"), Color.parseColor("#08FFFFFF"), Color.parseColor("#15000000"))
     ).apply {
         shape = GradientDrawable.RECTANGLE
         setStroke(1.dpToPx(context), Color.parseColor("#3BFFFFFF"))
@@ -558,11 +747,7 @@ private fun rebuildExtraKeys(
 
     fun createPressedDrawable(): GradientDrawable = GradientDrawable(
         GradientDrawable.Orientation.TOP_BOTTOM,
-        intArrayOf(
-            Color.parseColor("#5AFFFFFF"),
-            Color.parseColor("#1EFFFFFF"),
-            Color.parseColor("#00000000")
-        )
+        intArrayOf(Color.parseColor("#5AFFFFFF"), Color.parseColor("#1EFFFFFF"), Color.parseColor("#00000000"))
     ).apply {
         shape = GradientDrawable.RECTANGLE
         setStroke(1.dpToPx(context), Color.parseColor("#80FFFFFF"))
@@ -604,7 +789,6 @@ private fun rebuildExtraKeys(
             label.length <= 5 -> baseTextSize * 0.85f
             else -> baseTextSize * 0.7f
         }
-
         val drawable = if (label == "CTRL") {
             if (viewClient.ctrlActive) createActiveDrawable() else createDefaultStateList()
         } else if (label == "ALT") {
@@ -621,22 +805,13 @@ private fun rebuildExtraKeys(
             isClickable = !isTransparent
             isFocusable = false
             if (isTransparent) visibility = View.INVISIBLE
-
             layoutParams = LinearLayout.LayoutParams(
                 if (isFixed) ViewGroup.LayoutParams.WRAP_CONTENT else 0,
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 if (isFixed) 0f else 1f
             ).apply { setMargins(2.dpToPx(context), 0, 2.dpToPx(context), 0) }
-
-            if (isFixed) {
-                setPadding(
-                    8.dpToPx(context), 4.dpToPx(context),
-                    8.dpToPx(context), 4.dpToPx(context)
-                )
-            } else {
-                setPadding(0, 4.dpToPx(context), 0, 4.dpToPx(context))
-            }
-
+            if (isFixed) setPadding(8.dpToPx(context), 4.dpToPx(context), 8.dpToPx(context), 4.dpToPx(context))
+            else setPadding(0, 4.dpToPx(context), 0, 4.dpToPx(context))
             gravity = Gravity.CENTER
         }
     }
@@ -686,8 +861,7 @@ private fun rebuildExtraKeys(
             )
         }
         for (item in keys) {
-            val displayLabel =
-                if (item.display.isNotEmpty()) item.display else getDisplayLabel(item.key)
+            val displayLabel = if (item.display.isNotEmpty()) item.display else getDisplayLabel(item.key)
             val btn = makeButton(displayLabel)
 
             if (item.macro.isNotEmpty()) {
@@ -716,9 +890,7 @@ private fun rebuildExtraKeys(
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cm.primaryClip?.let { clip ->
                             if (clip.itemCount > 0) {
-                                terminalView.currentSession?.write(
-                                    clip.getItemAt(0).text?.toString() ?: ""
-                                )
+                                terminalView.currentSession?.write(clip.getItemAt(0).text?.toString() ?: "")
                             }
                         }
                     }
@@ -726,7 +898,6 @@ private fun rebuildExtraKeys(
                         val metaUpper = item.meta.uppercase()
                         val metaCtrl = "CTRL" in metaUpper || "C-" in metaUpper
                         val metaAlt  = "ALT" in metaUpper  || "M-" in metaUpper
-
                         val fireAction = {
                             sendModifiedSequence(
                                 terminalView, action,
@@ -739,7 +910,6 @@ private fun rebuildExtraKeys(
                                 }
                             )
                         }
-
                         if (item.key.uppercase() in listOf("UP", "DOWN", "LEFT", "RIGHT")) {
                             setRepeatClickListener(btn, fireAction)
                         } else {
@@ -758,7 +928,6 @@ private fun rebuildExtraKeys(
         for (i in 0 until jsonArray.length()) {
             val rowArray = jsonArray.getJSONArray(i)
             val rowKeys = mutableListOf<ExtraKeyItem>()
-
             for (j in 0 until rowArray.length()) {
                 when (val item = rowArray.get(j)) {
                     is String -> rowKeys.add(ExtraKeyItem(key = item))
@@ -772,7 +941,6 @@ private fun rebuildExtraKeys(
                     )
                 }
             }
-
             scrollParent.addView(addScrollRow(rowKeys))
 
             val fixedRow = LinearLayout(context).apply {
@@ -799,53 +967,38 @@ private fun rebuildExtraKeys(
                         if (rowKeys.first().display.isNotEmpty()) rowKeys.first().display
                         else getDisplayLabel(rowKeys.first().key)
                     } else "ESC"
-                    fixedRow.addView(
-                        makeButton(placeholderText, isTransparent = true, isFixed = true)
-                    )
+                    fixedRow.addView(makeButton(placeholderText, isTransparent = true, isFixed = true))
                 }
             }
             fixedParent.addView(fixedRow)
         }
 
-        when (jsonArray.length()) {
-            0 -> {
-                val kbRow = LinearLayout(context).apply {
+        if (jsonArray.length() == 0) {
+            listOf("⌨️" to { toggleKeyboard() }, "⚙️" to { onEditClicked() }).forEach { (label, cb) ->
+                val row = LinearLayout(context).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_HORIZONTAL
                     layoutParams = LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
                     )
                 }
-                val kbBtn = makeButton("⌨️", isFixed = true)
-                kbBtn.setOnClickListener { toggleKeyboard() }
-                kbRow.addView(kbBtn)
-                fixedParent.addView(kbRow)
-
-                val gearRow = LinearLayout(context).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_HORIZONTAL
-                    layoutParams = LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
-                    )
-                }
-                val editBtn = makeButton("⚙️", isFixed = true)
-                editBtn.setOnClickListener { onEditClicked() }
-                gearRow.addView(editBtn)
-                fixedParent.addView(gearRow)
+                val btn = makeButton(label, isFixed = true)
+                btn.setOnClickListener { cb() }
+                row.addView(btn)
+                fixedParent.addView(row)
             }
-            1 -> {
-                val kbRow = LinearLayout(context).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_HORIZONTAL
-                    layoutParams = LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
-                    )
-                }
-                val kbBtn = makeButton("⌨️", isFixed = true)
-                kbBtn.setOnClickListener { toggleKeyboard() }
-                kbRow.addView(kbBtn)
-                fixedParent.addView(kbRow, 0)
+        } else if (jsonArray.length() == 1) {
+            val kbRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, rowHeight
+                )
             }
+            val kbBtn = makeButton("⌨️", isFixed = true)
+            kbBtn.setOnClickListener { toggleKeyboard() }
+            kbRow.addView(kbBtn)
+            fixedParent.addView(kbRow, 0)
         }
     } catch (e: Exception) {
         Log.e(TAG, "rebuildExtraKeys failed", e)
@@ -892,7 +1045,6 @@ private class ShellSessionController(
 
     fun attachSessionIfNeeded(id: Int) {
         if (id == attachedId) return
-
         val attachLogic = {
             attachedId = id
             val s = sessionFor(id)
@@ -900,7 +1052,6 @@ private class ShellSessionController(
             PtyOutputRelay.bind(s, terminalView)
             terminalView.updateSize()
         }
-
         if (terminalView.width > 0 && terminalView.height > 0) {
             attachLogic()
         } else {

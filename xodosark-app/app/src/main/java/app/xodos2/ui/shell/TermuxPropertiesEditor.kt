@@ -70,6 +70,10 @@ fun TermuxPropertiesEditorDialog(
     val targetFile = remember(containerId) {
         initial.sourceFile ?: TermuxPropertiesLoader.defaultFile(context, containerId)
     }
+var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
+var backgroundDisplay by remember { mutableStateOf(initial.backgroundDisplay ?: "") } // "", "x11", "wayland"
+var editingColor by remember { mutableStateOf<ColorField?>(null) }
+
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var bg by remember { mutableStateOf(initial.backgroundColor?.let { intToHex(it) } ?: "") }
@@ -85,8 +89,7 @@ fun TermuxPropertiesEditorDialog(
             }
         )
     }
-    var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
-    var editingColor by remember { mutableStateOf<ColorField?>(null) }
+   
     var error by remember { mutableStateOf<String?>(null) }
 
     // Image picker — auto-sets background alpha to 59 (~23%) so it acts as a
@@ -188,8 +191,13 @@ fun TermuxPropertiesEditorDialog(
                             }
                         }
                     )
-                    else -> AdvancedTab(blink, { blink = it }, targetFile.absolutePath)
-                }
+                 else -> AdvancedTab(
+    blink = blink,
+    onBlink = { blink = it },
+    filePath = targetFile.absolutePath,
+    displayMode = backgroundDisplay,
+    onDisplayModeChange = { backgroundDisplay = it }
+)
 
                 error?.let { msg ->
                     Spacer(Modifier.height(8.dp))
@@ -218,6 +226,9 @@ fun TermuxPropertiesEditorDialog(
                     // Overlay removed — the background color's alpha now does
                     // the tinting over the image. Clean up any legacy value.
                     values["background_image_overlay"] = null
+                    // 
+values["background_display"] =
+    backgroundDisplay.trim().lowercase().takeIf { it == "x11" || it == "wayland" }
 
                     TermuxPropertiesWriter.save(targetFile, values)
                     onSaved()
@@ -479,15 +490,98 @@ private fun ImageTab(
         )
     }
 }
-
 @Composable
-private fun AdvancedTab(blink: String, onBlink: (String) -> Unit, filePath: String) {
+private fun AdvancedTab(
+    blink: String,
+    onBlink: (String) -> Unit,
+    filePath: String,
+    displayMode: String,
+    onDisplayModeChange: (String) -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState())
     ) {
+        // ── Terminal background display ─────────────────────
+        Text(
+            "Terminal background display",
+            color = ComposeColor.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Run a live X11 or Wayland surface behind the terminal text. " +
+            "Use it to watch GUI apps (glmark2, xterm, etc.) render while you keep " +
+            "typing in the shell. Input still goes to the terminal, not the display.",
+            color = ComposeColor.White.copy(alpha = 0.55f),
+            fontSize = 11.sp
+        )
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    ComposeColor.White.copy(alpha = 0.04f),
+                    RoundedCornerShape(10.dp)
+                )
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val options = listOf(
+                "" to "None",
+                "x11" to "X11",
+                "wayland" to "Wayland"
+            )
+            options.forEach { (key, label) ->
+                val active = displayMode == key
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .background(
+                            if (active) ComposeColor(0xFF7C3AED).copy(alpha = 0.7f)
+                            else ComposeColor.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .clickable { onDisplayModeChange(key) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        label,
+                        color = if (active) ComposeColor.White
+                                else ComposeColor.White.copy(alpha = 0.6f),
+                        fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+
+        if (displayMode == "x11") {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Tip: inside the terminal run something like  DISPLAY=:0 glxgears &  " +
+                "to see the X11 output render behind the terminal.",
+                color = ComposeColor(0xFFC3B6F9).copy(alpha = 0.8f),
+                fontSize = 10.sp
+            )
+        } else if (displayMode == "wayland") {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Tip: the Wayland socket name is  wayland-terminal-bg  — " +
+                "export WAYLAND_DISPLAY=wayland-terminal-bg  then run e.g.  weston-simple-egl.",
+                color = ComposeColor(0xFFC3B6F9).copy(alpha = 0.8f),
+                fontSize = 10.sp
+            )
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // ── Existing cursor blink rate field ────────────────
         OutlinedTextField(
             value = blink,
             onValueChange = onBlink,
@@ -506,8 +600,10 @@ private fun AdvancedTab(blink: String, onBlink: (String) -> Unit, filePath: Stri
         Text(filePath, color = ComposeColor(0xFFC3B6F9), fontSize = 11.sp)
         Spacer(Modifier.height(16.dp))
         Text(
-            "Colors use #AARRGGBB. First two hex digits are alpha (00 = transparent, FF = opaque).\n" +
-                    "Setting only foreground/cursor will NOT clear the ANSI palette — bash colors stay intact.",
+            "Colors use #AARRGGBB. First two hex digits are alpha " +
+            "(00 = transparent, FF = opaque).\n" +
+            "Setting only foreground/cursor will NOT clear the ANSI palette — " +
+            "bash colors stay intact.",
             color = ComposeColor.White.copy(alpha = 0.55f),
             style = MaterialTheme.typography.bodySmall
         )
