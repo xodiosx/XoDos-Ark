@@ -180,7 +180,7 @@ fun ShellScreen(
                     ?: sharedPrefs.getString("extra_keys_layout", DEFAULT_EXTRA_KEYS_JSON)
                     ?: DEFAULT_EXTRA_KEYS_JSON
                 showPropertiesEditor = false
-                propertiesEpoch++
+                propertiesEpoch++   // triggers the update block re-run → re-applies image + colors
             }
         )
     }
@@ -225,7 +225,7 @@ fun ShellScreen(
     AndroidView(
         modifier = modifier.fillMaxSize().statusBarsPadding().imePadding(),
         factory = { ctx ->
-            // ── Root is a FrameLayout so image covers the whole screen ──
+            // Root = FrameLayout so image covers the whole screen (incl. bar)
             val root = FrameLayout(ctx).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -234,7 +234,7 @@ fun ShellScreen(
                 descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             }
 
-            // LAYER 0 — background image, full screen (incl. behind bar)
+            // [0] Background image — full screen
             val bgImageView = AnimatedBackgroundView(ctx).apply { visibility = View.GONE }
             root.addView(
                 bgImageView,
@@ -244,7 +244,7 @@ fun ShellScreen(
                 )
             )
 
-            // LAYER 1 — tint overlay, full screen
+            // [1] Overlay tint — full screen
             val bgOverlay = View(ctx).apply { visibility = View.GONE }
             root.addView(
                 bgOverlay,
@@ -254,7 +254,7 @@ fun ShellScreen(
                 )
             )
 
-            // LAYER 2 — foreground content (terminal + extra keys bar)
+            // [2] Content column (terminal + bar)
             val contentColumn = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = FrameLayout.LayoutParams(
@@ -322,7 +322,7 @@ fun ShellScreen(
                 }
             }
 
-            // Terminal area — transparent so full-screen image shows through
+            // [contentColumn][0] Terminal area
             val terminalFrame = FrameLayout(ctx).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
@@ -338,21 +338,14 @@ fun ShellScreen(
             )
             contentColumn.addView(terminalFrame)
 
-            // ── Extra keys bar — semi-transparent so image shows through ──
+            // [contentColumn][1] Extra keys bar — initial background
+            // (real color/alpha is set on every update() from backgroundColor)
             val bottomBarLayout = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
                 )
-                val barDrawable = GradientDrawable(
-                    GradientDrawable.Orientation.TOP_BOTTOM,
-                    intArrayOf(
-                        Color.parseColor("#99080512"),   // ~60% opacity
-                        Color.parseColor("#CC030207")    // ~80% opacity
-                    )
-                ).apply { setStroke(1.dpToPx(ctx), Color.parseColor("#22FFFFFF")) }
-                background = barDrawable
                 setPadding(0, 4.dpToPx(ctx), 0, 4.dpToPx(ctx))
             }
 
@@ -383,7 +376,6 @@ fun ShellScreen(
 
             contentColumn.addView(bottomBarLayout)
 
-            // Foreground content on top of image + overlay
             root.addView(
                 contentColumn,
                 FrameLayout.LayoutParams(
@@ -400,7 +392,7 @@ fun ShellScreen(
         },
         update = { root ->
             @Suppress("UNUSED_VARIABLE")
-            val epoch = propertiesEpoch
+            val epoch = propertiesEpoch   // subscribes to save-driven refresh
 
             val cache = root.tag as ViewCache
             val controller = cache.controller
@@ -413,23 +405,19 @@ fun ShellScreen(
             controller.pruneSessionsExcept(terminalSessionIds.toSet())
             controller.attachSessionIfNeeded(activeSessionId)
 
-            // New layer layout:
-            //   0 = bg image (AnimatedBackgroundView)
-            //   1 = overlay (View)
-            //   2 = contentColumn (LinearLayout)
-            //       0 = terminalFrame (FrameLayout) → 0 = tv
-            //       1 = bottomBarLayout
+            // Layer indices
             val bgImageView   = root.getChildAt(0) as AnimatedBackgroundView
             val bgOverlay     = root.getChildAt(1) as View
             val contentColumn = root.getChildAt(2) as LinearLayout
             val terminalFrame = contentColumn.getChildAt(0) as FrameLayout
+            val bottomBar     = contentColumn.getChildAt(1) as LinearLayout
             val tv            = terminalFrame.getChildAt(0) as TerminalView
 
             tv.post {
                 val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
                 TermuxPropertiesLoader.apply(tv, props)
 
-                // ── Full-screen background image ──
+                // ── Image ──
                 val imgPath = props.backgroundImagePath
                 if (!imgPath.isNullOrBlank()) {
                     bgImageView.setSource(imgPath)
@@ -444,12 +432,27 @@ fun ShellScreen(
                     bgOverlay.visibility = View.GONE
                 }
 
-                // Background colour goes on the terminal frame only
-                // (bar keeps its own semi-transparent gradient so the image
-                //  shows through the whole screen).
-                terminalFrame.setBackgroundColor(props.backgroundColor ?: Color.BLACK)
+                // ── Terminal background color ──
+                val bgColor = props.backgroundColor ?: Color.BLACK
+                terminalFrame.setBackgroundColor(bgColor)
 
-                // Extra keys from file
+                // ── Bar background — alpha derived from background color ──
+                // This is the fix: bar was previously hardcoded to #99/#CC and
+                // never followed the user's chosen background alpha.
+                val bgAlpha = (bgColor ushr 24) and 0xFF
+                val barTopAlpha    = bgAlpha
+                val barBottomAlpha = bgAlpha
+                val barTop    = (barTopAlpha    shl 24) or 0x080512
+                val barBottom = (barBottomAlpha shl 24) or 0x030207
+                val barDrawable = GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(barTop, barBottom)
+                ).apply {
+                    setStroke(1.dpToPx(root.context), Color.parseColor("#22FFFFFF"))
+                }
+                bottomBar.background = barDrawable
+
+                // ── Extra keys from file ──
                 props.extraKeys?.let { fileJson ->
                     if (cache.appliedExtraKeysJson != fileJson) {
                         cache.appliedExtraKeysJson = fileJson

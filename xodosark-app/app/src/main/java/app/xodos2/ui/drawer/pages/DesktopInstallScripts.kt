@@ -100,23 +100,23 @@ object DesktopInstallScripts {
             "pulseaudio"
 
         val body = """
-            #!/data/data/app.xodos2/files/usr/bin/sh
+            #!/data/data/app.xodos2/files/usr/bin/bash
             set -e
 
-            echo "Installing $envName in native XoDos-Ark (Termux-style) environment..."
+            echo "Installing $envName in native XoDos-Ark (native-style) environment..."
 
             export PREFIX="/data/data/app.xodos2/files/usr"
             export HOME="/data/data/app.xodos2/files/home"
-            export PATH="${sd}PREFIX/bin:/system/bin:/system/xbin"
-            export LD_LIBRARY_PATH="${sd}PREFIX/lib"
+            #export PATH="${sd}PREFIX/bin:/system/bin:/system/xbin"
+           # export LD_LIBRARY_PATH="${sd}PREFIX/lib"
             export PULSE_SERVER=127.0.0.1
             export DEBIAN_FRONTEND=noninteractive
 
             mkdir -p "${sd}HOME"
 
             # Enable x11-repo (all desktop packages live there)
-            apt install -y x11-repo || pkg install -y x11-repo
-            apt update
+            apt update  || pkg update 
+           # apt upgrade -y
 
             # ── Hardware acceleration stack (always) ──
             echo "Installing GPU / Vulkan / Mesa stack..."
