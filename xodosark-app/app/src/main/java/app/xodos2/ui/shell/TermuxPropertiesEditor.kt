@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -73,7 +72,6 @@ fun TermuxPropertiesEditorDialog(
     }
 
     var selectedTab by remember { mutableIntStateOf(0) }
-
     var bg by remember { mutableStateOf(initial.backgroundColor?.let { intToHex(it) } ?: "") }
     var fg by remember { mutableStateOf(initial.foregroundColor?.let { intToHex(it) } ?: "") }
     var cursor by remember { mutableStateOf(initial.cursorColor?.let { intToHex(it) } ?: "") }
@@ -88,17 +86,12 @@ fun TermuxPropertiesEditorDialog(
         )
     }
     var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
-var overlayColor by remember {
-    mutableStateOf(
-        initial.backgroundImageOverlayColor?.let { intToHex(it) } ?: "#80000000"
-        // keep 50% black as default for readability — you can change this to
-
-    )
-}
     var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    // Image picker — keeps extension so GIF stays .gif
+    // Image picker — auto-sets background alpha to 59 (~23%) so it acts as a
+    // subtle tint over the image for readability. The user can override the
+    // alpha later in the Colors tab (e.g. set to 0 for a pure image).
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -122,6 +115,8 @@ var overlayColor by remember {
                     dest.outputStream().use { output -> input.copyTo(output) }
                 }
                 backgroundImagePath = dest.absolutePath
+                // Auto-tint: 0x3B = 59/255 ≈ 23 % opacity
+                bg = withAlpha(bg, 0x3B)
             } catch (e: Exception) {
                 error = "Failed to copy image: ${e.message}"
             }
@@ -185,20 +180,12 @@ var overlayColor by remember {
                     )
                     2 -> ImageTab(
                         imagePath = backgroundImagePath,
-                        overlayColor = overlayColor,
-                        // Uses SAME bg color from Colors tab as background layer
-                        backgroundColorHex = bg,
                         onPickImage = { imagePicker.launch(arrayOf("image/*")) },
                         onRemoveImage = {
                             backgroundImagePath = ""
-                            File(context.filesDir, "terminal_background.png").delete()
-                        },
-                        onOverlayClick = {
-                            editingColor = ColorField(
-                                label = "Image overlay",
-                                key = "background_image_overlay",
-                                value = overlayColor
-                            ) { overlayColor = it }
+                            listOf("png", "gif", "webp", "jpg", "apng", "img").forEach { e ->
+                                File(context.filesDir, "terminal_background.$e").delete()
+                            }
                         }
                     )
                     else -> AdvancedTab(blink, { blink = it }, targetFile.absolutePath)
@@ -226,11 +213,11 @@ var overlayColor by remember {
                     values["terminal-cursor-blink-rate"] = blink.takeIf { it.isNotBlank() }
                     values["extra-keys"] = extraKeys.takeIf { it.isNotBlank() }
                     ansi.forEachIndexed { i, v -> values["color$i"] = v.takeIf { it.isNotBlank() } }
-
                     values["background_image"] = backgroundImagePath.takeIf { it.isNotBlank() }
-                    // Save the overlay regardless of whether an image is set,
-// so it persists for when the user adds one later.
-values["background_image_overlay"] = overlayColor.takeIf { it.isNotBlank() }
+
+                    // Overlay removed — the background color's alpha now does
+                    // the tinting over the image. Clean up any legacy value.
+                    values["background_image_overlay"] = null
 
                     TermuxPropertiesWriter.save(targetFile, values)
                     onSaved()
@@ -418,18 +405,15 @@ private fun ExtraKeysTab(
 @Composable
 private fun ImageTab(
     imagePath: String,
-    overlayColor: String,
-    backgroundColorHex: String,
     onPickImage: () -> Unit,
-    onRemoveImage: () -> Unit,
-    onOverlayClick: () -> Unit
+    onRemoveImage: () -> Unit
 ) {
-    val overlayPreview = remember(overlayColor) { parseColor(overlayColor) }
-    val bgPreview = remember(backgroundColorHex) {
-        parseColor(backgroundColorHex) ?: 0xFF000000.toInt()
-    }
-
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 480.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
         Text("Background image", color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
 
@@ -437,7 +421,7 @@ private fun ImageTab(
             Text(imagePath, color = ComposeColor.White.copy(alpha = 0.6f), fontSize = 11.sp)
         } else {
             Text(
-                "No image selected — pick PNG, JPG, WebP or GIF",
+                "No image selected",
                 color = ComposeColor.White.copy(alpha = 0.6f),
                 fontSize = 13.sp
             )
@@ -460,55 +444,39 @@ private fun ImageTab(
         }
 
         Spacer(Modifier.height(20.dp))
-        Text("Overlay tint", color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(4.dp))
+
         Text(
-            "Shown stacked on top of your Background color. " +
-                    "Alpha 00 = no tint, 80 = 50%, FF = fully covering.",
-            color = ComposeColor.White.copy(alpha = 0.55f),
+            "Supported formats",
+            color = ComposeColor.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "PNG, JPG — static images\n" +
+            "GIF — animated (all Android versions)\n" +
+            "WebP, APNG — animated (Android 9+)",
+            color = ComposeColor.White.copy(alpha = 0.6f),
             fontSize = 11.sp
         )
-        Spacer(Modifier.height(8.dp))
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onOverlayClick() }
-                .background(ComposeColor.White.copy(alpha = 0.03f), RoundedCornerShape(8.dp))
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Swatch = Background ⊕ Overlay — exactly what's shown over the image
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .background(ComposeColor(bgPreview), RoundedCornerShape(8.dp))
-                    .border(1.dp, ComposeColor.White.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
-            ) {
-                overlayPreview?.let { ov ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(ComposeColor(ov), RoundedCornerShape(8.dp))
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(overlayColor, color = ComposeColor.White, fontSize = 13.sp)
-                Text(
-                    "over background ${if (backgroundColorHex.isBlank()) "default black" else backgroundColorHex}",
-                    color = ComposeColor.White.copy(alpha = 0.5f),
-                    fontSize = 10.sp
-                )
-            }
-            Text(
-                "Edit",
-                color = ComposeColor(0xFFC3B6F9),
-                fontWeight = FontWeight.Bold,
-                fontSize = 12.sp
-            )
-        }
+        Spacer(Modifier.height(20.dp))
+
+        Text(
+            "About the tint",
+            color = ComposeColor.White,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            "Picking an image automatically sets the background color's alpha " +
+            "to 59 (~23 %) so it acts as a subtle tint for readability.\n\n" +
+            "Change it in the Colors tab — set alpha to 0 for a pure, untinted image, " +
+            "or raise it for a darker overlay.",
+            color = ComposeColor.White.copy(alpha = 0.6f),
+            fontSize = 11.sp
+        )
     }
 }
 
@@ -570,4 +538,15 @@ private fun parseColor(raw: String): Int? {
     } catch (_: NumberFormatException) {
         null
     }
+}
+
+/** Replaces the alpha byte of [currentHex] with [newAlpha] (0–255), keeping RGB. */
+private fun withAlpha(currentHex: String, newAlpha: Int): String {
+    val clean = currentHex.trim().removePrefix("#").removePrefix("0x").uppercase()
+    val rgb = when (clean.length) {
+        8 -> clean.substring(2)   // strip existing AA
+        6 -> clean
+        else -> "000000"          // default black if empty
+    }
+    return "#%02X%s".format(newAlpha.coerceIn(0, 255), rgb)
 }
