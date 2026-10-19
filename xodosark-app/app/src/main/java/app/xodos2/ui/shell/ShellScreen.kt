@@ -123,24 +123,15 @@ private const val BG_WAYLAND_SOCKET = "wayland-terminal-bg"
  */
 private class BackgroundLorieView(ctx: Context) : LorieView(ctx) {
 
-    // Focus: never let this view intercept anything that could fire the
-    // TouchInputHandler code path (which assumes MainActivity is non-null).
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
         // intentionally no-op
     }
 
-    // Pre-IME dispatch (happens BEFORE ViewRootImpl, catches back key first).
     override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean = false
-
-    // The callback that LorieView normally uses to intercept back for its drawer.
     override fun onKeyPreIme(keyCode: Int, event: KeyEvent): Boolean = false
-
-    // Ordinary key dispatch.
     override fun dispatchKeyEvent(event: KeyEvent): Boolean = false
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = false
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = false
-
-    // Touch / trackball — don't consume.
     override fun onTouchEvent(event: MotionEvent): Boolean = false
     override fun onGenericMotionEvent(event: MotionEvent): Boolean = false
 }
@@ -170,6 +161,11 @@ fun ShellScreen(
     }
     val lifecycleOwner = LocalLifecycleOwner.current
     val ioScope = rememberCoroutineScope()
+
+    // Tracks which sessions have had props applied already, so onEmulatorSet
+    // doesn't re-run apply() on every re-attach (which visibly refreshes the
+    // terminal). Cleared when sessions are invalidated.
+    val propsAppliedSessions = remember { mutableSetOf<Int>() }
 
     val activeContainerId = remember(activeSessionId) {
         when (TerminalSessionIds.namespaceOf(activeSessionId)) {
@@ -271,6 +267,7 @@ fun ShellScreen(
             saveZoomImmediately()
             PtyOutputRelay.unbind()
             InputRouteState.shellTerminalView = null
+            propsAppliedSessions.clear()
         }
     }
 
@@ -338,14 +335,10 @@ fun ShellScreen(
                     val session = tv.currentSession ?: return
                     if (session !is RustPtySession) return
 
-                    // Only apply props the first time the emulator is set
-                    // for this session id. Otherwise every re-attach would
-                    // re-run apply() → visible refresh.
+                    // Only apply props once per session id — otherwise every
+                    // re-attach re-runs apply() and visibly refreshes the UI.
                     val sessionId = session.sessionId
-                    val marker = "xodos2_props_applied_session_$sessionId"
-                    val alreadyApplied = tv.getTag(marker) == true
-                    if (alreadyApplied) return
-                    tv.setTag(marker, true)
+                    if (!propsAppliedSessions.add(sessionId)) return
 
                     val cid = when (TerminalSessionIds.namespaceOf(sessionId)) {
                         TerminalSessionIds.NS_ARCH   -> 1
@@ -470,6 +463,10 @@ fun ShellScreen(
             if (rendererSessionResetEpoch != prevEpoch) {
                 root.setTag(R.id.xodos2_renderer_session_epoch, rendererSessionResetEpoch)
                 controller.invalidateAllSessions()
+                propsAppliedSessions.clear()
+                cache.cachedProps = null
+                cache.cachedPropsEpoch = -1
+                cache.cachedPropsContainerId = -1
             }
             controller.pruneSessionsExcept(terminalSessionIds.toSet())
             controller.attachSessionIfNeeded(activeSessionId)
@@ -482,7 +479,6 @@ fun ShellScreen(
             val tv                 = terminalFrame.getChildAt(0) as TerminalView
 
             tv.post {
-                // ── Load props only when they changed (epoch / container) ──
                 val props = if (
                     cache.cachedProps == null ||
                     cache.cachedPropsEpoch != propertiesEpoch ||
