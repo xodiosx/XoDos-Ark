@@ -423,7 +423,7 @@ fun ShellScreen(
             controller.pruneSessionsExcept(terminalSessionIds.toSet())
             controller.attachSessionIfNeeded(activeSessionId)
 
-            // New layer order:
+            // Layer order:
             //   [0] bgDisplayContainer (FrameLayout — X11/Wayland surface)
             //   [1] bgImageView (AnimatedBackgroundView)
             //   [2] contentColumn
@@ -441,24 +441,23 @@ fun ShellScreen(
                 TermuxPropertiesLoader.apply(tv, props)
 
                 // ── Background display (X11 / Wayland) ──
-              // 
-val desiredMode = props.backgroundDisplay
-if (cache.currentDisplayMode != desiredMode) {
-    teardownBackgroundDisplay(cache)
-    cache.currentDisplayMode = desiredMode
-    if (desiredMode != null) {
-        val modeToSetup = desiredMode   // capture before launch
-        cache.displaySetupJob = ioScope.launch {
-            setupBackgroundDisplay(
-                cache = cache,
-                mode = modeToSetup,
-                context = root.context,
-                activity = activity,
-                container = bgDisplayContainer
-            )
-        }
-    }
-}
+                val desiredMode = props.backgroundDisplay
+                if (cache.currentDisplayMode != desiredMode) {
+                    teardownBackgroundDisplay(cache)
+                    cache.currentDisplayMode = desiredMode
+                    if (desiredMode != null) {
+                        val modeToSetup = desiredMode
+                        cache.displaySetupJob = ioScope.launch {
+                            setupBackgroundDisplay(
+                                cache = cache,
+                                mode = modeToSetup,
+                                context = root.context,
+                                activity = activity,
+                                container = bgDisplayContainer
+                            )
+                        }
+                    }
+                }
 
                 // ── Static image background ──
                 val imgPath = props.backgroundImagePath
@@ -654,8 +653,12 @@ private suspend fun setupBackgroundDisplay(
         }
     } catch (t: Throwable) {
         Log.e(TAG, "setupBackgroundDisplay($mode) failed", t)
-        withContext(Dispatchers.Main) { container.visibility = View.GONE }
-        cache.currentDisplayMode = null 
+        withContext(Dispatchers.Main) {
+            container.visibility = View.GONE
+            // Stay at desired mode to avoid hot-loop retries; user must toggle
+            // the dropdown to try again.
+            cache.currentDisplayMode = mode
+        }
     }
 }
 

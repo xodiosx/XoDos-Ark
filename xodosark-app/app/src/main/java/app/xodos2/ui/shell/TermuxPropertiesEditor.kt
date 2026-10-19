@@ -70,10 +70,9 @@ fun TermuxPropertiesEditorDialog(
     val targetFile = remember(containerId) {
         initial.sourceFile ?: TermuxPropertiesLoader.defaultFile(context, containerId)
     }
-var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
-var backgroundDisplay by remember { mutableStateOf(initial.backgroundDisplay ?: "") } // "", "x11", "wayland"
-var editingColor by remember { mutableStateOf<ColorField?>(null) }
 
+    var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
+    var backgroundDisplay by remember { mutableStateOf(initial.backgroundDisplay ?: "") } // "", "x11", "wayland"
 
     var selectedTab by remember { mutableIntStateOf(0) }
     var bg by remember { mutableStateOf(initial.backgroundColor?.let { intToHex(it) } ?: "") }
@@ -89,12 +88,11 @@ var editingColor by remember { mutableStateOf<ColorField?>(null) }
             }
         )
     }
-   
+    var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     // Image picker — auto-sets background alpha to 59 (~23%) so it acts as a
-    // subtle tint over the image for readability. The user can override the
-    // alpha later in the Colors tab (e.g. set to 0 for a pure image).
+    // subtle tint over the image for readability.
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -191,13 +189,14 @@ var editingColor by remember { mutableStateOf<ColorField?>(null) }
                             }
                         }
                     )
-                 else -> AdvancedTab(
-    blink = blink,
-    onBlink = { blink = it },
-    filePath = targetFile.absolutePath,
-    displayMode = backgroundDisplay,
-    onDisplayModeChange = { backgroundDisplay = it }
-)
+                    else -> AdvancedTab(
+                        blink = blink,
+                        onBlink = { blink = it },
+                        filePath = targetFile.absolutePath,
+                        displayMode = backgroundDisplay,
+                        onDisplayModeChange = { backgroundDisplay = it }
+                    )
+                }   // ← closes `when` (this was the missing line)
 
                 error?.let { msg ->
                     Spacer(Modifier.height(8.dp))
@@ -222,13 +221,10 @@ var editingColor by remember { mutableStateOf<ColorField?>(null) }
                     values["extra-keys"] = extraKeys.takeIf { it.isNotBlank() }
                     ansi.forEachIndexed { i, v -> values["color$i"] = v.takeIf { it.isNotBlank() } }
                     values["background_image"] = backgroundImagePath.takeIf { it.isNotBlank() }
-
-                    // Overlay removed — the background color's alpha now does
-                    // the tinting over the image. Clean up any legacy value.
                     values["background_image_overlay"] = null
-                    // 
-values["background_display"] =
-    backgroundDisplay.trim().lowercase().takeIf { it == "x11" || it == "wayland" }
+
+                    values["background_display"] =
+                        backgroundDisplay.trim().lowercase().takeIf { it == "x11" || it == "wayland" }
 
                     TermuxPropertiesWriter.save(targetFile, values)
                     onSaved()
@@ -490,6 +486,7 @@ private fun ImageTab(
         )
     }
 }
+
 @Composable
 private fun AdvancedTab(
     blink: String,
