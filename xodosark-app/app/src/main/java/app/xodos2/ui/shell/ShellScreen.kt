@@ -87,7 +87,6 @@ private class ViewCache(
     val keysContainer: LinearLayout,
     val fixedContainer: LinearLayout,
     val viewClient: ShellViewClient,
-    // New: background display plumbing
     val bgDisplayContainer: FrameLayout,
     var currentDisplayMode: String? = null,
     var displaySetupJob: Job? = null,
@@ -97,10 +96,54 @@ private class ViewCache(
     var x11Frame: FrameLayout? = null
 ) {
     var appliedExtraKeysJson: String? = null
+
+    // ── Cached props so we don't re-read the file on every recompose ──
+    var cachedProps: TermuxProperties? = null
+    var cachedPropsEpoch: Int = -1
+    var cachedPropsContainerId: Int = -1
 }
 
 private const val TAG = "ShellScreen"
 private const val BG_WAYLAND_SOCKET = "wayland-terminal-bg"
+
+/**
+ * Background LorieView — total no-op for input.
+ *
+ * The stock com.termux.x11.LorieView overrides several key-dispatch methods
+ * and forwards them to its host MainActivity / TouchInputHandler. Inside
+ * the app's normal activity that means:
+ *   • back key → opens the X11 drawer
+ *   • back key → opens X11 preferences
+ *   • back key → NPEs inside TouchInputHandler.refreshInputDevices
+ *
+ * Because this LorieView sits behind the terminal purely as a render surface,
+ * we intercept every input-dispatch method and return false, meaning "I don't
+ * handle this, pass it on". That lets the back key reach the terminal's
+ * onKeyListener (and then the activity) as expected.
+ */
+private class BackgroundLorieView(ctx: Context) : LorieView(ctx) {
+
+    // Focus: never let this view intercept anything that could fire the
+    // TouchInputHandler code path (which assumes MainActivity is non-null).
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        // intentionally no-op
+    }
+
+    // Pre-IME dispatch (happens BEFORE ViewRootImpl, catches back key first).
+    override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean = false
+
+    // The callback that LorieView normally uses to intercept back for its drawer.
+    override fun onKeyPreIme(keyCode: Int, event: KeyEvent): Boolean = false
+
+    // Ordinary key dispatch.
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean = false
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean = false
+    override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = false
+
+    // Touch / trackball — don't consume.
+    override fun onTouchEvent(event: MotionEvent): Boolean = false
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean = false
+}
 
 @Composable
 fun ShellScreen(
@@ -150,7 +193,6 @@ fun ShellScreen(
     var showCloseSessionDialog by remember { mutableStateOf(false) }
     var showPropertiesEditor by remember { mutableStateOf(false) }
 
-    // Dialog: close/exit confirmation
     if (showCloseSessionDialog) {
         AlertDialog(
             onDismissRequest = { showCloseSessionDialog = false },
@@ -247,7 +289,7 @@ fun ShellScreen(
                 descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             }
 
-            // [0] Native background display container (X11 / Wayland) — hidden until needed
+            // [0] Native background display container (X11 / Wayland)
             val bgDisplayContainer = FrameLayout(ctx).apply {
                 visibility = View.GONE
                 layoutParams = FrameLayout.LayoutParams(
@@ -293,17 +335,26 @@ fun ShellScreen(
                 override fun isTerminalViewSelected(): Boolean = true
 
                 override fun onEmulatorSet() {
-                    val session = tv.currentSession
-                    if (session is RustPtySession) {
-                        val cid = when (TerminalSessionIds.namespaceOf(session.sessionId)) {
-                            TerminalSessionIds.NS_ARCH   -> 1
-                            TerminalSessionIds.NS_DEBIAN -> 2
-                            TerminalSessionIds.NS_WINE   -> 3
-                            else -> 1
-                        }
-                        val props = TermuxPropertiesLoader.load(ctx, cid)
-                        TermuxPropertiesLoader.apply(tv, props)
+                    val session = tv.currentSession ?: return
+                    if (session !is RustPtySession) return
+
+                    // Only apply props the first time the emulator is set
+                    // for this session id. Otherwise every re-attach would
+                    // re-run apply() → visible refresh.
+                    val sessionId = session.sessionId
+                    val marker = "xodos2_props_applied_session_$sessionId"
+                    val alreadyApplied = tv.getTag(marker) == true
+                    if (alreadyApplied) return
+                    tv.setTag(marker, true)
+
+                    val cid = when (TerminalSessionIds.namespaceOf(sessionId)) {
+                        TerminalSessionIds.NS_ARCH   -> 1
+                        TerminalSessionIds.NS_DEBIAN -> 2
+                        TerminalSessionIds.NS_WINE   -> 3
+                        else -> 1
                     }
+                    val props = TermuxPropertiesLoader.load(ctx, cid)
+                    TermuxPropertiesLoader.apply(tv, props)
                 }
             }
             tv.setTerminalViewClient(wrappedClient)
@@ -423,12 +474,6 @@ fun ShellScreen(
             controller.pruneSessionsExcept(terminalSessionIds.toSet())
             controller.attachSessionIfNeeded(activeSessionId)
 
-            // Layer order:
-            //   [0] bgDisplayContainer (FrameLayout — X11/Wayland surface)
-            //   [1] bgImageView (AnimatedBackgroundView)
-            //   [2] contentColumn
-            //       [0] terminalFrame → [0] tv
-            //       [1] bottomBarLayout
             val bgDisplayContainer = root.getChildAt(0) as FrameLayout
             val bgImageView        = root.getChildAt(1) as AnimatedBackgroundView
             val contentColumn      = root.getChildAt(2) as LinearLayout
@@ -437,8 +482,19 @@ fun ShellScreen(
             val tv                 = terminalFrame.getChildAt(0) as TerminalView
 
             tv.post {
-                val props = TermuxPropertiesLoader.load(root.context, activeContainerId)
-                TermuxPropertiesLoader.apply(tv, props)
+                // ── Load props only when they changed (epoch / container) ──
+                val props = if (
+                    cache.cachedProps == null ||
+                    cache.cachedPropsEpoch != propertiesEpoch ||
+                    cache.cachedPropsContainerId != activeContainerId
+                ) {
+                    TermuxPropertiesLoader.load(root.context, activeContainerId).also {
+                        TermuxPropertiesLoader.apply(tv, it)
+                        cache.cachedProps = it
+                        cache.cachedPropsEpoch = propertiesEpoch
+                        cache.cachedPropsContainerId = activeContainerId
+                    }
+                } else cache.cachedProps!!
 
                 // ── Background display (X11 / Wayland) ──
                 val desiredMode = props.backgroundDisplay
@@ -571,7 +627,9 @@ private suspend fun setupBackgroundDisplay(
                         isFocusable = false
                         descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     }
-                    val lv = LorieView(context).apply {
+                    // ✅ BackgroundLorieView — no-op on every key/touch/focus
+                    // callback, so back key never reaches X11's drawer/prefs.
+                    val lv = BackgroundLorieView(context).apply {
                         isClickable = false
                         isFocusable = false
                         isFocusableInTouchMode = false
@@ -655,8 +713,6 @@ private suspend fun setupBackgroundDisplay(
         Log.e(TAG, "setupBackgroundDisplay($mode) failed", t)
         withContext(Dispatchers.Main) {
             container.visibility = View.GONE
-            // Stay at desired mode to avoid hot-loop retries; user must toggle
-            // the dropdown to try again.
             cache.currentDisplayMode = mode
         }
     }
@@ -673,10 +729,6 @@ private fun teardownBackgroundDisplay(cache: ViewCache) {
     cache.x11Frame = null
 
     cache.waylandSurface = null
-    // nativeSurfaceDestroyed is called by the SurfaceHolder callback.
-    // We intentionally keep cache.waylandServerId alive so the server can be
-    // re-used if the user toggles the same mode back on. It is cleaned up
-    // by the OS when the app process dies.
 
     cache.bgDisplayContainer.removeAllViews()
     cache.bgDisplayContainer.visibility = View.GONE
@@ -1051,6 +1103,9 @@ private class ShellSessionController(
         val attachLogic = {
             attachedId = id
             val s = sessionFor(id)
+            // Always unbind first — prevents stacked output relays if
+            // a prior bind slipped through (e.g. after invalidateAllSessions).
+            runCatching { PtyOutputRelay.unbind() }
             terminalView.attachSession(s)
             PtyOutputRelay.bind(s, terminalView)
             terminalView.updateSize()
