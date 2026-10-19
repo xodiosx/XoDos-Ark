@@ -44,12 +44,19 @@ fun ColorPickerDialog(
     onDismiss: () -> Unit,
     onColorSelected: (hex: String) -> Unit
 ) {
-    var hexInput by remember(initialHex) {
-        mutableStateOf(normalizeHexInput(initialHex).take(6))
+    // FIX: for 8-char AARRGGBB take the LAST 6 (RRGGBB), not the first 6.
+    // Old code did `take(6)` which mis-read every colour with alpha.
+    val initialRgb = remember(initialHex) {
+        val clean = normalizeHexInput(initialHex)
+        when (clean.length) {
+            8 -> clean.substring(2)      // skip AA prefix
+            6 -> clean
+            else -> ""
+        }
     }
-    var alpha by remember(initialHex) {
-        mutableIntStateOf(parseAlpha(initialHex))
-    }
+
+    var hexInput by remember(initialHex) { mutableStateOf(initialRgb) }
+    var alpha by remember(initialHex) { mutableIntStateOf(parseAlpha(initialHex)) }
     var error by remember { mutableStateOf<String?>(null) }
 
     val rgb = remember(hexInput) { parseRgbHex(hexInput) }
@@ -59,14 +66,10 @@ fun ColorPickerDialog(
         onDismissRequest = onDismiss,
         containerColor = ComposeColor.Transparent,
         modifier = Modifier.glassDialogStyle().fillMaxWidth(0.92f),
-        title = {
-            Text(title, color = ComposeColor.White, fontWeight = FontWeight.Bold)
-        },
+        title = { Text(title, color = ComposeColor.White, fontWeight = FontWeight.Bold) },
         text = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
             ) {
                 Box(
                     modifier = Modifier
@@ -76,11 +79,7 @@ fun ColorPickerDialog(
                             preview?.let { ComposeColor(it) } ?: ComposeColor.Transparent,
                             RoundedCornerShape(12.dp)
                         )
-                        .border(
-                            1.dp,
-                            ComposeColor.White.copy(alpha = 0.3f),
-                            RoundedCornerShape(12.dp)
-                        )
+                        .border(1.dp, ComposeColor.White.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
                 ) {
                     Text(
                         preview?.let {
@@ -91,10 +90,7 @@ fun ColorPickerDialog(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .background(
-                                ComposeColor.Black.copy(alpha = 0.5f),
-                                RoundedCornerShape(6.dp)
-                            )
+                            .background(ComposeColor.Black.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -107,9 +103,7 @@ fun ColorPickerDialog(
                         hexInput = v.uppercase().filter { it in "0123456789ABCDEF" }.take(6)
                         error = null
                     },
-                    label = {
-                        Text("HEX (RRGGBB)", color = ComposeColor.White.copy(alpha = 0.7f))
-                    },
+                    label = { Text("HEX (RRGGBB)", color = ComposeColor.White.copy(alpha = 0.7f)) },
                     prefix = { Text("#", color = ComposeColor.White.copy(alpha = 0.5f)) },
                     singleLine = true,
                     isError = rgb == null && hexInput.isNotEmpty(),

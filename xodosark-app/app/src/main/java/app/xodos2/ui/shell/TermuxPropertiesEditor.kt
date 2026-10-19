@@ -88,11 +88,13 @@ fun TermuxPropertiesEditorDialog(
         )
     }
     var backgroundImagePath by remember { mutableStateOf(initial.backgroundImagePath ?: "") }
-    var overlayColor by remember {
-        mutableStateOf(
-            initial.backgroundImageOverlayColor?.let { intToHex(it) } ?: "#80000000"
-        )
-    }
+var overlayColor by remember {
+    mutableStateOf(
+        initial.backgroundImageOverlayColor?.let { intToHex(it) } ?: "#80000000"
+        // keep 50% black as default for readability — you can change this to
+
+    )
+}
     var editingColor by remember { mutableStateOf<ColorField?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -226,9 +228,9 @@ fun TermuxPropertiesEditorDialog(
                     ansi.forEachIndexed { i, v -> values["color$i"] = v.takeIf { it.isNotBlank() } }
 
                     values["background_image"] = backgroundImagePath.takeIf { it.isNotBlank() }
-                    values["background_image_overlay"] = overlayColor.takeIf {
-                        it.isNotBlank() && backgroundImagePath.isNotBlank()
-                    }
+                    // Save the overlay regardless of whether an image is set,
+// so it persists for when the user adds one later.
+values["background_image_overlay"] = overlayColor.takeIf { it.isNotBlank() }
 
                     TermuxPropertiesWriter.save(targetFile, values)
                     onSaved()
