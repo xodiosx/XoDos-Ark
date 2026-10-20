@@ -18,26 +18,26 @@ fun ProotOptionsSection(
     containerId: Int,
 ) {
     val context = LocalContext.current
-
-    // Initial values — prefer JSON (authoritative for Rust), fall back to prefs
     val initial = remember(containerId) {
         NativeInstallCoordinator.loadProotOptions(context, containerId)
     }
 
     var username by remember { mutableStateOf(initial.username.ifBlank { "root" }) }
     var hostname by remember { mutableStateOf(initial.hostname.ifBlank { "localhost" }) }
+    var kernel by remember { mutableStateOf(initial.kernelRelease) }
     var sharedHome by remember { mutableStateOf(initial.sharedHome) }
-    var kernelRelease by remember { mutableStateOf(initial.kernelRelease) }
+    var isolated by remember { mutableStateOf(initial.isolated) }
+    var minimal by remember { mutableStateOf(initial.minimal) }
 
     fun persist() {
-        // Keep prefs for UI-only consumers (e.g. showing current value in other places)
         prefs.edit()
             .putString("proot_username_$containerId", username)
             .putString("proot_hostname_$containerId", hostname)
             .putBoolean("proot_shared_home_$containerId", sharedHome)
-            .putString("proot_kernel_release_$containerId", kernelRelease)
+            .putString("proot_kernel_release_$containerId", kernel)
+            .putBoolean("proot_isolated_$containerId", isolated)
+            .putBoolean("proot_minimal_$containerId", minimal)
             .apply()
-        // Save JSON consumed by Rust on next session spawn
         NativeInstallCoordinator.saveProotOptions(
             context, containerId,
             NativeInstallCoordinator.ProotOptions(
@@ -45,16 +45,17 @@ fun ProotOptionsSection(
                 hostname = hostname,
                 sharedHome = sharedHome,
                 sharedTmp = true,
-                kernelRelease = kernelRelease
+                kernelRelease = kernel,
+                isolated = isolated,
+                minimal = minimal
             )
         )
     }
 
     DrawerExpandableSection(title = "Proot Options", defaultExpanded = false) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-
             Text(
-                "Login shell settings — applied the next time a terminal for this container is started.",
+                "Login shell settings — applied on the next terminal spawn.",
                 color = Color.White.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.bodySmall
             )
@@ -66,14 +67,7 @@ fun ProotOptionsSection(
                 label = { Text("Username (default: root)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFFC3B6F9),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                    focusedLabelColor = Color(0xFFC3B6F9),
-                    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                )
+                colors = textFieldColors()
             )
             Spacer(Modifier.height(8.dp))
 
@@ -83,31 +77,17 @@ fun ProotOptionsSection(
                 label = { Text("Hostname (default: localhost)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFFC3B6F9),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                    focusedLabelColor = Color(0xFFC3B6F9),
-                    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                )
+                colors = textFieldColors()
             )
             Spacer(Modifier.height(8.dp))
 
             OutlinedTextField(
-                value = kernelRelease,
-                onValueChange = { kernelRelease = it; persist() },
+                value = kernel,
+                onValueChange = { kernel = it; persist() },
                 label = { Text("Kernel release (blank = default)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFFC3B6F9),
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                    focusedLabelColor = Color(0xFFC3B6F9),
-                    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White
-                )
+                colors = textFieldColors()
             )
             Spacer(Modifier.height(12.dp))
 
@@ -115,10 +95,7 @@ fun ProotOptionsSection(
                 Switch(
                     checked = sharedHome,
                     onCheckedChange = { sharedHome = it; persist() },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color(0xFFC3B6F9),
-                        checkedTrackColor = Color(0xFF7C3AED)
-                    )
+                    colors = switchColors()
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Shared home folder", color = Color.White)
@@ -128,18 +105,53 @@ fun ProotOptionsSection(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(
                     checked = true,
-                    onCheckedChange = { /* forced */ },
+                    onCheckedChange = { },
                     enabled = false,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color(0xFFC3B6F9).copy(alpha = 0.6f),
-                        checkedTrackColor = Color(0xFF7C3AED).copy(alpha = 0.4f),
-                        disabledCheckedThumbColor = Color(0xFFC3B6F9).copy(alpha = 0.6f),
-                        disabledCheckedTrackColor = Color(0xFF7C3AED).copy(alpha = 0.4f)
-                    )
+                    colors = switchColors()
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Shared /tmp (forced)", color = Color.White.copy(alpha = 0.7f))
             }
+            Spacer(Modifier.height(4.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = isolated,
+                    onCheckedChange = { isolated = it; persist() },
+                    colors = switchColors()
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Isolated (skip host binds)", color = Color.White)
+            }
+            Spacer(Modifier.height(4.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = minimal,
+                    onCheckedChange = { minimal = it; persist() },
+                    colors = switchColors()
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Minimal (bare minimum)", color = Color.White)
+            }
         }
     }
 }
+
+@Composable
+private fun textFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = Color(0xFFC3B6F9),
+    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+    focusedLabelColor = Color(0xFFC3B6F9),
+    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White
+)
+
+@Composable
+private fun switchColors() = SwitchDefaults.colors(
+    checkedThumbColor = Color(0xFFC3B6F9),
+    checkedTrackColor = Color(0xFF7C3AED),
+    disabledCheckedThumbColor = Color(0xFFC3B6F9).copy(alpha = 0.6f),
+    disabledCheckedTrackColor = Color(0xFF7C3AED).copy(alpha = 0.4f)
+)

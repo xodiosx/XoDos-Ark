@@ -712,37 +712,53 @@ private fun writeNativeWrapper(context: Context) {
     }
 }
 
-// ─── Proot options (username / hostname / shared home / kernel) ──
-// Rust reads <filesDir>/proot_options/container_<N>.json at session start.
 private const val PROOT_OPTIONS_DIR = "proot_options"
 
 data class ProotOptions(
     val username: String = "root",
     val hostname: String = "localhost",
-    val sharedHome: Boolean = false,
-    val sharedTmp: Boolean = true, // always true; Rust forces it anyway
-    val kernelRelease: String = ""
+    val sharedHome: Boolean = true,       // matches proot-distro --termux-home default
+    val sharedTmp: Boolean = true,        // always forced
+    val kernelRelease: String = "",
+    val isolated: Boolean = false,
+    val minimal: Boolean = false,
+    val noSysvipc: Boolean = false,
+    val noLink2symlink: Boolean = false,
+    val changeId: String = "",
+    val cwd: String = "",
+    val binds: List<String> = emptyList(),
+    val envs: List<String> = emptyList()
 )
 
 fun saveProotOptions(context: Context, containerId: Int, opts: ProotOptions) {
     try {
         val dir = File(context.filesDir, PROOT_OPTIONS_DIR).apply { mkdirs() }
         val file = File(dir, "container_$containerId.json")
-        // Minimal escaping — these are simple strings, no quotes expected.
+        fun esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
+        val binds = opts.binds.joinToString(",") { "\"${esc(it)}\"" }
+        val envs  = opts.envs.joinToString(",")  { "\"${esc(it)}\"" }
         val json = """
             {
-              "username": "${opts.username.replace("\"", "")}",
-              "hostname": "${opts.hostname.replace("\"", "")}",
+              "username": "${esc(opts.username)}",
+              "hostname": "${esc(opts.hostname)}",
               "shared_home": ${opts.sharedHome},
               "shared_tmp": true,
-              "kernel_release": "${opts.kernelRelease.replace("\"", "")}"
+              "kernel_release": "${esc(opts.kernelRelease)}",
+              "isolated": ${opts.isolated},
+              "minimal": ${opts.minimal},
+              "no_sysvipc": ${opts.noSysvipc},
+              "no_link2symlink": ${opts.noLink2symlink},
+              "change_id": "${esc(opts.changeId)}",
+              "cwd": "${esc(opts.cwd)}",
+              "binds": [$binds],
+              "envs":  [$envs]
             }
         """.trimIndent()
         file.writeText(json)
         file.setReadable(true, false)
-        Log.i("NativeInstall", "Saved proot options for container $containerId → ${file.absolutePath}")
+        Log.i("NativeInstall", "Saved proot options c$containerId → ${file.absolutePath}")
     } catch (e: Exception) {
-        Log.e("NativeInstall", "Failed to save proot options", e)
+        Log.e("NativeInstall", "saveProotOptions failed", e)
     }
 }
 
@@ -750,20 +766,35 @@ fun loadProotOptions(context: Context, containerId: Int): ProotOptions {
     val file = File(context.filesDir, "$PROOT_OPTIONS_DIR/container_$containerId.json")
     if (!file.exists()) return ProotOptions()
     return try {
-        val txt = file.readText()
-        fun field(k: String): String? {
-            val re = Regex("\"$k\"\\s*:\\s*\"([^\"]*)\"")
-            return re.find(txt)?.groupValues?.get(1)
+        val t = file.readText()
+        fun f(k: String): String? =
+            Regex("\"$k\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(t)?.groupValues?.get(1)
+                ?.replace("\\\"", "\"")?.replace("\\\\", "\\")
+        fun b(k: String, default: Boolean = false): Boolean =
+            Regex("\"$k\"\\s*:\\s*(true|false)").find(t)?.groupValues?.get(1) == "true"
+        fun arr(k: String): List<String> {
+            val m = Regex("\"$k\"\\s*:\\s*\\[([^\\]]*)\\]").find(t) ?: return emptyList()
+            return Regex("\"((?:[^\"\\\\]|\\\\.)*)\"").findAll(m.groupValues[1])
+                .map { it.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\") }
+                .toList()
         }
         ProotOptions(
-            username = field("username") ?: "root",
-            hostname = field("hostname") ?: "localhost",
-            sharedHome = txt.contains("\"shared_home\"\\s*:\\s*true".toRegex()),
+            username = f("username") ?: "root",
+            hostname = f("hostname") ?: "localhost",
+            sharedHome = b("shared_home", true),
             sharedTmp = true,
-            kernelRelease = field("kernel_release") ?: ""
+            kernelRelease = f("kernel_release") ?: "",
+            isolated = b("isolated"),
+            minimal = b("minimal"),
+            noSysvipc = b("no_sysvipc"),
+            noLink2symlink = b("no_link2symlink"),
+            changeId = f("change_id") ?: "",
+            cwd = f("cwd") ?: "",
+            binds = arr("binds"),
+            envs = arr("envs")
         )
     } catch (e: Exception) {
-        Log.e("NativeInstall", "Failed to load proot options", e)
+        Log.e("NativeInstall", "loadProotOptions failed", e)
         ProotOptions()
     }
 }
