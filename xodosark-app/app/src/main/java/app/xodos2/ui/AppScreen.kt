@@ -205,7 +205,25 @@ object AppLogger {
 }
 
 
-
+/**
+ * Bridge between AppScreen's enter-*-desktop functions and ShellScreen's
+ * background X11 LorieView.
+ *
+ * `termux-x11` allows only one attached LorieView per X server process. When
+ * the user opens the X11 desktop, MainActivity.onCreate calls
+ * LorieView.connect(fd) — if our background LorieView is still attached at
+ * that moment, the primary gets a stale fd and the server can hang.
+ *
+ * So before starting MainActivity we call releaseBeforePrimaryAttaches(),
+ * which detaches the background LorieView and frees the slot.
+ */
+object TerminalBackgroundX11 {
+    @Volatile private var detach: (() -> Unit)? = null
+    fun register(fn: (() -> Unit)?) { detach = fn }
+    fun releaseBeforePrimaryAttaches() {
+        try { detach?.invoke() } catch (_: Throwable) {}
+    }
+}
 // =============================================================================
 // AppScreen – container‑based distro installer + original terminal/desktop UI
 // =============================================================================
@@ -649,6 +667,7 @@ fun enterArchX11Desktop() {
 
    // uiMode = UiMode.DEBIAN_X11_DESKTOP   // reuse the X11 UI mode
 uiMode = UiMode.TERMINAL
+TerminalBackgroundX11.releaseBeforePrimaryAttaches()
     
        try {
         val intent = Intent(context, com.termux.x11.MainActivity::class.java).apply {
@@ -741,6 +760,8 @@ fun enterWineDesktop() {
         waylandVisible = false
         pendingAutoShowWayland = false
         uiMode = UiMode.TERMINAL
+        TerminalBackgroundX11.releaseBeforePrimaryAttaches()
+        
         try {
             val intent = Intent(context, com.termux.x11.MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -766,6 +787,8 @@ fun enterWineDesktop() {
     pendingAutoShowWayland = false
     PtyOutputRelay.setSessionIoLoggingEnabled(TerminalSessionIds.WINE_X11_DISPLAY, false)
     uiMode = UiMode.TERMINAL
+    
+    TerminalBackgroundX11.releaseBeforePrimaryAttaches()
 
     try {
         val intent = Intent(context, com.termux.x11.MainActivity::class.java).apply {
@@ -862,6 +885,7 @@ fun openX11Settings() {
         waylandVisible = false
         pendingAutoShowWayland = false
         uiMode = UiMode.TERMINAL
+        TerminalBackgroundX11.releaseBeforePrimaryAttaches()
         try {
             val intent = Intent(context, com.termux.x11.MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -887,6 +911,7 @@ fun openX11Settings() {
     waylandVisible = false
     pendingAutoShowWayland = false
     uiMode = UiMode.TERMINAL
+    TerminalBackgroundX11.releaseBeforePrimaryAttaches()
 
     try {
         val intent = Intent(context, com.termux.x11.MainActivity::class.java).apply {

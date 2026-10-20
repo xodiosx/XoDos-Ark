@@ -202,6 +202,29 @@ public class MainActivity extends LoriePreferences {
     private static final float MAX_PIP_ASPECT_RATIO = getSystemDimenFloat("config_pictureInPictureMaxAspectRatio", 2.39f);
 
     public static Prefs prefs = null;
+    
+    // ─── Terminal-background X11 coordination ────────────────────────
+public interface X11ConnectionListener {
+    void onX11ConnectionChanged(boolean connected);
+}
+private static X11ConnectionListener sX11ConnectionListener;
+
+public static void setX11ConnectionListener(X11ConnectionListener l) {
+    sX11ConnectionListener = l;
+}
+
+/** True when THIS activity's LorieView owns the connection slot. */
+public static boolean isPrimaryConnected() {
+    return LorieView.connected();
+}
+
+private static void fireX11ConnectionChanged() {
+    X11ConnectionListener cb = sX11ConnectionListener;
+    if (cb != null) {
+        try { cb.onX11ConnectionChanged(LorieView.connected()); }
+        catch (Throwable ignored) {}
+    }
+}
 
     private static boolean oldFullscreen = false, oldHideCutout = false;
     private final SharedPreferences.OnSharedPreferenceChangeListener preferencesChangedListener = (__, key) -> onPreferencesChanged(key);
@@ -1038,6 +1061,8 @@ private void setupInputController() {
         stopHudService();  
         LogcatLogger.stop();  
         winHandler.stop();
+        try { if (LorieView.connected()) LorieView.connect(-1); } catch (Throwable ignored) {}
+    fireX11ConnectionChanged();
         super.onDestroy();
     }
 
@@ -1793,6 +1818,7 @@ protected boolean isSettingsActivity() {
                 getLorieView().setPointerIcon(PointerIcon.getSystemIcon(this, PointerIcon.TYPE_NULL));
 
             applyWindowSettings();
+            fireX11ConnectionChanged(); 
         });
     }
 
