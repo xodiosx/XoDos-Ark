@@ -276,7 +276,7 @@ fun ShellScreen(
                             if (com.termux.x11.MainActivity.isPrimaryLorieAttached()) {
                                 // Primary owns the slot — stay detached.
                                 if (cache.x11Attached) detachOurBackgroundX11(cache)
-                            } else if (cache.x11Attached && !LorieView.connected()) {
+                            } else if (cache.x11Attached && !LorieView.isConnected()) {
                                 // Our fd went stale while away — fresh attach.
                                 forceReattachX11(cache, context, activity, ioScope)
                             } else if (!cache.x11Attached) {

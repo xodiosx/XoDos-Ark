@@ -790,6 +790,12 @@ public void regenerate() {
     @FastNative private native void setFiltering(int filtering);
     @FastNative static native void connect(int fd);
     @CriticalNative static native boolean connected();
+    
+
+/** Public accessor for {@link #connected()}. */
+public static boolean isConnected() {
+    return connected();
+}
     @FastNative static native void startLogcat(int fd);
     @FastNative static native void setClipboardSyncEnabled(boolean enabled, boolean ignored);
     @FastNative public native void sendClipboardAnnounce();
