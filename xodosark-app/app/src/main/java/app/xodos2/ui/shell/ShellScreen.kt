@@ -59,10 +59,10 @@ import com.termux.x11.LorieView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.ui.graphics.Color as ComposeColor
-import kotlinx.coroutines.withContext
 
 private val DEFAULT_EXTRA_KEYS_JSON = """
 [
@@ -83,9 +83,9 @@ private class ViewCache(
     val keysContainer: LinearLayout,
     val fixedContainer: LinearLayout,
     val viewClient: ShellViewClient,
-    val solidBgView: FrameLayout,
     val bgImageView: AnimatedBackgroundView,
     val x11Container: FrameLayout,
+    val solidBgView: FrameLayout,
     val terminalFrame: FrameLayout
 ) {
     var appliedExtraKeysJson: String? = null
@@ -121,11 +121,6 @@ object TerminalBackgroundX11 {
     }
 }
 
-/**
- * Skip every input + focus callback in LorieView. As a background render
- * surface it never needs any of them, and skipping them prevents the NPE
- * from TouchInputHandler that assumes a live MainActivity.
- */
 private class BackgroundLorieView(ctx: Context) : LorieView(ctx) {
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) { /* no-op */ }
     override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean = false
@@ -165,8 +160,6 @@ fun ShellScreen(
 
     val propsAppliedSessions = remember { mutableSetOf<Int>() }
     val x11CacheRef = remember { mutableStateOf<ViewCache?>(null) }
-    // Tracks whether we have ever been paused — used to only run the
-    // X11 re-attach on an actual return from background, not on first launch.
     var wasInBackground by remember { mutableStateOf(false) }
 
     val activeContainerId = remember(activeSessionId) {
@@ -257,87 +250,85 @@ fun ShellScreen(
         sharedPrefs.edit().putInt("terminal_zoom_size", currentTextSize).apply()
     }
 
-    // ── Lifecycle: re-attach the X11 background surface when we come back
-    //    from MainActivity (or any app switch). termux-x11 supports only one
-    //    attached LorieView at a time, so when MainActivity opens with its
-    //    own LorieView, ours is kicked out and its fd goes stale. We must
-    //    re-attach on resume. Restarting the server happens inside
-    //    ensureX11ServerProcessStarted if it was stopped.
-DisposableEffect(lifecycleOwner, activeContainerId) {
-    val observer = LifecycleEventObserver { _, event ->
-        when (event) {
-            Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
-                wasInBackground = true
-                saveZoomImmediately()
-            }
-            Lifecycle.Event.ON_RESUME -> {
-                saveZoomImmediately()
-                if (!wasInBackground) return@LifecycleEventObserver
-                wasInBackground = false
+    DisposableEffect(lifecycleOwner, activeContainerId) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
+                    // Do NOT detach X11 here. Merely backgrounding the app
+                    // is not a reason to release the slot — the primary
+                    // desktop is not grabbing it in that case. The listener
+                    // handles the only legitimate detach trigger.
+                    wasInBackground = true
+                    saveZoomImmediately()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    saveZoomImmediately()
+                    if (!wasInBackground) return@LifecycleEventObserver
+                    wasInBackground = false
 
-                val cache = x11CacheRef.value ?: return@LifecycleEventObserver
+                    val cache = x11CacheRef.value ?: return@LifecycleEventObserver
+                    ioScope.launch {
+                        val props = withContext(Dispatchers.IO) {
+                            TermuxPropertiesLoader.load(context, activeContainerId)
+                        }
+                        if (props.backgroundDisplay != "x11") return@launch
+                        withContext(Dispatchers.Main) {
+                            if (com.termux.x11.MainActivity.isPrimaryLorieAttached()) {
+                                // Primary owns the slot — stay detached.
+                                if (cache.x11Attached) detachOurBackgroundX11(cache)
+                            } else if (cache.x11Attached && !LorieView.connected()) {
+                                // Our fd went stale while away — fresh attach.
+                                forceReattachX11(cache, context, activity, ioScope)
+                            } else if (!cache.x11Attached) {
+                                // We weren't attached — attach.
+                                ensureX11Background(cache, true, context, activity, ioScope)
+                            }
+                            // else: our fd is still healthy — do nothing.
+                        }
+                    }
+                }
+                else -> { /* ignore */ }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+
+        // ── React to primary LorieView attach/detach ──
+        com.termux.x11.MainActivity.setX11ConnectionListener { connected ->
+            activity.runOnUiThread {
+                val cache = x11CacheRef.value ?: return@runOnUiThread
                 ioScope.launch {
                     val props = withContext(Dispatchers.IO) {
                         TermuxPropertiesLoader.load(context, activeContainerId)
                     }
                     if (props.backgroundDisplay != "x11") return@launch
                     withContext(Dispatchers.Main) {
-                        if (com.termux.x11.MainActivity.isPrimaryConnected()) {
-                            // Primary is in front (desktop / PiP) — stay detached.
-                            if (cache.x11Attached) detachOurBackgroundX11(cache)
-                        } else if (cache.x11Attached) {
-                            // Stale fd from when we last attached — re-attach fresh.
-                            forceReattachX11(cache, context, activity, ioScope)
+                        if (connected) {
+                            detachOurBackgroundX11(cache)
                         } else {
                             ensureX11Background(cache, true, context, activity, ioScope)
                         }
                     }
                 }
             }
-            else -> { /* ignore */ }
+        }
+
+        // ── Pre-release hook that AppScreen calls before starting MainActivity ──
+        TerminalBackgroundX11.register {
+            x11CacheRef.value?.let { detachOurBackgroundX11(it) }
+        }
+
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            com.termux.x11.MainActivity.setX11ConnectionListener(null)
+            TerminalBackgroundX11.register(null)
+            saveZoomImmediately()
+            PtyOutputRelay.unbind()
+            InputRouteState.shellTerminalView = null
+            propsAppliedSessions.clear()
+            x11CacheRef.value?.let { detachOurBackgroundX11(it) }
+            x11CacheRef.value = null
         }
     }
-    lifecycleOwner.lifecycle.addObserver(observer)
-
-    // ── React to primary LorieView attach/detach ──
-    com.termux.x11.MainActivity.setX11ConnectionListener { connected ->
-        activity.runOnUiThread {
-            val cache = x11CacheRef.value ?: return@runOnUiThread
-            ioScope.launch {
-                val props = withContext(Dispatchers.IO) {
-                    TermuxPropertiesLoader.load(context, activeContainerId)
-                }
-                if (props.backgroundDisplay != "x11") return@launch
-                withContext(Dispatchers.Main) {
-                    if (connected) {
-                        // Primary grabbed the slot — hand it over cleanly.
-                        detachOurBackgroundX11(cache)
-                    } else {
-                        // Primary released — take the slot back.
-                        ensureX11Background(cache, true, context, activity, ioScope)
-                    }
-                }
-            }
-        }
-    }
-
-    // ── Pre-release hook that AppScreen calls before starting MainActivity ──
-    TerminalBackgroundX11.register {
-        x11CacheRef.value?.let { detachOurBackgroundX11(it) }
-    }
-
-    onDispose {
-        lifecycleOwner.lifecycle.removeObserver(observer)
-        com.termux.x11.MainActivity.setX11ConnectionListener(null)
-        TerminalBackgroundX11.register(null)
-        saveZoomImmediately()
-        PtyOutputRelay.unbind()
-        InputRouteState.shellTerminalView = null
-        propsAppliedSessions.clear()
-        x11CacheRef.value?.let { detachOurBackgroundX11(it) }
-        x11CacheRef.value = null
-    }
-}
 
     remember(activeContainerId) {
         TermuxPropertiesLoader.seedNativeDefault(context)
@@ -347,10 +338,14 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
         modifier = modifier.fillMaxSize().statusBarsPadding().imePadding(),
         factory = { ctx ->
             // Root layering (bottom → top):
-            //   [0] solidBgView    — solid colour, always present
-            //   [1] bgImageView    — optional image / GIF
-            //   [2] x11Container   — persistent LorieView host (X11 background)
-            //   [3] contentColumn  — terminal + bottom bar
+            //   [0] bgImageView     — static / animated image (if set)
+            //   [1] x11Container    — LorieView (only when X11 bg is active)
+            //   [2] solidBgView     — colour overlay (bgColor, alpha respected)
+            //   [3] contentColumn   — terminal text + extra-keys bar
+            //
+            // The colour is ON TOP of X11 so it acts as a readability tint
+            // AND keeps the terminal legible during the brief window when
+            // X11 is re-fetching its framebuffer.
             val root = FrameLayout(ctx).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -359,15 +354,7 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
                 descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             }
 
-            val solidBgView = FrameLayout(ctx).apply {
-                setBackgroundColor(Color.BLACK)
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            }
-            root.addView(solidBgView)
-
+            // [0] Image / GIF
             val bgImageView = AnimatedBackgroundView(ctx).apply {
                 visibility = View.GONE
                 layoutParams = FrameLayout.LayoutParams(
@@ -377,6 +364,7 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
             }
             root.addView(bgImageView)
 
+            // [1] X11 surface container
             val x11Container = FrameLayout(ctx).apply {
                 setBackgroundColor(Color.TRANSPARENT)
                 isClickable = false
@@ -390,6 +378,17 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
             }
             root.addView(x11Container)
 
+            // [2] Colour overlay (default = fully opaque black until update() sets it)
+            val solidBgView = FrameLayout(ctx).apply {
+                setBackgroundColor(Color.BLACK)
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            }
+            root.addView(solidBgView)
+
+            // [3] Content column
             val contentColumn = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = FrameLayout.LayoutParams(
@@ -423,7 +422,10 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
                         TerminalSessionIds.NS_WINE   -> 3
                         else -> 1
                     }
-                    val props = TermuxPropertiesLoader.load(ctx, cid)
+                    val rawProps = TermuxPropertiesLoader.load(ctx, cid)
+                    // Terminal cells stay transparent — colour tinting comes
+                    // from solidBgView at z=2, not from cell bg.
+                    val props = rawProps.copy(backgroundColor = 0x00000000)
                     TermuxPropertiesLoader.apply(tv, props)
                 }
             }
@@ -522,9 +524,9 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
                 keysContainer = keysContainer,
                 fixedContainer = fixedContainer,
                 viewClient = viewClient,
-                solidBgView = solidBgView,
                 bgImageView = bgImageView,
                 x11Container = x11Container,
+                solidBgView = solidBgView,
                 terminalFrame = terminalFrame
             )
             root.tag = cache
@@ -560,21 +562,36 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
                     cache.cachedPropsEpoch != propertiesEpoch ||
                     cache.cachedPropsContainerId != activeContainerId
                 ) {
-                    TermuxPropertiesLoader.load(root.context, activeContainerId).also {
-                        TermuxPropertiesLoader.apply(tv, it)
+                    val raw = TermuxPropertiesLoader.load(root.context, activeContainerId).also {
+                        // Force transparent cell bg — tinting lives in solidBgView.
+                        TermuxPropertiesLoader.apply(tv, it.copy(backgroundColor = 0x00000000))
                         cache.cachedProps = it
                         cache.cachedPropsEpoch = propertiesEpoch
                         cache.cachedPropsContainerId = activeContainerId
                     }
+                    raw
                 } else cache.cachedProps!!
 
                 val desiredMode = props.backgroundDisplay.takeIf { it == "x11" }
+                val imgPath = props.backgroundImagePath
 
-                val bgColor: Int = props.backgroundColor ?: Color.BLACK
+                // ── [2] Colour overlay ──
+                // User-set colour wins. Otherwise a soft 23 % black tint when
+                // X11 or image is active (keeps terminal text legible), and
+                // solid black otherwise.
+                val bgColor: Int = props.backgroundColor
+                    ?: if (!imgPath.isNullOrBlank() || desiredMode != null) 0x3B000000
+                       else Color.BLACK
                 cache.solidBgView.setBackgroundColor(bgColor)
 
-                val imgPath = props.backgroundImagePath
-                if (!imgPath.isNullOrBlank() && desiredMode == null) {
+                // TerminalFrame is always transparent; the tint lives above it.
+                cache.terminalFrame.setBackgroundColor(Color.TRANSPARENT)
+
+                // ── [0] Image layer ──
+                // Show whenever an image is set. X11 sits on top; where X11
+                // doesn't paint (fetch blank, or transparent regions), the
+                // image shows through.
+                if (!imgPath.isNullOrBlank()) {
                     cache.bgImageView.setSource(imgPath)
                     cache.bgImageView.visibility = View.VISIBLE
                 } else {
@@ -582,10 +599,7 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
                     cache.bgImageView.visibility = View.GONE
                 }
 
-                cache.terminalFrame.setBackgroundColor(
-                    if (desiredMode == null) bgColor else Color.TRANSPARENT
-                )
-
+                // ── [1] X11 layer ──
                 ensureX11Background(
                     cache = cache,
                     enabled = desiredMode == "x11",
@@ -594,6 +608,7 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
                     scope = ioScope
                 )
 
+                // ── Extra-keys bar alpha follows bgColor ──
                 val bgAlpha = (bgColor ushr 24) and 0xFF
                 val barTop    = (bgAlpha shl 24) or 0x080512
                 val barBottom = (bgAlpha shl 24) or 0x030207
@@ -664,13 +679,11 @@ private fun ensureX11Background(
         return
     }
 
- // desktop foreground, PiP, or anywhere — we stay detached.
-    if (com.termux.x11.MainActivity.isPrimaryConnected()) {
-        if (cache.x11Attached) {
-            // Primary grabbed the slot while we were attached — release immediately
-            // so its fd doesn't go stale.
-            detachOurBackgroundX11(cache)
-        }
+    // THE GATE: only one LorieView may own the X11 slot at a time.
+    // isPrimaryLorieAttached() asks MainActivity specifically — it does
+    // NOT reflect our own background LorieView.
+    if (com.termux.x11.MainActivity.isPrimaryLorieAttached()) {
+        if (cache.x11Attached) detachOurBackgroundX11(cache)
         cache.x11Container.visibility = View.GONE
         return
     }
@@ -721,11 +734,6 @@ private fun ensureX11Background(
     cache.x11Attached = true
 }
 
-/**
- * Full teardown + re-attach. Called when we return from background (e.g.
- * closing MainActivity, which stole the LorieView slot) so our LorieView
- * gets a fresh fd from the (possibly restarted) X11 server.
- */
 private fun detachOurBackgroundX11(cache: ViewCache) {
     try { cache.x11Controller?.detach() } catch (_: Throwable) {}
     cache.x11Controller = null

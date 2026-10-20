@@ -221,9 +221,20 @@ public static boolean isPrimaryConnected() {
 private static void fireX11ConnectionChanged() {
     X11ConnectionListener cb = sX11ConnectionListener;
     if (cb != null) {
-        try { cb.onX11ConnectionChanged(LorieView.connected()); }
+        try { cb.onX11ConnectionChanged(sPrimaryLorieAttached); }
         catch (Throwable ignored) {}
     }
+}
+// ─── Primary LorieView connection tracking ────────────────────
+// Tracks whether MAINACTIVITY's own LorieView holds the X11 slot,
+// independent of any other LorieView in the process (e.g. the
+// terminal-background one). LorieView.connected() is process-global
+// and returns true for ANY attached LorieView, so we cannot use it
+// to distinguish "primary is up" from "background is up".
+private static volatile boolean sPrimaryLorieAttached = false;
+
+public static boolean isPrimaryLorieAttached() {
+    return sPrimaryLorieAttached;
 }
 
     private static boolean oldFullscreen = false, oldHideCutout = false;
@@ -1061,8 +1072,11 @@ private void setupInputController() {
         stopHudService();  
         LogcatLogger.stop();  
         winHandler.stop();
-        try { if (LorieView.connected()) LorieView.connect(-1); } catch (Throwable ignored) {}
-    fireX11ConnectionChanged();
+           if (sPrimaryLorieAttached) {
+        try { LorieView.connect(-1); } catch (Throwable ignored) {}
+        sPrimaryLorieAttached = false;
+        fireX11ConnectionChanged();
+    }
         super.onDestroy();
     }
 
@@ -1324,7 +1338,8 @@ private void setupInputController() {
         try {
             service.asBinder().linkToDeath(() -> {
                 service = null;
-
+                sPrimaryLorieAttached = false;       
+    fireX11ConnectionChanged();   
                 Log.v("Lorie", "Disconnected");
                 runOnUiThread(() -> { LorieView.connect(-1); clientConnectedStateChanged();} );
             }, 0);
@@ -1363,6 +1378,8 @@ private void setupInputController() {
                 Log.v("MainActivity", "Extracting X connection socket.");
                 LorieView.connect(fd.detachFd());
                 finishStartupDraw();
+                sPrimaryLorieAttached = true;    
+        fireX11ConnectionChanged();      
                 getLorieView().triggerCallback();
                 clientConnectedStateChanged();
                 getLorieView().reloadPreferences(prefs);
