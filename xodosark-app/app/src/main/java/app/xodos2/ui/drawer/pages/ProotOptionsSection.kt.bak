@@ -1,0 +1,129 @@
+// ProotOptionsSection.kt
+package app.xodos2.ui.drawer.pages
+
+import android.content.SharedPreferences
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import app.xodos2.ui.drawer.menu.DrawerExpandableSection
+
+@Composable
+fun ProotOptionsSection(
+    prefs: SharedPreferences,
+    containerId: Int,
+) {
+    // Load existing values
+    var username by remember { mutableStateOf(prefs.getString("proot_username_$containerId", "root") ?: "root") }
+    var hostname by remember { mutableStateOf(prefs.getString("proot_hostname_$containerId", "localhost") ?: "localhost") }
+    var sharedHome by remember { mutableStateOf(prefs.getBoolean("proot_shared_home_$containerId", false)) }
+    var sharedTmp by remember { mutableStateOf(true) } // forced
+    var kernelRelease by remember { mutableStateOf(prefs.getString("proot_kernel_release_$containerId", "") ?: "") }
+
+    DrawerExpandableSection(title = "Proot Options", defaultExpanded = false) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+            // Username
+            OutlinedTextField(
+                value = username,
+                onValueChange = {
+                    username = it
+                    prefs.edit().putString("proot_username_$containerId", it).apply()
+                },
+                label = { Text("Username (default: root)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFFC3B6F9),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedLabelColor = Color(0xFFC3B6F9),
+                    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                )
+            )
+            Spacer(Modifier.height(8.dp))
+
+            // Hostname
+            OutlinedTextField(
+                value = hostname,
+                onValueChange = {
+                    hostname = it
+                    prefs.edit().putString("proot_hostname_$containerId", it).apply()
+                },
+                label = { Text("Hostname (default: localhost)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFFC3B6F9),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedLabelColor = Color(0xFFC3B6F9),
+                    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                )
+            )
+            Spacer(Modifier.height(8.dp))
+
+            // Kernel release (optional)
+            OutlinedTextField(
+                value = kernelRelease,
+                onValueChange = {
+                    kernelRelease = it
+                    prefs.edit().putString("proot_kernel_release_$containerId", it).apply()
+                },
+                label = { Text("Kernel release (blank = default)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFFC3B6F9),
+                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                    focusedLabelColor = Color(0xFFC3B6F9),
+                    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White
+                )
+            )
+            Spacer(Modifier.height(8.dp))
+
+            // Shared home toggle
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Switch(
+                    checked = sharedHome,
+                    onCheckedChange = {
+                        sharedHome = it
+                        prefs.edit().putBoolean("proot_shared_home_$containerId", it).apply()
+                    },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color(0xFFC3B6F9),
+                        checkedTrackColor = Color(0xFF7C3AED)
+                    )
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Shared home folder", color = Color.White)
+            }
+            Spacer(Modifier.height(4.dp))
+
+            // Shared TMP (forced on, disabled)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Switch(
+                    checked = true,
+                    onCheckedChange = { /* forced */ },
+                    enabled = false,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color(0xFFC3B6F9),
+                        checkedTrackColor = Color(0xFF7C3AED),
+                        disabledCheckedThumbColor = Color(0xFFC3B6F9).copy(alpha = 0.6f),
+                        disabledCheckedTrackColor = Color(0xFF7C3AED).copy(alpha = 0.4f)
+                    )
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Shared /tmp (forced)", color = Color.White.copy(alpha = 0.7f))
+            }
+        }
+    }
+}
