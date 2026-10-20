@@ -1222,7 +1222,10 @@ fun downloadFullDesktopGUIArchive() {
     // ----- native init and container check -----
 LaunchedEffect(Unit) {
     AppLogger.log("Starting native init and asset sync")
-
+for (id in 1..3) {
+        val opts = NativeInstallCoordinator.loadProotOptions(context, id)
+        NativeInstallCoordinator.saveProotOptions(context, id, opts)
+    }
     // Snapshot before init — used to detect "bootstrap was just installed"
     val pkgPath = File(context.filesDir, "usr/bin/pkg")
     val hadPkgBefore = pkgPath.exists()

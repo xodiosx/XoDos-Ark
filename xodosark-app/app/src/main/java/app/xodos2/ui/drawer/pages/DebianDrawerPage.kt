@@ -246,6 +246,11 @@ fun DebianDrawerPage(
         onExecuteCommand = onExecuteCommand
     )
 
+ProotOptionsSection(
+    prefs = prefs,
+    containerId = 2
+)
+
 DxvkSelectorSection(
         category = "d3d",
         title = "D3D Components (DXVK)",

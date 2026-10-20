@@ -712,7 +712,61 @@ private fun writeNativeWrapper(context: Context) {
     }
 }
 
+// ─── Proot options (username / hostname / shared home / kernel) ──
+// Rust reads <filesDir>/proot_options/container_<N>.json at session start.
+private const val PROOT_OPTIONS_DIR = "proot_options"
 
+data class ProotOptions(
+    val username: String = "root",
+    val hostname: String = "localhost",
+    val sharedHome: Boolean = false,
+    val sharedTmp: Boolean = true, // always true; Rust forces it anyway
+    val kernelRelease: String = ""
+)
+
+fun saveProotOptions(context: Context, containerId: Int, opts: ProotOptions) {
+    try {
+        val dir = File(context.filesDir, PROOT_OPTIONS_DIR).apply { mkdirs() }
+        val file = File(dir, "container_$containerId.json")
+        // Minimal escaping — these are simple strings, no quotes expected.
+        val json = """
+            {
+              "username": "${opts.username.replace("\"", "")}",
+              "hostname": "${opts.hostname.replace("\"", "")}",
+              "shared_home": ${opts.sharedHome},
+              "shared_tmp": true,
+              "kernel_release": "${opts.kernelRelease.replace("\"", "")}"
+            }
+        """.trimIndent()
+        file.writeText(json)
+        file.setReadable(true, false)
+        Log.i("NativeInstall", "Saved proot options for container $containerId → ${file.absolutePath}")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to save proot options", e)
+    }
+}
+
+fun loadProotOptions(context: Context, containerId: Int): ProotOptions {
+    val file = File(context.filesDir, "$PROOT_OPTIONS_DIR/container_$containerId.json")
+    if (!file.exists()) return ProotOptions()
+    return try {
+        val txt = file.readText()
+        fun field(k: String): String? {
+            val re = Regex("\"$k\"\\s*:\\s*\"([^\"]*)\"")
+            return re.find(txt)?.groupValues?.get(1)
+        }
+        ProotOptions(
+            username = field("username") ?: "root",
+            hostname = field("hostname") ?: "localhost",
+            sharedHome = txt.contains("\"shared_home\"\\s*:\\s*true".toRegex()),
+            sharedTmp = true,
+            kernelRelease = field("kernel_release") ?: ""
+        )
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to load proot options", e)
+        ProotOptions()
+    }
+}
 
     fun saveContainerDistro(context: Context, containerId: Int, distroId: String) {
         context.getSharedPreferences("xodos2_containers", Context.MODE_PRIVATE)

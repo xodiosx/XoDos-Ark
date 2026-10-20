@@ -308,6 +308,12 @@ DesktopLaunchersSection(
         onExecuteCommand = onExecuteCommand
     )
     
+ 
+ProotOptionsSection(
+    prefs = prefs,
+    containerId = 1
+)
+
 DxvkSelectorSection(
         category = "d3d",
         title = "D3D Components (DXVK)",

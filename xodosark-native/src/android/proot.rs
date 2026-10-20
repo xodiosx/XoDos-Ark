@@ -1,3 +1,4 @@
+//! proot.rs
 //! Proot argv and environment for the interactive shell, plus PTY‑spawn logic.
 //!
 //! A rootfs is considered **proot‑compatible** only when **all** of these exist:
@@ -6,6 +7,24 @@
 //! * `sys/.empty` directory
 //! If any of them is missing, the container is treated as non‑proot and a
 //! lightweight Android shell is launched with `PREFIX` pointing to its `/usr`.
+//!
+//! ## Per‑container options (username / hostname / shared home / kernel)
+//!
+//! The Kotlin side writes `<filesDir>/proot_options/container_<id>.json`:
+//!
+//! ```json
+//! {
+//!   "username": "user",
+//!   "hostname": "localhost",
+//!   "shared_home": false,
+//!   "shared_tmp": true,
+//!   "kernel_release": ""
+//! }
+//! ```
+//!
+//! `fork_pty_shell_in_rootfs()` reads this file directly (container id is
+//! derived from the rootfs path) so **no JNI signature changes** are required.
+//! `shared_tmp` is always forced true by the argv builder.
 use super::{get_application_context, has_rootfs};
 use super::{host_pulse_runtime_dir, guest_pulse_server_env, GUEST_PULSE_RUNTIME_MOUNT};
 use anyhow::{Context, Result};
@@ -18,6 +37,120 @@ use std::os::fd::IntoRawFd;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::{Path, PathBuf};
+
+// --------------------------------------------------------------------------
+// ProotOptions
+// --------------------------------------------------------------------------
+
+/// Runtime options for entering a proot container. Loaded from
+/// `<filesDir>/proot_options/container_<id>.json` by the JSON loader below.
+#[derive(Debug, Clone)]
+pub struct ProotOptions {
+    /// Desired guest username. Empty or "root" → root.
+    pub username: String,
+    /// Hostname reported by `hostname` inside the container.
+    pub hostname: String,
+    /// Bind the host home directory into the guest user's home.
+    pub shared_home: bool,
+    /// Force‑shared /tmp. Always true; kept for completeness.
+    pub shared_tmp: bool,
+    /// Custom kernel release string. Empty → default.
+    pub kernel_release: String,
+}
+
+impl Default for ProotOptions {
+    fn default() -> Self {
+        Self {
+            username: "root".into(),
+            hostname: "localhost".into(),
+            shared_home: false,
+            shared_tmp: true, // forced
+            kernel_release: String::new(),
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
+// JSON loader (no external crate — tiny parser good enough for flat objects)
+// --------------------------------------------------------------------------
+
+fn proot_options_dir(data_dir: &Path) -> PathBuf {
+    data_dir.join("proot_options")
+}
+
+fn container_id_from_rootfs(rootfs: &Path) -> Option<i32> {
+    // rootfs == <filesDir>/containers/<id>
+    rootfs.file_name()?.to_str()?.parse::<i32>().ok()
+}
+
+/// Extract a JSON field by key. Handles string and bool/number values.
+/// Sufficient for our flat `{ "k": "v", ... }` files.
+fn read_json_field(content: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{}\"", key);
+    let start = content.find(&needle)?;
+    let after = &content[start + needle.len()..];
+    let colon = after.find(':')?;
+    let rest = after[colon + 1..].trim_start();
+    if let Some(stripped) = rest.strip_prefix('"') {
+        let end = stripped.find('"')?;
+        Some(stripped[..end].to_string())
+    } else {
+        // bool / number
+        let end = rest
+            .find(|c: char| c == ',' || c == '}' || c.is_whitespace())
+            .unwrap_or(rest.len());
+        Some(rest[..end].to_string())
+    }
+}
+
+fn load_proot_options_for(rootfs: &Path) -> ProotOptions {
+    let mut opts = ProotOptions::default();
+
+    let data_dir = match get_application_context() {
+        Ok(ctx) => ctx.data_dir.clone(),
+        Err(_) => return opts,
+    };
+    let Some(container_id) = container_id_from_rootfs(rootfs) else {
+        return opts;
+    };
+
+    let file = proot_options_dir(&data_dir).join(format!("container_{}.json", container_id));
+    let Ok(content) = fs::read_to_string(&file) else {
+        log::info!(
+            "proot: no options file for container {} — using defaults",
+            container_id
+        );
+        return opts;
+    };
+
+    if let Some(v) = read_json_field(&content, "username") {
+        if !v.trim().is_empty() {
+            opts.username = v;
+        }
+    }
+    if let Some(v) = read_json_field(&content, "hostname") {
+        if !v.trim().is_empty() {
+            opts.hostname = v;
+        }
+    }
+    if let Some(v) = read_json_field(&content, "shared_home") {
+        opts.shared_home = v == "true";
+    }
+    // shared_tmp is always forced true by the argv builder — ignore file value.
+    if let Some(v) = read_json_field(&content, "kernel_release") {
+        opts.kernel_release = v;
+    }
+
+    log::info!(
+        "proot: loaded options for container {} → user={:?} host={:?} shared_home={} kernel={:?}",
+        container_id,
+        opts.username,
+        opts.hostname,
+        opts.shared_home,
+        opts.kernel_release
+    );
+    opts
+}
 
 // --------------------------------------------------------------------------
 // Constants
@@ -211,9 +344,6 @@ fn fake_proc_bindings(_rootfs: &Path, sysdata_dir: &Path) -> Result<Vec<CString>
 
 /// Returns the guest path of a usable shell inside `rootfs`, plus a flag
 /// indicating whether it is a BusyBox multi-call binary.
-///
-/// This only inspects the rootfs; it makes no assumptions about proot.
-/// If `None` is returned the caller should fall back to a native shell.
 pub(super) fn find_shell_in_rootfs(rootfs: &Path) -> Option<(&'static str, bool)> {
     let termux_detected = has_termux_inside_container(rootfs);
 
@@ -223,7 +353,6 @@ pub(super) fn find_shell_in_rootfs(rootfs: &Path) -> Option<(&'static str, bool)
             ("/data/data/com.termux/files/usr/bin/sh", false),
             ("/data/data/com.termux/files/usr/bin/dash", false),
             ("/data/data/com.termux/files/usr/bin/ash", false),
-            
         ]
     } else {
         vec![
@@ -261,10 +390,7 @@ pub(super) fn find_shell_in_rootfs(rootfs: &Path) -> Option<(&'static str, bool)
     }
 }
 
-/// Build argv/env for the **native** (Termux‑style) Android shell.
-///
-/// Priority: `prefix/bin/bash` → `prefix/bin/sh` → `/system/bin/sh`.
-/// `prefix` is `<data_dir>/usr` (i.e. `/data/data/app.xodos2/files/usr`).
+/// Build argv/env for the native (Termux‑style) Android shell.
 fn build_native_args() -> Result<(Vec<CString>, Vec<CString>)> {
     let ctx = get_application_context()?;
     let mut argv: Vec<CString> = Vec::new();
@@ -286,7 +412,6 @@ fn build_native_args() -> Result<(Vec<CString>, Vec<CString>)> {
     let bash_path = format!("{}/bin/bash", prefix_str);
     let sh_path = format!("{}/bin/sh", prefix_str);
 
-    // Native shell priority: bash → sh → /system/bin/sh
     let (shell_path, is_bionic) = if Path::new(&bash_path).exists() {
         (bash_path, true)
     } else if Path::new(&sh_path).exists() {
@@ -321,30 +446,18 @@ fn build_native_args() -> Result<(Vec<CString>, Vec<CString>)> {
         CString::new("PS1=[XoDos-Ark\\W]\\$ ").unwrap(),
     ]);
 
-    log::debug!(
-        "native: final argv = {:?}",
-        argv.iter()
-            .map(|s| s.to_string_lossy().into_owned())
-            .collect::<Vec<_>>()
-    );
-    log::debug!(
-        "native: final env = {:?}",
-        env.iter()
-            .map(|s| s.to_string_lossy().into_owned())
-            .collect::<Vec<_>>()
-    );
-
     Ok((argv, env))
 }
 
-/// Build a full PRoot argv/env for a proot‑compatible `rootfs`.
-///
-/// The caller must supply the guest shell path (and whether it's BusyBox),
-/// typically obtained from [`find_shell_in_rootfs`].
+// --------------------------------------------------------------------------
+// build_proot_args — respects ProotOptions
+// --------------------------------------------------------------------------
+
 fn build_proot_args(
     rootfs: &Path,
     shell_binary: &str,
     is_busybox: bool,
+    opts: &ProotOptions,
 ) -> Result<(Vec<CString>, Vec<CString>)> {
     let ctx = get_application_context()?;
     let mut argv: Vec<CString> = Vec::new();
@@ -354,23 +467,27 @@ fn build_proot_args(
     let proot_str = proot.to_string_lossy();
     let loader_str = loader.to_string_lossy();
 
-    // Detect Termux inside the container rootfs early
+    // Detect Termux inside the container rootfs early.
     let termux_detected = has_termux_inside_container(rootfs);
 
     argv.push(CString::new(proot_str.as_bytes()).context("proot path")?);
 
-    // 0. Write fake /proc & /sys content (outside rootfs)
+    // 0. Write fake /proc & /sys content (outside rootfs).
     ensure_fake_sysdata(rootfs)?;
     let sysdata_dir = rootfs.parent().context("rootfs parent")?.join("sysdata");
 
-    // 1. Basic rootfs and options
+    // 1. Basic rootfs and options.
     argv.push(CString::new("-r").unwrap());
     argv.push(CString::new(rootfs.to_string_lossy().as_bytes()).context("rootfs path")?);
 
-    let kernel_release = format!(
-        "{} {}",
-        DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION
-    );
+    let kernel_release = if opts.kernel_release.trim().is_empty() {
+        format!(
+            "{} {}",
+            DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION
+        )
+    } else {
+        opts.kernel_release.clone()
+    };
     argv.push(CString::new(format!("--kernel-release={}", kernel_release)).unwrap());
 
     argv.push(CString::new("-L").unwrap());
@@ -378,7 +495,7 @@ fn build_proot_args(
     argv.push(CString::new("--sysvipc").unwrap());
     argv.push(CString::new("--kill-on-exit").unwrap());
 
-    // Conditional UID/GID change
+    // Conditional UID/GID change.
     if termux_detected {
         let (uid, gid) = current_uid_gid();
         argv.push(CString::new(format!("--change-id={}:{}", uid, gid)).unwrap());
@@ -386,13 +503,21 @@ fn build_proot_args(
         argv.push(CString::new("--change-id=0:0").unwrap());
     }
 
-    // Core binds – conditional /data handling
+    // Hostname: write /etc/hostname so `hostname` reports it.
+    if !opts.hostname.trim().is_empty() {
+        let hostname_file = rootfs.join("etc/hostname");
+        if let Some(parent) = hostname_file.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+        if let Err(e) = fs::write(&hostname_file, format!("{}\n", opts.hostname.trim())) {
+            log::warn!("proot: failed to write /etc/hostname: {:?}", e);
+        }
+    }
+
+    // Core binds – conditional /data handling.
     argv.push(CString::new("--bind=/dev").unwrap());
 
     if termux_detected {
-        // Termux detected inside container:
-        // - Do NOT bind host's /data partition.
-        // - Bind host Termux home to container's /data/data/com.termux/files/home
         let host_xodos_home2 = Path::new("/data/data/app.xodos2/files/home");
         if host_xodos_home2.exists() {
             let guest_path = "/data/data/com.termux/files/home";
@@ -416,16 +541,35 @@ fn build_proot_args(
             );
         }
     } else {
-        // Normal distro: bind app home to /root
         let host_app_home = Path::new("/data/data/app.xodos2/files/home");
         let _ = fs::create_dir_all(host_app_home);
-        argv.push(
-            CString::new(format!("--bind={}:/root", host_app_home.display())).unwrap(),
-        );
-        log::info!(
-            "proot: bound host app home {} to /root",
-            host_app_home.display()
-        );
+
+        if opts.shared_home {
+            // Bind host home into the guest user's home directory.
+            let guest_home = if opts.username.trim().is_empty() || opts.username.trim() == "root"
+            {
+                "/root".to_string()
+            } else {
+                format!("/home/{}", opts.username.trim())
+            };
+            argv.push(
+                CString::new(format!(
+                    "--bind={}:{}",
+                    host_app_home.display(),
+                    guest_home
+                ))
+                .unwrap(),
+            );
+            log::info!(
+                "proot: shared home bound {} to {}",
+                host_app_home.display(),
+                guest_home
+            );
+        } else {
+            argv.push(
+                CString::new(format!("--bind={}:/root", host_app_home.display())).unwrap(),
+            );
+        }
     }
 
     argv.push(CString::new("--bind=/proc").unwrap());
@@ -434,7 +578,7 @@ fn build_proot_args(
     argv.push(CString::new("--bind=/apex").unwrap());
     argv.push(CString::new("--bind=/storage").unwrap());
 
-    // GPU / DRM
+    // GPU / DRM.
     if Path::new("/dev/kgsl-3d0").exists() {
         argv.push(CString::new("--bind=/dev/kgsl-3d0:/dev/kgsl-3d0").unwrap());
     }
@@ -446,7 +590,7 @@ fn build_proot_args(
         argv.push(CString::new(format!("--bind={}:/dev/dri", dummy_dri.display())).unwrap());
     }
 
-    // Wayland / X11
+    // Wayland / X11.
     let wayland_runtime = ctx.data_dir.join("usr").join("tmp");
     fs::create_dir_all(&wayland_runtime)?;
     fs::set_permissions(&wayland_runtime, PermissionsExt::from_mode(0o700))?;
@@ -474,7 +618,7 @@ fn build_proot_args(
         .unwrap(),
     );
 
-    // VirGL
+    // VirGL.
     let virgl_runtime = ctx.data_dir.join("virgl-run");
     fs::create_dir_all(&virgl_runtime)?;
     argv.push(
@@ -485,7 +629,7 @@ fn build_proot_args(
         .unwrap(),
     );
 
-    // PulseAudio
+    // PulseAudio.
     let pulse_rt = host_pulse_runtime_dir(&ctx.data_dir);
     fs::create_dir_all(&pulse_rt)?;
     argv.push(
@@ -513,10 +657,19 @@ fn build_proot_args(
         .unwrap(),
     );
 
-    // /dev/shm
+    // /dev/shm.
     argv.push(CString::new(format!("--bind={}/tmp:/dev/shm", rootfs.display())).unwrap());
 
-    // SD card
+    // ────────────────────────────────────────────────────────────────
+    // FORCED shared /tmp — always bind host PREFIX/tmp to guest /tmp.
+    // ────────────────────────────────────────────────────────────────
+    let host_tmp = ctx.data_dir.join("usr").join("tmp");
+    fs::create_dir_all(&host_tmp)?;
+    fs::set_permissions(&host_tmp, PermissionsExt::from_mode(0o1777))?;
+    argv.push(CString::new(format!("--bind={}:/tmp", host_tmp.display())).unwrap());
+    log::info!("proot: forced shared /tmp -> {}", host_tmp.display());
+
+    // SD card.
     if let Some(ref sdcard) = ctx.external_storage_path {
         if sdcard.exists() {
             for (guest, host) in [
@@ -532,18 +685,18 @@ fn build_proot_args(
         }
     }
 
-    // Standard fds
+    // Standard fds.
     argv.push(CString::new("--bind=/dev/urandom:/dev/random").unwrap());
     argv.push(CString::new("--bind=/proc/self/fd:/dev/fd").unwrap());
     argv.push(CString::new("--bind=/proc/self/fd/0:/dev/stdin").unwrap());
     argv.push(CString::new("--bind=/proc/self/fd/1:/dev/stdout").unwrap());
     argv.push(CString::new("--bind=/proc/self/fd/2:/dev/stderr").unwrap());
 
-    // Fake proc
+    // Fake proc.
     let fake_binds = fake_proc_bindings(rootfs, &sysdata_dir)?;
     argv.extend(fake_binds);
 
-    // Fake SELinux
+    // Fake SELinux.
     argv.push(
         CString::new(format!(
             "--bind={}/sys/.empty:/sys/fs/selinux",
@@ -552,7 +705,7 @@ fn build_proot_args(
         .unwrap(),
     );
 
-    // Extra Android dirs
+    // Extra Android dirs.
     for path in [
         "/vendor",
         "/odm",
@@ -567,16 +720,13 @@ fn build_proot_args(
         }
     }
 
-    // Ensure /etc/resolv.conf and /etc/hosts exist
+    // Ensure /etc/resolv.conf and /etc/hosts exist.
     let resolv_conf = rootfs.join("etc/resolv.conf");
     if !resolv_conf.exists() {
         if let Some(parent) = resolv_conf.parent() {
             fs::create_dir_all(parent).ok();
         }
-        if let Err(e) = fs::write(
-            &resolv_conf,
-            "nameserver 8.8.8.8\nnameserver 8.8.4.4\n",
-        ) {
+        if let Err(e) = fs::write(&resolv_conf, "nameserver 8.8.8.8\nnameserver 8.8.4.4\n") {
             log::warn!("proot: failed to write resolv.conf: {:?}", e);
         }
     }
@@ -593,7 +743,7 @@ fn build_proot_args(
         }
     }
 
-    // ---- Shell exec (shell was chosen by caller) ----
+    // ---- Shell exec ----
     if is_busybox {
         argv.push(CString::new(shell_binary).unwrap());
         argv.push(CString::new("sh").unwrap());
@@ -604,15 +754,24 @@ fn build_proot_args(
         argv.push(CString::new("-i").unwrap());
     }
 
-    // Environment variables
+    // ── Environment variables ──
     env.push(CString::new(format!("PROOT_LOADER={}", loader_str)).unwrap());
     env.push(CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display())).unwrap());
 
+    // Effective user
+    let effective_user = if opts.username.trim().is_empty() || opts.username.trim() == "root" {
+        "root".to_string()
+    } else {
+        opts.username.trim().to_string()
+    };
+
     // HOME
     let home_dir = if termux_detected {
-        "/data/data/com.termux/files/home"
+        "/data/data/com.termux/files/home".to_string()
+    } else if effective_user == "root" {
+        "/root".to_string()
     } else {
-        "/root"
+        format!("/home/{}", effective_user)
     };
     env.push(CString::new(format!("HOME={}", home_dir)).unwrap());
 
@@ -624,15 +783,10 @@ fn build_proot_args(
     };
     env.push(CString::new(format!("PATH={}", default_path)).unwrap());
 
-    // USER and LOGNAME
-    let (user_name, logname) = if termux_detected {
-        let current_user = std::env::var("USER").unwrap_or_else(|_| "termux".to_string());
-        (current_user.clone(), current_user)
-    } else {
-        ("root".to_string(), "root".to_string())
-    };
-    env.push(CString::new(format!("USER={}", user_name)).unwrap());
-    env.push(CString::new(format!("LOGNAME={}", logname)).unwrap());
+    // USER / LOGNAME / HOSTNAME
+    env.push(CString::new(format!("USER={}", effective_user)).unwrap());
+    env.push(CString::new(format!("LOGNAME={}", effective_user)).unwrap());
+    env.push(CString::new(format!("HOSTNAME={}", opts.hostname.trim())).unwrap());
 
     env.push(CString::new("TERM=xterm-256color").unwrap());
     env.push(CString::new("LANG=C.UTF-8").unwrap());
@@ -680,12 +834,15 @@ fn build_proot_args(
     Ok((argv, env))
 }
 
-/// Top‑level dispatcher used by PTY spawning.
-///
-/// Priority:
-/// 1. Container shell inside proot (if rootfs is proot‑compatible **and** has a shell).
-/// 2. Native Termux‑style shell under `prefix/bin` (or `/system/bin/sh` as last resort).
-pub(super) fn build_exec_args(rootfs: &Path) -> Result<(Vec<CString>, Vec<CString>)> {
+// --------------------------------------------------------------------------
+// Public dispatcher — reads ProotOptions internally, so the JNI signature
+// stays exactly the same (rootfs, rows, cols).
+// --------------------------------------------------------------------------
+
+pub(super) fn build_exec_args(
+    rootfs: &Path,
+    opts: &ProotOptions,
+) -> Result<(Vec<CString>, Vec<CString>)> {
     if is_proot_compatible(rootfs) {
         if let Some((shell_binary, is_busybox)) = find_shell_in_rootfs(rootfs) {
             log::info!(
@@ -694,7 +851,7 @@ pub(super) fn build_exec_args(rootfs: &Path) -> Result<(Vec<CString>, Vec<CStrin
                 is_busybox,
                 rootfs
             );
-            return build_proot_args(rootfs, shell_binary, is_busybox);
+            return build_proot_args(rootfs, shell_binary, is_busybox, opts);
         }
         log::warn!(
             "proot: rootfs {:?} is compatible but has no usable shell — \
@@ -757,24 +914,32 @@ fn fork_pty_with_argv(
             let master_read = unsafe { File::from_raw_fd(master_read_fd) };
             let master_write = unsafe { File::from_raw_fd(master_write_fd) };
             let stdin: Box<dyn Write + Send> = Box::new(master_write);
-            Ok((ChildProcess { pid: child }, master_read, stdin, master_write_fd))
+            Ok((
+                ChildProcess { pid: child },
+                master_read,
+                stdin,
+                master_write_fd,
+            ))
         }
     }
 }
 
 /// Spawn the shell for `rootfs`, applying the full fallback chain:
 /// container shell (inside proot) → native Termux‑style shell → `/system/bin/sh`.
+///
+/// **No JNI changes required** — the ProotOptions JSON file is read here,
+/// based on the container id derived from the rootfs path.
 pub fn fork_pty_shell_in_rootfs(
     rootfs: &Path,
     initial_rows: u16,
     initial_cols: u16,
 ) -> Result<(ChildProcess, File, Box<dyn Write + Send>, RawFd)> {
-    let (argv, env) = build_exec_args(rootfs)?;
+    let opts = load_proot_options_for(rootfs);
+    let (argv, env) = build_exec_args(rootfs, &opts)?;
     fork_pty_with_argv(argv, env, initial_rows, initial_cols)
 }
 
-/// Spawn the **native** Termux‑style Android shell with no proot.
-/// Useful when no container is installed at all.
+/// Spawn the native Termux‑style Android shell with no proot.
 pub fn fork_pty_native_shell(
     initial_rows: u16,
     initial_cols: u16,
@@ -791,10 +956,7 @@ pub(super) fn path_exists_in_rootfs(rootfs: &Path, relative_path: &str) -> bool 
     if full_path.is_symlink() {
         if let Ok(target) = fs::read_link(&full_path) {
             let resolved = if target.is_relative() {
-                full_path
-                    .parent()
-                    .unwrap_or(Path::new("/"))
-                    .join(target)
+                full_path.parent().unwrap_or(Path::new("/")).join(target)
             } else {
                 let target_str = target.to_string_lossy();
                 if target_str.starts_with('/') {
