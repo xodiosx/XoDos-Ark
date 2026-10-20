@@ -1,39 +1,68 @@
-// ProotOptionsSection.kt
 package app.xodos2.ui.drawer.pages
 
 import android.content.SharedPreferences
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
+import app.xodos2.ui.runtime.NativeInstallCoordinator
 
 @Composable
 fun ProotOptionsSection(
     prefs: SharedPreferences,
     containerId: Int,
 ) {
-    // Load existing values
-    var username by remember { mutableStateOf(prefs.getString("proot_username_$containerId", "root") ?: "root") }
-    var hostname by remember { mutableStateOf(prefs.getString("proot_hostname_$containerId", "localhost") ?: "localhost") }
-    var sharedHome by remember { mutableStateOf(prefs.getBoolean("proot_shared_home_$containerId", false)) }
-    var sharedTmp by remember { mutableStateOf(true) } // forced
-    var kernelRelease by remember { mutableStateOf(prefs.getString("proot_kernel_release_$containerId", "") ?: "") }
+    val context = LocalContext.current
+
+    // Initial values — prefer JSON (authoritative for Rust), fall back to prefs
+    val initial = remember(containerId) {
+        NativeInstallCoordinator.loadProotOptions(context, containerId)
+    }
+
+    var username by remember { mutableStateOf(initial.username.ifBlank { "root" }) }
+    var hostname by remember { mutableStateOf(initial.hostname.ifBlank { "localhost" }) }
+    var sharedHome by remember { mutableStateOf(initial.sharedHome) }
+    var kernelRelease by remember { mutableStateOf(initial.kernelRelease) }
+
+    fun persist() {
+        // Keep prefs for UI-only consumers (e.g. showing current value in other places)
+        prefs.edit()
+            .putString("proot_username_$containerId", username)
+            .putString("proot_hostname_$containerId", hostname)
+            .putBoolean("proot_shared_home_$containerId", sharedHome)
+            .putString("proot_kernel_release_$containerId", kernelRelease)
+            .apply()
+        // Save JSON consumed by Rust on next session spawn
+        NativeInstallCoordinator.saveProotOptions(
+            context, containerId,
+            NativeInstallCoordinator.ProotOptions(
+                username = username,
+                hostname = hostname,
+                sharedHome = sharedHome,
+                sharedTmp = true,
+                kernelRelease = kernelRelease
+            )
+        )
+    }
 
     DrawerExpandableSection(title = "Proot Options", defaultExpanded = false) {
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            // Username
+
+            Text(
+                "Login shell settings — applied the next time a terminal for this container is started.",
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(Modifier.height(12.dp))
+
             OutlinedTextField(
                 value = username,
-                onValueChange = {
-                    username = it
-                    prefs.edit().putString("proot_username_$containerId", it).apply()
-                },
+                onValueChange = { username = it; persist() },
                 label = { Text("Username (default: root)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -48,13 +77,9 @@ fun ProotOptionsSection(
             )
             Spacer(Modifier.height(8.dp))
 
-            // Hostname
             OutlinedTextField(
                 value = hostname,
-                onValueChange = {
-                    hostname = it
-                    prefs.edit().putString("proot_hostname_$containerId", it).apply()
-                },
+                onValueChange = { hostname = it; persist() },
                 label = { Text("Hostname (default: localhost)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -69,13 +94,9 @@ fun ProotOptionsSection(
             )
             Spacer(Modifier.height(8.dp))
 
-            // Kernel release (optional)
             OutlinedTextField(
                 value = kernelRelease,
-                onValueChange = {
-                    kernelRelease = it
-                    prefs.edit().putString("proot_kernel_release_$containerId", it).apply()
-                },
+                onValueChange = { kernelRelease = it; persist() },
                 label = { Text("Kernel release (blank = default)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -88,16 +109,12 @@ fun ProotOptionsSection(
                     unfocusedTextColor = Color.White
                 )
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Shared home toggle
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(
                     checked = sharedHome,
-                    onCheckedChange = {
-                        sharedHome = it
-                        prefs.edit().putBoolean("proot_shared_home_$containerId", it).apply()
-                    },
+                    onCheckedChange = { sharedHome = it; persist() },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color(0xFFC3B6F9),
                         checkedTrackColor = Color(0xFF7C3AED)
@@ -108,15 +125,14 @@ fun ProotOptionsSection(
             }
             Spacer(Modifier.height(4.dp))
 
-            // Shared TMP (forced on, disabled)
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(
                     checked = true,
                     onCheckedChange = { /* forced */ },
                     enabled = false,
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color(0xFFC3B6F9),
-                        checkedTrackColor = Color(0xFF7C3AED),
+                        checkedThumbColor = Color(0xFFC3B6F9).copy(alpha = 0.6f),
+                        checkedTrackColor = Color(0xFF7C3AED).copy(alpha = 0.4f),
                         disabledCheckedThumbColor = Color(0xFFC3B6F9).copy(alpha = 0.6f),
                         disabledCheckedTrackColor = Color(0xFF7C3AED).copy(alpha = 0.4f)
                     )
