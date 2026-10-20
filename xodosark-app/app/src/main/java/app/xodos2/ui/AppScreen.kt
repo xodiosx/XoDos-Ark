@@ -96,7 +96,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ensureActive
 import kotlin.coroutines.coroutineContext
 import android.view.WindowManager
-
+import app.xodos2.ui.shell.TerminalBackgroundX11
 import app.xodos2.ui.glassDialogStyle
 
 private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")

@@ -62,6 +62,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.ui.graphics.Color as ComposeColor
+import kotlinx.coroutines.withContext
 
 private val DEFAULT_EXTRA_KEYS_JSON = """
 [
@@ -99,6 +100,26 @@ private class ViewCache(
 }
 
 private const val TAG = "ShellScreen"
+
+/**
+ * Bridge between AppScreen's enter-*-desktop functions and ShellScreen's
+ * background X11 LorieView.
+ *
+ * termux-x11 allows only one attached LorieView per X server process. When
+ * the user opens the X11 desktop, MainActivity.onCreate calls
+ * LorieView.connect(fd). If our background LorieView is still attached at
+ * that moment, the primary gets a stale fd and the server can hang.
+ *
+ * So before starting MainActivity we call releaseBeforePrimaryAttaches(),
+ * which detaches the background LorieView and frees the slot.
+ */
+object TerminalBackgroundX11 {
+    @Volatile private var detach: (() -> Unit)? = null
+    fun register(fn: (() -> Unit)?) { detach = fn }
+    fun releaseBeforePrimaryAttaches() {
+        try { detach?.invoke() } catch (_: Throwable) {}
+    }
+}
 
 /**
  * Skip every input + focus callback in LorieView. As a background render
@@ -630,24 +651,6 @@ DisposableEffect(lifecycleOwner, activeContainerId) {
 // ─────────────────────────────────────────────────────────────
 // X11 background surface management
 // ─────────────────────────────────────────────────────────────
-private fun detachOurBackgroundX11(cache: ViewCache) {
-    try { cache.x11Controller?.detach() } catch (_: Throwable) {}
-    cache.x11Controller = null
-    cache.x11Lorie = null
-    cache.x11Container.removeAllViews()
-    cache.x11Container.visibility = View.GONE
-    cache.x11Attached = false
-}
-
-private fun forceReattachX11(
-    cache: ViewCache,
-    context: Context,
-    activity: Activity,
-    scope: CoroutineScope
-) {
-    if (cache.x11Attached) detachOurBackgroundX11(cache)
-    ensureX11Background(cache, true, context, activity, scope)
-}
 
 private fun ensureX11Background(
     cache: ViewCache,
@@ -723,30 +726,23 @@ private fun ensureX11Background(
  * closing MainActivity, which stole the LorieView slot) so our LorieView
  * gets a fresh fd from the (possibly restarted) X11 server.
  */
+private fun detachOurBackgroundX11(cache: ViewCache) {
+    try { cache.x11Controller?.detach() } catch (_: Throwable) {}
+    cache.x11Controller = null
+    cache.x11Lorie = null
+    cache.x11Container.removeAllViews()
+    cache.x11Container.visibility = View.GONE
+    cache.x11Attached = false
+}
+
 private fun forceReattachX11(
     cache: ViewCache,
     context: Context,
     activity: Activity,
     scope: CoroutineScope
 ) {
-    if (!cache.x11Attached) {
-        // Nothing was attached; the normal update flow will attach if needed.
-        return
-    }
-
-    try { cache.x11Controller?.detach() } catch (_: Throwable) {}
-    cache.x11Controller = null
-    cache.x11Lorie = null
-    cache.x11Container.removeAllViews()
-    cache.x11Attached = false
-
-    ensureX11Background(
-        cache = cache,
-        enabled = true,
-        context = context,
-        activity = activity,
-        scope = scope
-    )
+    if (cache.x11Attached) detachOurBackgroundX11(cache)
+    ensureX11Background(cache, true, context, activity, scope)
 }
 
 // ─────────────────────────────────────────────────────────────
