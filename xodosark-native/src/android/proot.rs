@@ -26,16 +26,16 @@ pub struct ProotOptions {
     pub username: String,
     pub hostname: String,
     pub shared_home: bool,
-    pub shared_tmp: bool,        // always forced true by the builder
+    pub shared_tmp: bool,
     pub kernel_release: String,
     pub isolated: bool,
     pub minimal: bool,
     pub no_sysvipc: bool,
     pub no_link2symlink: bool,
-    pub change_id: String,       // e.g. "0:0" — overrides everything if set
+    pub change_id: String,
     pub cwd: String,
-    pub binds: Vec<String>,      // "SRC:DST"
-    pub envs: Vec<String>,       // "KEY=VALUE"
+    pub binds: Vec<String>,
+    pub envs: Vec<String>,
 }
 
 impl Default for ProotOptions {
@@ -102,21 +102,12 @@ fn read_json_array(content: &str, key: &str) -> Vec<String> {
     let mut in_string = false;
     let mut escape = false;
     for c in inside.chars() {
-        if escape {
-            current.push(c);
-            escape = false;
-        } else if c == '\\' && in_string {
-            escape = true;
-        } else if c == '"' {
-            if in_string {
-                out.push(std::mem::take(&mut current));
-                in_string = false;
-            } else {
-                in_string = true;
-            }
-        } else if in_string {
-            current.push(c);
-        }
+        if escape { current.push(c); escape = false; }
+        else if c == '\\' && in_string { escape = true; }
+        else if c == '"' {
+            if in_string { out.push(std::mem::take(&mut current)); in_string = false; }
+            else { in_string = true; }
+        } else if in_string { current.push(c); }
     }
     out
 }
@@ -137,9 +128,7 @@ fn load_proot_options_for(rootfs: &Path) -> ProotOptions {
     if let Some(v) = read_json_field(&content, "hostname") {
         if !v.trim().is_empty() { opts.hostname = v; }
     }
-    opts.shared_home = read_json_field(&content, "shared_home")
-        .map(|v| v == "true")
-        .unwrap_or(true);
+    opts.shared_home = read_json_field(&content, "shared_home").map(|v| v == "true").unwrap_or(true);
     if let Some(v) = read_json_field(&content, "kernel_release") { opts.kernel_release = v; }
     opts.isolated = read_json_field(&content, "isolated").map(|v| v == "true").unwrap_or(false);
     opts.minimal  = read_json_field(&content, "minimal").map(|v| v == "true").unwrap_or(false);
@@ -166,9 +155,7 @@ const DEFAULT_FAKE_KERNEL_RELEASE: &str = "6.17.0-PRoot-Distro";
 const DEFAULT_FAKE_KERNEL_VERSION: &str =
     "#1 SMP PREEMPT_DYNAMIC Fri, 10 Oct 2025 00:00:00 +0000";
 
-const PULSE_CLIENT_NO_SHM: &str = "\
-enable-shm = no\nenable-memfd = no\n\
-";
+const PULSE_CLIENT_NO_SHM: &str = "enable-shm = no\nenable-memfd = no\n";
 
 const GUEST_PROFILE_XODOS2_RUNTIME: &str = "\
 : \"${XDG_RUNTIME_DIR:=/run/user/0}\"\n\
@@ -234,13 +221,13 @@ fn write_fake_hostname(data_dir: &Path, hostname: &str) -> PathBuf {
 }
 
 // ==========================================================================
-// User setup — DIRECT UID mapping (no su)
+// User setup — direct UID mapping (no su)
 // ==========================================================================
 
-/// Ensures `username` exists in passwd/group with uid=gid=1000, creates
-/// /home/username with 0777 so the fake-uid-1000 process can write there,
-/// and returns the (uid, gid) pair to use with `--change-id`.
 fn ensure_user_in_rootfs(rootfs: &Path, username: &str) -> Result<(u32, u32)> {
+    let root_home = rootfs.join("root");
+    if !root_home.exists() { let _ = fs::create_dir_all(&root_home); }
+
     if username.trim().is_empty() || username.trim() == "root" {
         return Ok((0, 0));
     }
@@ -248,7 +235,6 @@ fn ensure_user_in_rootfs(rootfs: &Path, username: &str) -> Result<(u32, u32)> {
     let uid: u32 = 1000;
     let gid: u32 = 1000;
 
-    // passwd
     let passwd = rootfs.join("etc/passwd");
     if let Some(p) = passwd.parent() { let _ = fs::create_dir_all(p); }
     let content = fs::read_to_string(&passwd).unwrap_or_default();
@@ -258,17 +244,14 @@ fn ensure_user_in_rootfs(rootfs: &Path, username: &str) -> Result<(u32, u32)> {
             .write_all(entry.as_bytes())?;
     }
 
-    // group
     let group = rootfs.join("etc/group");
     if let Some(p) = group.parent() { let _ = fs::create_dir_all(p); }
     let g = fs::read_to_string(&group).unwrap_or_default();
     if !g.lines().any(|l| l.starts_with(&format!("{}:", user))) {
-        let entry = format!("{}:x:{}:\n", user, gid);
         fs::OpenOptions::new().create(true).append(true).open(&group)?
-            .write_all(entry.as_bytes())?;
+            .write_all(format!("{}:x:{}:\n", user, gid).as_bytes())?;
     }
 
-    // home dir + 0777 so fake-uid-1000 can write under proot permission emulation
     let home = rootfs.join(format!("home/{}", user));
     fs::create_dir_all(&home)?;
     let _ = fs::set_permissions(&home, PermissionsExt::from_mode(0o777));
@@ -277,44 +260,69 @@ fn ensure_user_in_rootfs(rootfs: &Path, username: &str) -> Result<(u32, u32)> {
 }
 
 // ==========================================================================
-// Hostname prompt override
+// Hostname override — PROMPT_COMMAND based
 // ==========================================================================
 
-fn inject_hostname_profile(rootfs: &Path, hostname: &str) {
-    let profile_d = rootfs.join("etc/profile.d");
-    if let Err(e) = fs::create_dir_all(&profile_d) {
-        log::warn!("proot: profile.d: {:?}", e);
-        return;
-    }
-    let script = profile_d.join("zz-xodos2-hostname.sh");
-    let content = format!(
-        r#"#!/bin/sh
-HOSTNAME="{}"
-export HOSTNAME
-# Rewrite \h and \H in the current PS1 to the literal hostname.
-if [ -n "$PS1" ]; then
-    PS1=$(printf '%s' "$PS1" | sed "s/\\\\h/{}/g; s/\\\\H/{}/g")
+/// Rewrites `\h` / `\H` in `$PS1` at prompt-render time via `PROMPT_COMMAND`.
+/// That fires *after* every distro `PS1` assignment (bash.bashrc, .bashrc,
+/// .profile), so the replacement actually sticks — unlike my previous
+/// attempt, which ran during `profile.d` when `$PS1` was still empty.
+fn inject_hostname_profile(rootfs: &Path, hostname: &str, effective_user: &str) {
+    let host = hostname.trim();
+
+    let snippet = format!(
+        r#"
+# XoDos-Ark hostname override
+export HOSTNAME="{host}"
+if [ -n "${{BASH_VERSION:-}}" ]; then
+    _xodos2_fix_ps1() {{
+        case "${{PS1:-}}" in
+            *'\h'*|*'\H'*)
+                PS1="${{PS1//\\h/$HOSTNAME}}"
+                PS1="${{PS1//\\H/$HOSTNAME}}"
+                ;;
+        esac
+    }}
+    case "${{PROMPT_COMMAND:-}}" in
+        *_xodos2_fix_ps1*) ;;
+        *) PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND;}}_xodos2_fix_ps1" ;;
+    esac
+elif [ -n "${{PS1:-}}" ]; then
+    PS1=$(printf '%s' "$PS1" | sed "s/\\\\h/{host}/g; s/\\\\H/{host}/g")
     export PS1
 fi
 "#,
-        hostname.trim(), hostname.trim(), hostname.trim()
+        host = host
     );
-    if let Err(e) = fs::write(&script, content) {
-        log::warn!("proot: write hostname profile: {:?}", e);
-    } else {
-        let _ = fs::set_permissions(&script, PermissionsExt::from_mode(0o755));
-    }
 
+    // 1) profile.d — login shells
+    let profile_d = rootfs.join("etc/profile.d");
+    let _ = fs::create_dir_all(&profile_d);
+    let script = profile_d.join("zz-xodos2-hostname.sh");
+    let _ = fs::write(&script, format!("#!/bin/sh\n{}\n", snippet));
+    let _ = fs::set_permissions(&script, PermissionsExt::from_mode(0o755));
+
+    // 2) /etc/bash.bashrc — non-login interactive shells (Debian/Ubuntu)
     let bashrc = rootfs.join("etc/bash.bashrc");
-    let marker = "# XoDos-Ark hostname override";
     let existing = fs::read_to_string(&bashrc).unwrap_or_default();
-    if !existing.contains(marker) {
-        let snippet = format!(
-            "\n{}\n[ -r /etc/profile.d/zz-xodos2-hostname.sh ] && . /etc/profile.d/zz-xodos2-hostname.sh\n",
-            marker
-        );
+    if !existing.contains("# XoDos-Ark hostname override") {
         let _ = fs::OpenOptions::new().create(true).append(true).open(&bashrc)
             .and_then(|mut f| f.write_all(snippet.as_bytes()));
+    }
+
+    // 3) ~/.bashrc for root and target user — belt and suspenders
+    let mut homes = vec![rootfs.join("root")];
+    if effective_user != "root" && !effective_user.is_empty() {
+        homes.push(rootfs.join(format!("home/{}", effective_user)));
+    }
+    for home in homes {
+        let _ = fs::create_dir_all(&home);
+        let user_bashrc = home.join(".bashrc");
+        let existing = fs::read_to_string(&user_bashrc).unwrap_or_default();
+        if !existing.contains("# XoDos-Ark hostname override") {
+            let _ = fs::OpenOptions::new().create(true).append(true).open(&user_bashrc)
+                .and_then(|mut f| f.write_all(snippet.as_bytes()));
+        }
     }
 }
 
@@ -439,7 +447,7 @@ fn build_native_args() -> Result<(Vec<CString>, Vec<CString>)> {
 }
 
 // ==========================================================================
-// build_proot_args — full option support, DIRECT user switch
+// build_proot_args
 // ==========================================================================
 
 fn build_proot_args(
@@ -481,31 +489,25 @@ fn build_proot_args(
     }
     argv.push(CString::new("--kill-on-exit").unwrap());
 
-    // ── CHANGE-ID: direct user switch, NO su ──
+    // Direct user switch via fake_id0 — NO su
     if !opts.change_id.trim().is_empty() {
-        // explicit override wins
         argv.push(CString::new(format!("--change-id={}", opts.change_id.trim())).unwrap());
         log::info!("proot: explicit --change-id={}", opts.change_id.trim());
     } else if termux_detected {
         let (u, g) = current_uid_gid();
         argv.push(CString::new(format!("--change-id={}:{}", u, g)).unwrap());
     } else if target_uid != 0 {
-        // custom user → switch directly via fake_id0
         argv.push(CString::new(format!("--change-id={}:{}", target_uid, target_gid)).unwrap());
         log::info!("proot: direct user switch via --change-id={}:{}", target_uid, target_gid);
     } else {
         argv.push(CString::new("--change-id=0:0").unwrap());
     }
 
-    // Hostname: fake /etc/hostname + /proc/sys/kernel/hostname + PS1 override
+    // Hostname: fake binds + PROMPT_COMMAND override
     let fake_hostname = write_fake_hostname(&ctx.data_dir, &opts.hostname);
-    argv.push(CString::new(format!(
-        "--bind={}:/etc/hostname", fake_hostname.display()
-    ))?);
-    argv.push(CString::new(format!(
-        "--bind={}:/proc/sys/kernel/hostname", fake_hostname.display()
-    ))?);
-    inject_hostname_profile(rootfs, &opts.hostname);
+    argv.push(CString::new(format!("--bind={}:/etc/hostname", fake_hostname.display()))?);
+    argv.push(CString::new(format!("--bind={}:/proc/sys/kernel/hostname", fake_hostname.display()))?);
+    inject_hostname_profile(rootfs, &opts.hostname, &effective_user);
 
     // Core binds
     argv.push(CString::new("--bind=/dev").unwrap());
@@ -515,7 +517,7 @@ fn build_proot_args(
         argv.push(CString::new("--bind=/storage").unwrap());
     }
 
-    // ── HOME bind: only when shared_home=true ──
+    // Home bind — ONLY when shared_home=true
     if termux_detected {
         if opts.shared_home {
             let host_home = Path::new("/data/data/app.xodos2/files/home");
@@ -529,14 +531,9 @@ fn build_proot_args(
     } else if opts.shared_home {
         let host_home = Path::new("/data/data/app.xodos2/files/home");
         let _ = fs::create_dir_all(host_home);
-        let guest_home = if effective_user == "root" {
-            "/root".to_string()
-        } else {
-            format!("/home/{}", effective_user)
-        };
-        argv.push(CString::new(format!(
-            "--bind={}:{}", host_home.display(), guest_home
-        ))?);
+        let guest_home = if effective_user == "root" { "/root".to_string() }
+                         else { format!("/home/{}", effective_user) };
+        argv.push(CString::new(format!("--bind={}:{}", host_home.display(), guest_home))?);
         log::info!("proot: shared home {} → {}", host_home.display(), guest_home);
     } else {
         log::info!("proot: shared_home=false — container's own home used");
@@ -553,7 +550,7 @@ fn build_proot_args(
         argv.push(CString::new("--bind=/dev/dri:/dev/dri").unwrap());
     }
 
-    // Wayland/X11/VirGL/Pulse — only when not minimal
+    // Wayland/X11/VirGL/Pulse
     if !opts.minimal {
         let wayland_rt = ctx.data_dir.join("usr/tmp");
         let _ = fs::create_dir_all(&wayland_rt);
@@ -566,18 +563,12 @@ fn build_proot_args(
         let _ = fs::set_permissions(&host_x11, PermissionsExt::from_mode(0o1777));
         let _ = fs::set_permissions(&guest_x11, PermissionsExt::from_mode(0o1777));
 
-        argv.push(CString::new(format!(
-            "--bind={}:/run/user/0", wayland_rt.display()
-        ))?);
-        argv.push(CString::new(format!(
-            "--bind={}:/tmp/.X11-unix", host_x11.display()
-        ))?);
+        argv.push(CString::new(format!("--bind={}:/run/user/0", wayland_rt.display()))?);
+        argv.push(CString::new(format!("--bind={}:/tmp/.X11-unix", host_x11.display()))?);
 
         let virgl_rt = ctx.data_dir.join("virgl-run");
         let _ = fs::create_dir_all(&virgl_rt);
-        argv.push(CString::new(format!(
-            "--bind={}:/run/xodos2-virgl", virgl_rt.display()
-        ))?);
+        argv.push(CString::new(format!("--bind={}:/run/xodos2-virgl", virgl_rt.display()))?);
 
         let pulse_rt = host_pulse_runtime_dir(&ctx.data_dir);
         let _ = fs::create_dir_all(&pulse_rt);
@@ -597,9 +588,7 @@ fn build_proot_args(
     }
 
     // /dev/shm
-    argv.push(CString::new(format!(
-        "--bind={}/tmp:/dev/shm", rootfs.display()
-    ))?);
+    argv.push(CString::new(format!("--bind={}/tmp:/dev/shm", rootfs.display()))?);
 
     // FORCED shared /tmp
     let host_tmp = ctx.data_dir.join("usr/tmp");
@@ -612,9 +601,7 @@ fn build_proot_args(
         if let Some(ref sd) = ctx.external_storage_path {
             if sd.exists() {
                 for guest in ["/android", "/root/android", "/sdcard", "/root/sdcard"] {
-                    argv.push(CString::new(format!(
-                        "--bind={}:{}", sd.display(), guest
-                    ))?);
+                    argv.push(CString::new(format!("--bind={}:{}", sd.display(), guest))?);
                 }
             }
         }
@@ -651,7 +638,7 @@ fn build_proot_args(
         }
     }
 
-    // User-supplied binds
+    // User binds
     for b in &opts.binds {
         let b = b.trim();
         if b.is_empty() { continue; }
@@ -672,16 +659,13 @@ fn build_proot_args(
              ::1 localhost.localdomain localhost ip6-localhost ip6-loopback\n");
     }
 
-    // Working directory
-    let default_cwd = if effective_user == "root" {
-        "/root".to_string()
-    } else {
-        format!("/home/{}", effective_user)
-    };
+    // cwd
+    let default_cwd = if effective_user == "root" { "/root".to_string() }
+                      else { format!("/home/{}", effective_user) };
     let cwd = if opts.cwd.trim().is_empty() { default_cwd } else { opts.cwd.trim().to_string() };
     argv.push(CString::new(format!("--cwd={}", cwd))?);
 
-    // ── Shell exec: same shell regardless of user; --change-id already switched identity ──
+    // Shell
     if is_busybox {
         argv.push(CString::new(shell_binary).unwrap());
         argv.push(CString::new("sh").unwrap());
@@ -692,7 +676,7 @@ fn build_proot_args(
         argv.push(CString::new("-i").unwrap());
     }
 
-    // ── Env vars ──
+    // Env
     let mut env: Vec<CString> = Vec::new();
     env.push(CString::new(format!("PROOT_LOADER={}", loader.to_string_lossy()))?);
     env.push(CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display()))?);
@@ -733,7 +717,6 @@ fn build_proot_args(
         env.push(CString::new("ENV=/root/.bashrc").unwrap());
     }
 
-    // User-supplied envs
     for e in &opts.envs {
         let e = e.trim();
         if e.is_empty() || !e.contains('=') { continue; }
