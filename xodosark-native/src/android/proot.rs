@@ -2,7 +2,10 @@
 //!
 //! Options live in `<filesDir>/proot_options/container_<id>.json`.
 //! Users are switched **directly** via `--change-id` (fake_id0), never via
-//! a layered `su` shell.
+//! a layered `su` shell. The hostname is read dynamically from
+//! `/etc/hostname` (which is bind-mounted to a per-container fake file that
+//! the Android UI rewrites on every drawer save), so prompt updates take
+//! effect on the very next shell prompt — even mid-session.
 
 use super::{get_application_context, has_rootfs};
 use super::{host_pulse_runtime_dir, guest_pulse_server_env, GUEST_PULSE_RUNTIME_MOUNT};
@@ -140,9 +143,9 @@ fn load_proot_options_for(rootfs: &Path) -> ProotOptions {
     opts.envs  = read_json_array(&content, "envs");
 
     log::info!(
-        "proot: c{} user={:?} host={:?} shared_home={} isolated={} minimal={} binds={} envs={}",
+        "proot: c{} user={:?} host={:?} shared_home={} isolated={} minimal={}",
         cid, opts.username, opts.hostname, opts.shared_home,
-        opts.isolated, opts.minimal, opts.binds.len(), opts.envs.len()
+        opts.isolated, opts.minimal
     );
     opts
 }
@@ -173,6 +176,9 @@ if command -v pactl >/dev/null 2>&1; then\n\
   pactl set-default-sink xodos2-out >/dev/null 2>&1 || true\n\
 fi\n\
 ";
+
+const HN_START: &str = "# >>> xodos2-hostname >>>";
+const HN_END: &str = "# <<< xodos2-hostname <<<";
 
 // ==========================================================================
 // Small helpers
@@ -214,8 +220,17 @@ fn write_guest_profile_fragment(data_dir: &Path) -> PathBuf {
     path
 }
 
-fn write_fake_hostname(data_dir: &Path, hostname: &str) -> PathBuf {
-    let path = data_dir.join("fake_hostname");
+/// Per-container fake hostname path. Kotlin (`saveProotOptions`) also writes
+/// to this same file so a running shell picks up the change on its next
+/// prompt, without spawning a new session.
+fn fake_hostname_path(data_dir: &Path, cid: i32) -> PathBuf {
+    let dir = proot_options_dir(data_dir);
+    let _ = fs::create_dir_all(&dir);
+    dir.join(format!("fake_hostname_{}.txt", cid))
+}
+
+fn write_fake_hostname(data_dir: &Path, cid: i32, hostname: &str) -> PathBuf {
+    let path = fake_hostname_path(data_dir, cid);
     let _ = fs::write(&path, format!("{}\n", hostname.trim()));
     path
 }
@@ -260,68 +275,146 @@ fn ensure_user_in_rootfs(rootfs: &Path, username: &str) -> Result<(u32, u32)> {
 }
 
 // ==========================================================================
-// Hostname override — PROMPT_COMMAND based
+// Hostname override — dynamic, marker-block replacement
 // ==========================================================================
 
-/// Rewrites `\h` / `\H` in `$PS1` at prompt-render time via `PROMPT_COMMAND`.
-/// That fires *after* every distro `PS1` assignment (bash.bashrc, .bashrc,
-/// .profile), so the replacement actually sticks — unlike my previous
-/// attempt, which ran during `profile.d` when `$PS1` was still empty.
-fn inject_hostname_profile(rootfs: &Path, hostname: &str, effective_user: &str) {
-    let host = hostname.trim();
+/// The block we install into every startup file. It is *dynamic*: it reads
+/// `/etc/hostname` at source time and again inside `_xodos2_fix_ps1`, which
+/// `PROMPT_COMMAND` invokes before every prompt. So a change to `/etc/hostname`
+/// (which Kotlin writes on every drawer save) propagates to the very next
+/// prompt, with no restart.
+const HOSTNAME_BLOCK: &str = r#"
+# XoDos-Ark hostname override — dynamic, reads /etc/hostname at every prompt
+_hostname_from_file() {
+    local h="$(cat /etc/hostname 2>/dev/null | tr -d '[:space:]')"
+    [ -z "$h" ] && h="localhost"
+    printf '%s' "$h"
+}
+HOSTNAME="$(_hostname_from_file)"; export HOSTNAME
 
-    let snippet = format!(
-        r#"
-# XoDos-Ark hostname override
-export HOSTNAME="{host}"
-if [ -n "${{BASH_VERSION:-}}" ]; then
-    _xodos2_fix_ps1() {{
-        case "${{PS1:-}}" in
+if [ -n "${BASH_VERSION:-}" ]; then
+    _xodos2_fix_ps1() {
+        local h
+        h="$(_hostname_from_file)"
+        HOSTNAME="$h"; export HOSTNAME
+        case "${PS1:-}" in
             *'\h'*|*'\H'*)
-                PS1="${{PS1//\\h/$HOSTNAME}}"
-                PS1="${{PS1//\\H/$HOSTNAME}}"
+                PS1="${PS1//\\h/$h}"
+                PS1="${PS1//\\H/$h}"
                 ;;
         esac
-    }}
-    case "${{PROMPT_COMMAND:-}}" in
+    }
+    case "${PROMPT_COMMAND:-}" in
         *_xodos2_fix_ps1*) ;;
-        *) PROMPT_COMMAND="${{PROMPT_COMMAND:+$PROMPT_COMMAND;}}_xodos2_fix_ps1" ;;
+        *) PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}_xodos2_fix_ps1" ;;
     esac
-elif [ -n "${{PS1:-}}" ]; then
-    PS1=$(printf '%s' "$PS1" | sed "s/\\\\h/{host}/g; s/\\\\H/{host}/g")
+elif [ -n "${PS1:-}" ]; then
+    PS1=$(printf '%s' "$PS1" | sed "s/\\\\h/$(_hostname_from_file)/g; s/\\\\H/$(_hostname_from_file)/g")
     export PS1
 fi
-"#,
-        host = host
-    );
+"#;
 
-    // 1) profile.d — login shells
+/// Removes any existing `>>> xodos2-hostname >>>` … `<<< xodos2-hostname <<<`
+/// block from `content`. Old-style blocks from previous versions (marker line
+/// `# XoDos-Ark hostname override` without the `>>>`/`<<<` wrappers) are also
+/// stripped, using a bounded heuristic (max 40 lines after the marker).
+fn strip_hostname_block(content: &str) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut skip_until_end_marker = false;
+    let mut skip_old_remaining: i32 = 0;
+
+    for line in content.lines() {
+        let t = line.trim();
+
+        if t == HN_START { skip_until_end_marker = true; continue; }
+        if t == HN_END   { skip_until_end_marker = false; continue; }
+        if skip_until_end_marker { continue; }
+
+        // Old-style block from previous builds
+        if t == "# XoDos-Ark hostname override" { skip_old_remaining = 40; continue; }
+        if skip_old_remaining > 0 {
+            skip_old_remaining -= 1;
+            // Stop skipping early on lines that clearly belong to user config.
+            let looks_like_ours =
+                t.is_empty()
+                || t == "fi" || t == "esac" || t == "}" || t == ";;"
+                || t.starts_with("if ") || t.starts_with("elif ") || t.starts_with("else")
+                || t.starts_with("case ") || t.starts_with("export ")
+                || t.starts_with("HOSTNAME") || t.starts_with("PS1")
+                || t.starts_with("PROMPT_COMMAND") || t.starts_with("_xodos2_")
+                || t.starts_with("_hostname_")
+                || t.starts_with("*'\\h'") || t.starts_with("*'\\H'")
+                || t.contains("HOSTNAME") || t.contains("_xodos2_fix_ps1")
+                || t.contains("PS1=") || t.contains("PROMPT_COMMAND=")
+                || t.starts_with('#');
+            if !looks_like_ours {
+                skip_old_remaining = 0;
+            } else {
+                continue;
+            }
+        }
+
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+/// Rewrites `path` so it contains `new_block` wrapped in our markers,
+/// preserving any other content.
+fn install_hostname_block(path: &Path, new_block: &str) {
+    let existing = fs::read_to_string(path).unwrap_or_default();
+    let mut cleaned = strip_hostname_block(&existing);
+    if !cleaned.is_empty() && !cleaned.ends_with('\n') { cleaned.push('\n'); }
+    cleaned.push_str(HN_START); cleaned.push('\n');
+    cleaned.push_str(new_block);
+    if !new_block.ends_with('\n') { cleaned.push('\n'); }
+    cleaned.push_str(HN_END); cleaned.push('\n');
+    if let Some(p) = path.parent() { let _ = fs::create_dir_all(p); }
+    let _ = fs::write(path, cleaned);
+}
+
+fn inject_hostname_profile(
+    rootfs: &Path,
+    effective_user: &str,
+    host_home: Option<&Path>,
+) {
+    // 1. profile.d — the most reliable hook for `bash -l`
     let profile_d = rootfs.join("etc/profile.d");
     let _ = fs::create_dir_all(&profile_d);
     let script = profile_d.join("zz-xodos2-hostname.sh");
-    let _ = fs::write(&script, format!("#!/bin/sh\n{}\n", snippet));
+    let _ = fs::write(&script, format!("#!/bin/sh\n{}\n", HOSTNAME_BLOCK));
     let _ = fs::set_permissions(&script, PermissionsExt::from_mode(0o755));
 
-    // 2) /etc/bash.bashrc — non-login interactive shells (Debian/Ubuntu)
-    let bashrc = rootfs.join("etc/bash.bashrc");
-    let existing = fs::read_to_string(&bashrc).unwrap_or_default();
-    if !existing.contains("# XoDos-Ark hostname override") {
-        let _ = fs::OpenOptions::new().create(true).append(true).open(&bashrc)
-            .and_then(|mut f| f.write_all(snippet.as_bytes()));
+    // 2. /etc/bash.bashrc — interactive non-login shells (Debian/Ubuntu)
+    install_hostname_block(&rootfs.join("etc/bash.bashrc"), HOSTNAME_BLOCK);
+
+    // 3. ~/.bashrc for root (container-side)
+    let root_home = rootfs.join("root");
+    let _ = fs::create_dir_all(&root_home);
+    install_hostname_block(&root_home.join(".bashrc"), HOSTNAME_BLOCK);
+
+    // 4. ~/.bashrc for the target user (container-side) + .profile fallback
+    if effective_user != "root" && !effective_user.is_empty() {
+        let user_home = rootfs.join(format!("home/{}", effective_user));
+        let _ = fs::create_dir_all(&user_home);
+        install_hostname_block(&user_home.join(".bashrc"), HOSTNAME_BLOCK);
+        let profile = user_home.join(".profile");
+        if !profile.exists() {
+            let _ = fs::write(&profile,
+                "if [ -f ~/.bashrc ]; then . ~/.bashrc; fi\n");
+        }
     }
 
-    // 3) ~/.bashrc for root and target user — belt and suspenders
-    let mut homes = vec![rootfs.join("root")];
-    if effective_user != "root" && !effective_user.is_empty() {
-        homes.push(rootfs.join(format!("home/{}", effective_user)));
-    }
-    for home in homes {
-        let _ = fs::create_dir_all(&home);
-        let user_bashrc = home.join(".bashrc");
-        let existing = fs::read_to_string(&user_bashrc).unwrap_or_default();
-        if !existing.contains("# XoDos-Ark hostname override") {
-            let _ = fs::OpenOptions::new().create(true).append(true).open(&user_bashrc)
-                .and_then(|mut f| f.write_all(snippet.as_bytes()));
+    // 5. Host home — only when shared_home is on, because the bind shadows
+    //    the container-side home at runtime.
+    if let Some(hh) = host_home {
+        let _ = fs::create_dir_all(hh);
+        install_hostname_block(&hh.join(".bashrc"), HOSTNAME_BLOCK);
+        let profile = hh.join(".profile");
+        if !profile.exists() {
+            let _ = fs::write(&profile,
+                "if [ -f ~/.bashrc ]; then . ~/.bashrc; fi\n");
         }
     }
 }
@@ -459,6 +552,7 @@ fn build_proot_args(
     let ctx = get_application_context()?;
     let (proot, loader) = proot_and_loader_paths()?;
     let termux_detected = has_termux_inside_container(rootfs);
+    let cid = container_id_from_rootfs(rootfs).unwrap_or(0);
 
     let effective_user = if opts.username.trim().is_empty() || opts.username.trim() == "root" {
         "root".to_string()
@@ -492,32 +586,51 @@ fn build_proot_args(
     // Direct user switch via fake_id0 — NO su
     if !opts.change_id.trim().is_empty() {
         argv.push(CString::new(format!("--change-id={}", opts.change_id.trim())).unwrap());
-        log::info!("proot: explicit --change-id={}", opts.change_id.trim());
     } else if termux_detected {
         let (u, g) = current_uid_gid();
         argv.push(CString::new(format!("--change-id={}:{}", u, g)).unwrap());
     } else if target_uid != 0 {
         argv.push(CString::new(format!("--change-id={}:{}", target_uid, target_gid)).unwrap());
-        log::info!("proot: direct user switch via --change-id={}:{}", target_uid, target_gid);
     } else {
         argv.push(CString::new("--change-id=0:0").unwrap());
     }
 
-    // Hostname: fake binds + PROMPT_COMMAND override
-    let fake_hostname = write_fake_hostname(&ctx.data_dir, &opts.hostname);
-    argv.push(CString::new(format!("--bind={}:/etc/hostname", fake_hostname.display()))?);
-    argv.push(CString::new(format!("--bind={}:/proc/sys/kernel/hostname", fake_hostname.display()))?);
-    inject_hostname_profile(rootfs, &opts.hostname, &effective_user);
-
-    // Core binds
+    // Core binds FIRST, so /proc & /etc exist before we bind over them.
     argv.push(CString::new("--bind=/dev").unwrap());
+    argv.push(CString::new("--bind=/proc").unwrap());
+    argv.push(CString::new("--bind=/sys").unwrap());
     if !opts.minimal && !opts.isolated {
         argv.push(CString::new("--bind=/system").unwrap());
         argv.push(CString::new("--bind=/apex").unwrap());
         argv.push(CString::new("--bind=/storage").unwrap());
     }
 
-    // Home bind — ONLY when shared_home=true
+    // Hostname: fake /etc/hostname (create target if missing) + /proc entry
+    let host_home_path = if opts.shared_home && !termux_detected {
+        Some(PathBuf::from("/data/data/app.xodos2/files/home"))
+    } else { None };
+
+    let guest_etc_hostname = rootfs.join("etc/hostname");
+    if !guest_etc_hostname.exists() {
+        let _ = fs::create_dir_all(guest_etc_hostname.parent().unwrap_or(Path::new("/")));
+        let _ = fs::write(&guest_etc_hostname, "\n");
+    }
+    let fake_hn = write_fake_hostname(&ctx.data_dir, cid, &opts.hostname);
+    argv.push(CString::new(format!(
+        "--bind={}:/etc/hostname", fake_hn.display()
+    ))?);
+    argv.push(CString::new(format!(
+        "--bind={}:/proc/sys/kernel/hostname", fake_hn.display()
+    ))?);
+
+    // Install dynamic hostname snippet everywhere the shell might source
+    inject_hostname_profile(
+        rootfs,
+        &effective_user,
+        host_home_path.as_deref(),
+    );
+
+    // Home bind — ONLY when shared_home=true (fixes the "always bound" bug)
     if termux_detected {
         if opts.shared_home {
             let host_home = Path::new("/data/data/app.xodos2/files/home");
@@ -533,14 +646,10 @@ fn build_proot_args(
         let _ = fs::create_dir_all(host_home);
         let guest_home = if effective_user == "root" { "/root".to_string() }
                          else { format!("/home/{}", effective_user) };
-        argv.push(CString::new(format!("--bind={}:{}", host_home.display(), guest_home))?);
-        log::info!("proot: shared home {} → {}", host_home.display(), guest_home);
-    } else {
-        log::info!("proot: shared_home=false — container's own home used");
+        argv.push(CString::new(format!(
+            "--bind={}:{}", host_home.display(), guest_home
+        ))?);
     }
-
-    argv.push(CString::new("--bind=/proc").unwrap());
-    argv.push(CString::new("--bind=/sys").unwrap());
 
     // GPU
     if Path::new("/dev/kgsl-3d0").exists() {
