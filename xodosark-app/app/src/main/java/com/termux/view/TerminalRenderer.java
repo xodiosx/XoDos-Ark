@@ -183,13 +183,37 @@ public final class TerminalRenderer {
             backColor = palette[backColor];
         }
 
-        // Reverse video here if _one and only one_ of the reverse flags are set:
-        final boolean reverseVideoHere = reverseVideo ^ (effect & (TextStyle.CHARACTER_ATTRIBUTE_INVERSE)) != 0;
-        if (reverseVideoHere) {
-            int tmp = foreColor;
-            foreColor = backColor;
-            backColor = tmp;
-        }
+    // Reverse video here if _one and only one_ of the reverse flags are set:
+final boolean reverseVideoHere = reverseVideo ^ (effect & (TextStyle.CHARACTER_ATTRIBUTE_INVERSE)) != 0;
+if (reverseVideoHere) {
+    int tmp = foreColor;
+    foreColor = backColor;
+    backColor = tmp;
+
+    // ── Selection readability fix ─────────────────────────────
+    // With a transparent cell background (image / X11 / animated-gif
+    // backgrounds force COLOR_INDEX_BACKGROUND = 0x00000000), the swap
+    // above makes foreColor fully transparent → the selection highlight
+    // is visible but the text disappears. Substitute a contrast-safe
+    // pair: highlight stays the user's text colour, and we pick black
+    // or white for the glyphs based on the highlight's luminance.
+    final boolean foreTransparent = (foreColor & 0xFF000000) == 0;
+    final boolean backTransparent = (backColor & 0xFF000000) == 0;
+    if (foreTransparent || backTransparent) {
+        // Fallback: if both sides were transparent, pick a neutral grey
+        // so the highlight is at least visible.
+        final int highlightBg = backTransparent ? 0xFF808080 : backColor;
+
+        final int r = (highlightBg >> 16) & 0xFF;
+        final int g = (highlightBg >> 8)  & 0xFF;
+        final int b =  highlightBg        & 0xFF;
+        final int luminance = (r * 299 + g * 587 + b * 114) / 1000;
+
+        // Black on light highlights, white on dark highlights.
+        foreColor = luminance > 128 ? 0xFF000000 : 0xFFFFFFFF;
+        backColor = highlightBg;
+    }
+}
 
         float left = startColumn * mFontWidth;
         float right = left + runWidthColumns * mFontWidth;
