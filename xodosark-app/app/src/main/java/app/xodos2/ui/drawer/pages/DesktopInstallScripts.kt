@@ -66,7 +66,7 @@ object DesktopInstallScripts {
             "LXQt Desktop"   -> "lxqt*"
             "MATE"           -> "mate*"
             "Cinnamon"       -> "cinnamon*"
-            "KDE Plasma"     -> "plasma*"
+            "KDE Plasma"     -> "plasma* dolphin konsole kate gwenview spectacle"
             "GNOME"          -> "gnome*"
             "Budgie"         -> "budgie*"
             "LXDE"           -> "lxde*"
