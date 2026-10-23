@@ -1,7 +1,6 @@
 // DesktopLaunchersSection.kt
 package app.xodos2.ui.drawer.pages
 
-import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,12 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.glass.GlassButton
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,8 +34,19 @@ fun DesktopLaunchersSection(
     var editingBinary by remember { mutableStateOf<String?>(null) }
     var editScript by remember { mutableStateOf("") }
 
+    // ── FIX #1: resolve native-ness once, reuse everywhere ─────────
+    // Re-evaluated after every scan (which is the moment the user
+    // most likely finished installing a DE) and on container switch.
+    val isNative by remember(containerId, scanResult) {
+        mutableStateOf(DesktopDetector.isNativeContainer(context, containerId))
+    }
+
+    /** Single source of the script — always uses the correct flavour. */
+    fun scriptFor(binary: String): String =
+        getCustomScript(prefs, containerId, binary)
+            ?: DesktopDetector.defaultLaunchScript(binary, isNative)
+
     DrawerExpandableSection(title = "Desktop Launchers", defaultExpanded = false) {
-        // Scan button
         Button(
             onClick = {
                 coroutineScope.launch {
@@ -58,7 +68,6 @@ fun DesktopLaunchersSection(
 
         Spacer(Modifier.height(8.dp))
 
-        // Detected buttons
         scanResult?.let { detected ->
             if (detected.isNotEmpty()) {
                 Column {
@@ -75,18 +84,13 @@ fun DesktopLaunchersSection(
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clickable {
-                                        val script = getCustomScript(prefs, containerId, binary)
-                                            ?: DesktopDetector.defaultLaunchScript(binary)
-                                        onExecuteCommand(script)
-                                    }
+                                    .clickable { onExecuteCommand(scriptFor(binary)) }
                                     .padding(vertical = 12.dp, horizontal = 8.dp)
                             )
                             IconButton(
                                 onClick = {
                                     editingBinary = binary
-                                    editScript = getCustomScript(prefs, containerId, binary)
-                                        ?: DesktopDetector.defaultLaunchScript(binary)
+                                    editScript = scriptFor(binary)
                                 },
                                 modifier = Modifier.size(36.dp)
                             ) {
@@ -104,7 +108,6 @@ fun DesktopLaunchersSection(
             }
         }
 
-        // Manual dropdown fallback
         if (showManualPick) {
             var manualDropdownExpanded by remember { mutableStateOf(false) }
             Box {
@@ -123,9 +126,7 @@ fun DesktopLaunchersSection(
                             text = { Text(name) },
                             onClick = {
                                 manualDropdownExpanded = false
-                                val script = getCustomScript(prefs, containerId, binary)
-                                    ?: DesktopDetector.defaultLaunchScript(binary)
-                                onExecuteCommand(script)
+                                onExecuteCommand(scriptFor(binary))
                             }
                         )
                     }
@@ -134,7 +135,6 @@ fun DesktopLaunchersSection(
         }
     }
 
-    // Edit dialog with Reset functionality
     if (editingBinary != null) {
         val binary = editingBinary!!
         val displayName = DesktopDetector.knownBinaries[binary] ?: binary
@@ -163,10 +163,9 @@ fun DesktopLaunchersSection(
             },
             dismissButton = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Reset button – restore the default script
                     GlassButton(onClick = {
-                        editScript = DesktopDetector.defaultLaunchScript(binary)
-                        // Optionally delete the saved custom script so the default becomes permanent
+                        // ── FIX #2: regenerate with correct flavour ──
+                        editScript = DesktopDetector.defaultLaunchScript(binary, isNative)
                         deleteCustomScript(prefs, containerId, binary)
                     }) {
                         Text("Reset", color = Color(0xFFFF6B6B))
@@ -181,13 +180,14 @@ fun DesktopLaunchersSection(
     }
 }
 
-// Persistence helpers
+// ── persistence helpers ────────────────────────────────────────────
+// FIX #3: bump to v2 so any PRoot scripts cached by the old build
+// are silently orphaned and regenerated with the correct flavour.
 private fun scriptPrefKey(containerId: Int, binary: String) =
-    "desktop_launch_script_${containerId}_$binary"
+    "desktop_launch_script_v2_${containerId}_$binary"
 
-private fun getCustomScript(prefs: SharedPreferences, containerId: Int, binary: String): String? {
-    return prefs.getString(scriptPrefKey(containerId, binary), null)
-}
+private fun getCustomScript(prefs: SharedPreferences, containerId: Int, binary: String): String? =
+    prefs.getString(scriptPrefKey(containerId, binary), null)
 
 private fun saveCustomScript(prefs: SharedPreferences, containerId: Int, binary: String, script: String) {
     prefs.edit().putString(scriptPrefKey(containerId, binary), script).apply()

@@ -277,6 +277,8 @@ internal fun isNativeDistroId(id: String?): Boolean {
 xfce4-session 
 """.trimIndent()
     }
+    
+    
 
     /**
      * Returns a shell script that launches [binary].
@@ -284,7 +286,7 @@ xfce4-session
      * @param isNative  when true, produces a Termux-style native launch
      *                  script (PREFIX/HOME/PATH/LD_LIBRARY_PATH, no PRoot).
      */
-    fun defaultLaunchScript(binary: String, isNative: Boolean = false): String {
+    fun defaultLaunchScript(binary: String, isNative: Boolean): String {
         if (isNative) return nativeLaunchScript(binary)
 
         // ── PRoot / distro container ─────────────────────────────
