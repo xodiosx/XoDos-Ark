@@ -63,7 +63,7 @@ object DesktopInstallScripts {
         // Every DE in Termux's x11-repo is expressible as a wildcard prefix.
         val packagePattern: String = when (envName) {
             "XFCE Desktop"   -> "xfce4*"
-            "LXQt Desktop"   -> "lxqt*"
+            "LXQt Desktop"   -> "PyXDG lxqt*"
             "MATE"           -> "mate*"
             "Cinnamon"       -> "cinnamon*"
             "KDE Plasma"     -> "plasma* dolphin konsole kate gwenview spectacle"
@@ -98,6 +98,13 @@ object DesktopInstallScripts {
             "mesa-vulkan-icd-freedreno virglrenderer " +
             "vulkan-wrapper mesa-vulkan-icd-virtio-dri3 " +
             "pulseaudio"
+            
+            val lxqtExtras = if (envName == "LXQt Desktop" || envName == "Openbox") {
+    """
+    # Python + PyXDG (required by openbox-xdg-autostart)
+    pkg install -y python || true
+    pip install --no-input PyXDG || pip3 install --no-input PyXDG || true
+    """.trimIndent()
 
         val body = """
             #!/data/data/app.xodos2/files/usr/bin/bash
@@ -125,6 +132,9 @@ object DesktopInstallScripts {
 
             # ── Desktop environment (wildcard; x11-repo has no -dev packages) ──
             apt install -y '$packagePattern'
+            
+            # ── LXQt / Openbox extras ──
+    $lxqtExtras
 
             # Audio front-end
             apt install -y pavucontrol || true
