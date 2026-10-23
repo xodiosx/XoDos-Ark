@@ -56,7 +56,7 @@ object DesktopInstallScripts {
         // Every DE in Termux's x11-repo is expressible as a wildcard prefix.
         val packagePattern: String = when (envName) {
             "XFCE Desktop"   -> "xfce4*"
-            "LXQt Desktop"   -> "PyXDG lxqt*"
+            "LXQt Desktop"   -> "lxqt*"
             "MATE"           -> "mate*"
             "Cinnamon"       -> "cinnamon*"
             "KDE Plasma"     -> "plasma* dolphin konsole kate gwenview spectacle"
