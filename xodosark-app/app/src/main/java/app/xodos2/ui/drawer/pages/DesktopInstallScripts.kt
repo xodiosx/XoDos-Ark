@@ -38,15 +38,8 @@ object DesktopInstallScripts {
     }
 
     // ── helpers ───────────────────────────────────────────────
-    private fun looksNative(distro: String): Boolean {
-        val d = distro.trim()
-        if (d.isEmpty()) return false
-        return d.equals(DesktopDetector.NATIVE_DISTRO_ID, ignoreCase = true) ||
-               d.contains("xodos-ark", ignoreCase = true) ||
-               d.contains("xodos2",    ignoreCase = true) ||
-               d.contains("native",    ignoreCase = true) ||
-               d.contains("termux",    ignoreCase = true)
-    }
+    private fun looksNative(distro: String): Boolean =
+    DesktopDetector.isNativeDistroId(distro)
 
     /** Tiny shim so we don't need an import cycle on the long class name. */
     private object NativeInstallCoordinatorDistro {
@@ -102,9 +95,11 @@ object DesktopInstallScripts {
             val lxqtExtras = if (envName == "LXQt Desktop" || envName == "Openbox") {
     """
     # Python + PyXDG (required by openbox-xdg-autostart)
-    pkg install -y python || true
-    pip install --no-input PyXDG || pip3 install --no-input PyXDG || true
+    pkg install -y python python-pip || true
+    pip install --no-input --break-system-packages PyXDG \
+        || pip3 install --no-input --break-system-packages PyXDG || true
     """.trimIndent()
+} else ""
 
         val body = """
             #!/data/data/app.xodos2/files/usr/bin/bash
@@ -121,7 +116,7 @@ object DesktopInstallScripts {
 
             mkdir -p "${sd}HOME"
 
-            # Enable x11-repo (all desktop packages live there)
+            # update x11 (all desktop packages live there)
             apt update  || pkg update 
            # apt upgrade -y
 
@@ -131,7 +126,10 @@ object DesktopInstallScripts {
                 apt install -y --no-install-recommends $gpuStack || true
 
             # ── Desktop environment (wildcard; x11-repo has no -dev packages) ──
-            apt install -y '$packagePattern'
+            
+            set +e       
+            apt install -y $packagePattern || true
+            
             
             # ── LXQt / Openbox extras ──
     $lxqtExtras

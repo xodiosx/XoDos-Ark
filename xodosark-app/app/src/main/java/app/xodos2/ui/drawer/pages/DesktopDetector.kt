@@ -118,20 +118,43 @@ printf '}\n'
      * either via SharedPreferences ("XoDos-Ark") or the .rootfs_type marker.
      */
     fun isNativeContainer(context: Context, containerId: Int): Boolean {
-        val saved = NativeInstallCoordinator.getContainerDistro(context, containerId)
-        if (!saved.isNullOrBlank()) {
-            return saved.equals(NATIVE_DISTRO_ID, ignoreCase = true)
-        }
-        val marker = File(
-            NativeInstallCoordinator.containerPath(context, containerId),
-            ".rootfs_type"
-        )
+    val containerDir = NativeInstallCoordinator.containerPath(context, containerId)
+
+    // ── 1. Marker file is authoritative ───────────────────────────
+    // Native containers always write "xodos-ark" here.
+    for (name in listOf(".rootfs_type", "rootfs_type")) {
+        val marker = File(containerDir, name)
         if (marker.exists()) {
-            return marker.readText().trim().equals(NATIVE_DISTRO_ID, ignoreCase = true)
+            val txt = marker.readText().trim()
+            Log.d("DesktopDetector", "isNative: $name='$txt'")
+            if (isNativeDistroId(txt)) return true
         }
-        return false
     }
 
+    // ── 2. Saved pref (accepts aliases, not just the exact id) ────
+    val saved = NativeInstallCoordinator.getContainerDistro(context, containerId)
+    Log.d("DesktopDetector", "isNative: saved='$saved'")
+    if (isNativeDistroId(saved)) return true
+
+    // ── 3. Last resort: native prefix present, no rootfs dir ──────
+    val hasNativeUsr = File(context.filesDir, "usr/bin").isDirectory
+    val hasRootfs    = containerDir.isDirectory
+    Log.d("DesktopDetector", "isNative: usr=$hasNativeUsr rootfs=$hasRootfs")
+    if (hasNativeUsr && !hasRootfs) return true
+
+    return false
+}
+
+/** Single source of truth for "this id means native". */
+internal fun isNativeDistroId(id: String?): Boolean {
+    val d = id?.trim().orEmpty()
+    if (d.isEmpty()) return false
+    return d.equals(NATIVE_DISTRO_ID, ignoreCase = true) ||
+           d.contains("xodos-ark", ignoreCase = true) ||
+           d.contains("xodos2",    ignoreCase = true) ||
+           d.equals("native",      ignoreCase = true) ||
+           d.equals("termux",      ignoreCase = true)
+}
     /**
      * Returns [displayName, binaryName] for every desktop environment whose
      * starting binary exists.
@@ -402,7 +425,7 @@ xfce4-session
                 export XDG_SESSION_TYPE='wayland'
                 unset DISPLAY
             fi
-            source {'$'}PREFIX/opt/drv
+            . ${'$'}PREFIX/opt/drv
 
             killall -9 dbus-daemon dbus-launch 2>/dev/null || true
         """.trimIndent()
