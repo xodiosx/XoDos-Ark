@@ -1147,7 +1147,7 @@ fun downloadBootstrapArchive() {
 
         try {
             withContext(Dispatchers.IO) {
-                val url = URL("https://github.com/xodiosx/XoDos-Ark/releases/download/wine10.1/fexcore.tar.xz")
+                val url = URL("https://github.com/xodiosx/XoDos-Ark/releases/download/vwine10.1/xfex.tar.xz")
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 15_000
                 connection.readTimeout = 15_000
