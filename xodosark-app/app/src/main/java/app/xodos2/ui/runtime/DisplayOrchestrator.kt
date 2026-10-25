@@ -272,6 +272,7 @@ val payload = buildString {
                 b.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")             
                 b.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/panfrost_icd.json\n")
                 b.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/panfrost_icd.json\n")
+                b.append("export PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1\n")
                 b.append("export TU_DEBUG=noconform\n")
             }
             else -> {
@@ -346,6 +347,7 @@ val payload = buildString {
                 sb.append("export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/panfrost_icd.json\n")
                 sb.append("export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/panfrost_icd.json\n")
                 sb.append("export TU_DEBUG=noconform\n")
+                sb.append("export PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1\n")
             }
             else -> {
                 sb.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
@@ -437,6 +439,7 @@ fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): String {
                 sb.append("export VK_ICD_FILENAMES=${nativePath("/usr/share/vulkan/icd.d/panfrost_icd.json")}\n")
                 sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/panfrost_icd.json")}\n")
                 sb.append("export TU_DEBUG=noconform\n")
+                sb.append("export PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1\n")
             }
         "WRAPPER" -> {
         // Native‑only wrapper driver – does not affect proot environment
