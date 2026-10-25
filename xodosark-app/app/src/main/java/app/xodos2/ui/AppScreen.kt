@@ -102,6 +102,20 @@ import app.xodos2.ui.glassDialogStyle
 private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")
 private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
 
+
+private val WINE_NATIVE_DEPENDENCIES = listOf(
+    "libandroid-support", "libx11", "libxcb", "libxau", "libxdmcp",
+    "libxext", "libxfixes", "libxi", "libxrender", "libxrandr",
+    "libxcursor", "libxinerama", "libxcomposite", "libxdamage",
+    "libxft", "libxmu", "libxt", "libxtst", "libxss", "libxv",
+    "libxkbcommon", "libxshmfence", "xorg-xrandr", "mesa", "libdrm",
+    "fontconfig", "freetype", "glib", "zlib",  "hangover-libwow64fex", "hangover-libarm64ecfex", "hangover-wowbox64", "7zip", "zstd", "gnutls",
+    "openssl", "openal-soft", "gstreamer", "virglrenderer-venus",
+    "angle-android", "pulseaudio", "libsndfile", "alsa-lib", "libevdev",
+    "mesa-vulkan-icd-freedreno", "vulkan-loader-generic",
+    "vulkan-wrapper", "mali-vulkan-panvk", "mesa-vulkan-icd-virtio-dri3"
+)
+
 private const val X11_MODE_LABEL_NATIVE = "Native"
 private const val X11_MODE_LABEL_SCALED = "Scaled"
 private const val X11_MODE_LABEL_EXACT = "Fixed size"
@@ -427,6 +441,43 @@ fun markContainerAsNativeTerminal(containerId: Int) {
     NativeInstallCoordinator.saveContainerDistro(context, containerId, "XoDos-Ark")
     refreshContainerState()
     refreshLegacyFlags()
+}
+
+/**
+ * Installs the Wine runtime dependencies into a native terminal session.
+ *
+ *  • If any native container has a live terminal session → reuse it.
+ *  • Otherwise spawn the default native session (ARCH_TERMINAL, container 1).
+ *
+ *  The `apt update` prefix is added so freshly-added packages can be
+ *  resolved even if the local package index is stale.
+ */
+fun installWineDependenciesInNativeSession() {
+    // 1. Find a native container (1..3)
+    val nativeContainerId = (1..3).firstOrNull { cid ->
+        DesktopDetector.isNativeContainer(context, cid)
+    }
+
+    val sessionId: Int = when (nativeContainerId) {
+        1 -> TerminalSessionIds.ARCH_TERMINAL
+        2 -> TerminalSessionIds.DEBIAN_TERMINAL
+        3 -> TerminalSessionIds.WINE_TERMINAL
+        else -> TerminalSessionIds.ARCH_TERMINAL   // default
+    }
+
+    // 2. Spawn the session if it isn't already running
+    if (!NativeBridge.isSessionAlive(sessionId)) {
+        NativeBridge.spawnSessionInRootfs(
+            sessionId, 80, 24,
+            TerminalSessionIds.rootfsKindForNativeId(sessionId)
+        )
+    }
+
+    // 3. Push the apt install command to the shell
+    val pkgList = WINE_NATIVE_DEPENDENCIES.joinToString(" ")
+    val cmd = "apt update && apt install -y --no-install-recommends $pkgList\n"
+    NativeBridge.writeInput(sessionId, cmd.toByteArray())
+    AppLogger.log("Queued wine dependency install on session $sessionId")
 }
 
 fun proceedToDistroSelection(containerId: Int) {
@@ -1507,6 +1558,7 @@ val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
                 if (exitCode == 0) {
                     bootstrapProgress = 100 to "installed"
                     Toast.makeText(context, "Package installed", Toast.LENGTH_SHORT).show()
+                    installWineDependenciesInNativeSession()
                 } else {
                     val errMsg = if (stderrLog.isNotEmpty()) stderrLog else "unknown error"
                     bootstrapError = "Extraction failed (exit $exitCode): $errMsg"
