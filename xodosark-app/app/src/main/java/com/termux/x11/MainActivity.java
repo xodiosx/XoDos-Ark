@@ -347,7 +347,7 @@ private void checkConnectedControllers() {
 public boolean isWineRunning() {
     try {
         // Fully qualify java.lang.Process to avoid conflict with android.os.Process
-        java.lang.Process process = Runtime.getRuntime().exec("pgrep -f winhandler.exe");
+        java.lang.Process process = Runtime.getRuntime().exec("pgrep -f wineserver");
         return process.waitFor() == 0;
     } catch (Exception e) {
         return false;
