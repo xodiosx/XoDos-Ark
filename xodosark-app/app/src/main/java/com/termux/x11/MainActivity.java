@@ -344,7 +344,7 @@ private void checkConnectedControllers() {
     return false;
 }
     
-/*public boolean isWineRunning() {
+public boolean isWineRunning() {
     try {
         // Fully qualify java.lang.Process to avoid conflict with android.os.Process
         java.lang.Process process = Runtime.getRuntime().exec("pgrep -f winhandler.exe");
@@ -354,10 +354,7 @@ private void checkConnectedControllers() {
     }
 }
 
-*/
-public boolean isWineRunning() {
-    return true;
-}
+
 /// DRAWER
 
     private void setupTermuxActivityListener() {
