@@ -801,11 +801,11 @@ public void sendGamepadEvent(int button, boolean pressed,
     // sendGamepadEventNative(button, pressed, axisX, axisY, axisID);
 }
 
-@FastNative public native void sendGamepadEvent(int button, boolean pressed,
+/*@FastNative public native void sendGamepadEvent(int button, boolean pressed,
         float axisX, float axisY, int axisID);
 @FastNative public native void sendGamepadDevice(int deviceId, boolean present,
         int vendorId, int productId, int inputMode, boolean hasRumble, String name);
-
+*/
     @FastNative private native void nativeInit();
     @FastNative private native void surfaceChanged(Surface surface);
     @FastNative private native void setFiltering(int filtering);

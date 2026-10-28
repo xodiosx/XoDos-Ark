@@ -21,11 +21,7 @@ public interface InputStub {
 
     /** Sends a mouse event. */
     void sendMouseEvent(float x, float y, int whichButton, boolean buttonDown, boolean relative);
-/** Sends a gamepad button/axis event. May be a no-op when IPC handles transport. */
-void sendGamepadEvent(int button, boolean pressed, float axisX, float axisY, int axisID);
 
-/** Mirrors the host Caps/Num/Scroll Lock state to the X server. */
-void sendLockKeysState(int state);
     /** Sends a mouse wheel event. */
     void sendMouseWheelEvent(float deltaX, float deltaY);
 
