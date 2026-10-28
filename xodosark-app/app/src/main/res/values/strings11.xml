@@ -476,6 +476,39 @@
     <string name="reinstall_x11">Reinstall X11</string>
     <string name="stop_desktop_btn">Stop Desktop</string>
     <string name="exit_btn">Exit</string>
+<string name="gamepad_category">Gamepad (SDL)</string>
+<string name="gamepad_sdlEnabled_title">Route controller to SDL gamepad</string>
+<string name="gamepad_sdlEnabled_summary_on">Controller keys go to X11 as a virtual XInput gamepad. WinHandler is bypassed for controller input.</string>
+<string name="gamepad_sdlEnabled_summary_off">Controller keys go to WinHandler (Wine) as before.</string>
 
+<string name="gamepad_forwardX11_title">Forward X11 gamepad state back to Android</string>
+<string name="gamepad_forwardX11_summary">Lets X11-side rumble/effects drive Android vibration.</string>
+
+<string name="gamepad_host_title">Host</string>
+<string name="gamepad_host_summary">Local X server host. Leave at 127.0.0.1 unless you run X11 remotely.</string>
+
+<string name="gamepad_port_title">Client port</string>
+<string name="gamepad_port_summary">Server port is client + 1. Default 4600.</string>
+
+<string name="gamepad_id_title">Gamepad ID</string>
+<string name="gamepad_id_summary">Virtual gamepad number shown to X11. Default 1.</string>
+
+<string name="gamepad_stateHz_title">State pump rate (Hz)</string>
+<string name="gamepad_stateHz_summary">How many times per second the controller state is pushed to X11.</string>
+
+<string name="gamepad_inputType_title">Input type</string>
+<string name="gamepad_inputType_summary">Handshake format offered to the X11 LORIE-CONTROLLER extension.</string>
+
+<string name="gamepad_mode_title">Mapped mode</string>
+<string name="gamepad_mode_summary">Mapped = real controller buttons; Keyboard = route through extra-keys binds.</string>
+
+<string name="gamepad_vibrate_title">Vibration</string>
+<string name="gamepad_vibrate_summary">System uses the Android vibrator on rumble events.</string>
+
+<string name="gamepad_vibrateStrength_title">Vibration strength</string>
+<string name="gamepad_vibrateStrength_summary">0–255.</string>
+
+<string name="gamepad_name_title">Gamepad name</string>
+<string name="gamepad_name_summary">Name advertised to X11 / SDL.</string>
 
 </resources>

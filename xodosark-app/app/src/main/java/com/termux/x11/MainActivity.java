@@ -355,6 +355,153 @@ public boolean isWineRunning() {
 }
 
 
+/// sdl gamepad 
+// ===== Physical gamepad: dual-path (SDL ↔ WinHandler) =====
+private static final String GP = "gamepad_";
+private boolean sdlEnabled = false;               // ← the toggle
+
+private GamepadIpc ipc;
+private final GamepadIpc.GamepadState gpState = new GamepadIpc.GamepadState().neutral();
+private GamepadInputHandler gamepadHandler;
+
+private String  currHost = "127.0.0.1";
+private int     currClientPort = 4600, currServerPort = 4601, currGpId = 1, currStateHz = 125;
+private boolean currForwardX11 = true;
+private String  currInputType = "xinput", currMode = "mapped",
+                currVibrateMode = "system", currGpName = "Termux-X11 Pad";
+private int     currVibrateStrength = 128;
+
+public GamepadIpc getGamepadIpc() { return ipc; }
+public GamepadIpc.GamepadState getGamepadState() { return gpState; }
+public GamepadInputHandler getGamepadHandler() { return gamepadHandler; }
+public boolean isSdlGamepadEnabled() { return sdlEnabled; }
+
+/** Called by the LORIE-CONTROLLER X11 extension through the private UI channel. */
+public void controllerRumble(int effect, int low, int high, int durationMs) {
+    if (gamepadHandler == null) return;
+    if ((low == 0 && high == 0) || durationMs <= 0) gamepadHandler.cancelRumble();
+    else gamepadHandler.rumble(low, high, durationMs);
+}
+
+private SharedPreferences gpPrefs() {
+    return PreferenceManager.getDefaultSharedPreferences(this);
+}
+private String  gpS(String k, String d)   { return gpPrefs().getString(GP + k, d); }
+private int     gpI(String k, int d)      { return gpPrefs().getInt(GP + k, d); }
+private boolean gpB(String k, boolean d)  { return gpPrefs().getBoolean(GP + k, d); }
+
+private static int parseIntOr(String s, int def) {
+    try { return Integer.parseInt(s.trim()); } catch (Exception e) { return def; }
+}
+private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
+
+private void readConfigFromPrefs() {
+    sdlEnabled = gpB("sdlEnabled", false);
+
+    String host = gpS("host", "127.0.0.1");
+    currHost        = host.isEmpty() ? "127.0.0.1" : host;
+    currClientPort  = clamp(parseIntOr(gpS("port", "4600"), 4600), 1, 65535);
+    currServerPort  = currClientPort + 1;
+    currGpId        = clamp(parseIntOr(gpS("id", "1"), 1), 0, Integer.MAX_VALUE);
+    currStateHz     = clamp(gpI("stateHz", 125), 10, 500);
+    currForwardX11  = gpB("forwardX11", true);
+    currInputType   = gpS("inputType", "xinput");
+    currMode        = gpS("mode", "mapped");
+    currVibrateMode = gpS("vibrate", "system");
+    currVibrateStrength = gpI("vibrateStrength", 128);
+    currGpName      = gpS("name", "Termux-X11 Pad");
+}
+
+private void stopIpcAndHandler() {
+    try { if (gamepadHandler != null) gamepadHandler.shutdown(); } catch (Throwable ignored) {}
+    gamepadHandler = null;
+    try { if (ipc != null) { ipc.sendRelease(); ipc.stop(); } } catch (Throwable ignored) {}
+    ipc = null;
+}
+
+private void startIpcFromCurrentConfig(LorieView lorieView) {
+    stopIpcAndHandler();
+    if (!sdlEnabled) return;         // ← toggle guard
+    if (lorieView == null) return;
+
+    final String mode = currInputType.toLowerCase();
+
+    GamepadIpc.HandshakeFormat fmt;
+    switch (mode) {
+        case "xinput": fmt = GamepadIpc.HandshakeFormat.NEW; break;
+        case "dinput":
+        case "directinput": fmt = GamepadIpc.HandshakeFormat.LEGACY; break;
+        case "none": fmt = GamepadIpc.HandshakeFormat.NONE; break;
+        default: fmt = GamepadIpc.HandshakeFormat.BOTH; break;
+    }
+
+    ipc = new GamepadIpc(
+            currHost, currClientPort, currServerPort, currGpId,
+            new GamepadIpc.Listener() {
+                @Override public int onGetGamepadRequested() {
+                    switch (mode) {
+                        case "xinput": return GamepadIpc.FLAG_INPUT_TYPE_XINPUT;
+                        case "dinput":
+                        case "directinput":
+                            return GamepadIpc.FLAG_INPUT_TYPE_DINPUT | GamepadIpc.FLAG_DINPUT_MAPPER_XINPUT;
+                        case "none": return 0;
+                        default: return GamepadIpc.FLAG_INPUT_TYPE_XINPUT
+                                     | GamepadIpc.FLAG_INPUT_TYPE_DINPUT
+                                     | GamepadIpc.FLAG_DINPUT_MAPPER_XINPUT;
+                    }
+                }
+                @Override public void onRumble(int l, int r, int durMs) {
+                    if (gamepadHandler != null) gamepadHandler.rumble(l, r, durMs);
+                }
+                @Override public void onRelease() {
+                    if (gamepadHandler != null) gamepadHandler.cancelRumble();
+                }
+                @Override public void onLog(String msg) { Log.d("GamepadIPC", msg); }
+            },
+            fmt);
+    ipc.setPumpHz(currStateHz);
+    ipc.setName(currGpName);
+    ipc.start();
+
+    gamepadHandler = new GamepadInputHandler(this, lorieView, ipc, gpState, currForwardX11);
+    // If the real signature is (.., SharedPreferences) then call reloadPrefs(gpPrefs()) here.
+    gamepadHandler.setupGamepadInput();
+}
+
+private void maybeReloadGamepad(LorieView lorieView) {
+    if (lorieView == null) return;
+
+    boolean oldSdl = sdlEnabled;
+    String  oldHost = currHost, oldIn = currInputType, oldMode = currMode;
+    int     oldCli = currClientPort, oldSrv = currServerPort, oldId = currGpId, oldHz = currStateHz;
+    boolean oldFwd = currForwardX11;
+
+    readConfigFromPrefs();
+
+    // Toggle flipped → tear down or bring up the SDL path
+    if (oldSdl != sdlEnabled) {
+        if (sdlEnabled) startIpcFromCurrentConfig(lorieView);
+        else            stopIpcAndHandler();
+        return;
+    }
+
+    // Toggle stayed on, but endpoint changed → restart
+    if (sdlEnabled) {
+        boolean needRestart =
+                !currHost.equals(oldHost) || currClientPort != oldCli || currServerPort != oldSrv
+                || currGpId != oldId || currStateHz != oldHz
+                || !currInputType.equals(oldIn) || !currMode.equals(oldMode);
+
+        if (needRestart) {
+            startIpcFromCurrentConfig(lorieView);
+        } else {
+            if (ipc != null) ipc.setPumpHz(currStateHz);
+            if (gamepadHandler != null) gamepadHandler.reloadPrefs(gpPrefs());
+        }
+    }
+}
+
+
 /// DRAWER
 
     private void setupTermuxActivityListener() {
@@ -607,7 +754,7 @@ public void prepareToExit() {
     });
 }
 
-//// touch fix
+//// touch fix and keys Fix 
 @Override
 public boolean dispatchTouchEvent(MotionEvent ev) {
     Log.d("MainActivity", "dispatchTouchEvent - Action: " + 
@@ -655,7 +802,61 @@ public boolean dispatchTouchEvent(MotionEvent ev) {
 }
 
 
+private static boolean isControllerEvent(KeyEvent e) {
+    final InputDevice dev = e.getDevice();
+    final int src = (dev != null) ? dev.getSources() : e.getSource();
+    final boolean hasKb   = (src & InputDevice.SOURCE_KEYBOARD) != 0;
+    final boolean hasGp   = (src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK)) != 0;
+    final boolean hasDpad = (src & InputDevice.SOURCE_DPAD) != 0;
+    final int kc = e.getKeyCode();
+    final boolean isDpadKey =
+            kc == KeyEvent.KEYCODE_DPAD_UP || kc == KeyEvent.KEYCODE_DPAD_RIGHT
+         || kc == KeyEvent.KEYCODE_DPAD_DOWN || kc == KeyEvent.KEYCODE_DPAD_LEFT
+         || kc == KeyEvent.KEYCODE_DPAD_CENTER;
+    return (KeyEvent.isGamepadButton(kc) && (hasGp || hasDpad))
+        || (isDpadKey && !hasKb && (hasGp || hasDpad));
+}
 
+@Override
+public boolean dispatchKeyEvent(KeyEvent e) {
+    // ★ SDL takes priority — nothing else sees this event when SDL is on
+    if (sdlEnabled && gamepadHandler != null && isControllerEvent(e)) {
+        if (e.getAction() == KeyEvent.ACTION_DOWN) {
+            if (e.getRepeatCount() == 0) gamepadHandler.handleKeyDown(e.getKeyCode(), e);
+            return true;
+        }
+        if (e.getAction() == KeyEvent.ACTION_UP) {
+            gamepadHandler.handleKeyUp(e.getKeyCode(), e);
+            return true;
+        }
+    }
+    // SDL off → normal flow → LorieView → mLorieKeyListener → WinHandler
+    return super.dispatchKeyEvent(e);
+}
+
+@Override
+public boolean onKeyDown(int keyCode, KeyEvent event) {
+    final int src = event.getSource();
+    if ((src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_DPAD)) != 0)
+        return false;
+    return super.onKeyDown(keyCode, event);
+}
+
+@Override
+public boolean onKeyUp(int keyCode, KeyEvent event) {
+    final int src = event.getSource();
+    if ((src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_DPAD)) != 0)
+        return false;
+    return super.onKeyUp(keyCode, event);
+}
+
+@Override
+public boolean onGenericMotionEvent(MotionEvent event) {
+    if (sdlEnabled && gamepadHandler != null && gamepadHandler.handleGenericMotionEvent(event))
+        return true;
+    // SDL off → activity falls through to the view listeners that feed WinHandler
+    return super.onGenericMotionEvent(event);
+}
 
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
@@ -813,9 +1014,8 @@ lorieContentView = findViewById(R.id.id_display_window);
             boolean result = mInputHandler.sendKeyEvent(e);
 
              /// gamepad and touch 
-    if (!isIgnoredDevice(dev) && isGamepadConnected()) {
-              InputDevice device = e.getDevice();
-    
+if (!sdlEnabled && !isIgnoredDevice(dev) && isGamepadConnected()) {
+    InputDevice device = e.getDevice();
           //Toast.makeText(this,"Handled Key: " + KeyEvent.keyCodeToString(e.getKeyCode()),Toast.LENGTH_SHORT).show();    
           // Toast.makeText(this, "Handled:=" + e, Toast.LENGTH_SHORT).show();
           // inputControlsView.dispatchKeyEvent(e);
@@ -973,7 +1173,10 @@ lorieContentView = findViewById(R.id.id_display_window);
 
         
     lorieView.setOnGenericMotionListener((v, e) -> {
-    if (!isIgnoredDevice(e.getDevice()) && isGamepadConnected() && (e.getSource() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) {
+        if (!sdlEnabled
+            && !isIgnoredDevice(e.getDevice())
+            && isGamepadConnected()
+            && (e.getSource() & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) {
         // Send to Wine if running
         if (isWineRunning()) {
             winHandler.onGenericMotionEvent(e);
@@ -1014,6 +1217,8 @@ lorieContentView = findViewById(R.id.id_display_window);
         checkConnectedControllers();
         initStylusAuxButtons();
         initMouseAuxButtons();
+        readConfigFromPrefs();
+startIpcFromCurrentConfig(lorieView);
 
         if (SDK_INT >= VERSION_CODES.TIRAMISU
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PERMISSION_GRANTED
@@ -1072,6 +1277,7 @@ private void setupInputController() {
         stopHudService();  
         LogcatLogger.stop();  
         winHandler.stop();
+        stopIpcAndHandler();
            if (sPrimaryLorieAttached) {
         try { LorieView.connect(-1); } catch (Throwable ignored) {}
         sPrimaryLorieAttached = false;
@@ -1836,6 +2042,7 @@ protected boolean isSettingsActivity() {
 
             applyWindowSettings();
             fireX11ConnectionChanged(); 
+            if (sdlEnabled && gamepadHandler != null) gamepadHandler.resyncToLorie();
         });
     }
 

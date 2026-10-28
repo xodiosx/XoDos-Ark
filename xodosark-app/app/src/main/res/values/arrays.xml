@@ -1,5 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+<!-- ===== Gamepad (SDL) ===== -->
+<string-array name="gamepad_input_entries">
+    <item>XInput</item>
+    <item>DirectInput</item>
+    <item>All (XInput + DInput)</item>
+    <item>Disabled</item>
+</string-array>
+<string-array name="gamepad_input_values">
+    <item>xinput</item>
+    <item>dinput</item>
+    <item>all</item>
+    <item>none</item>
+</string-array>
+
+<string-array name="gamepad_mode_entries">
+    <item>Mapped (physical buttons → controller buttons)</item>
+    <item>Keyboard (physical buttons → key binds)</item>
+</string-array>
+<string-array name="gamepad_mode_values">
+    <item>mapped</item>
+    <item>keys</item>
+</string-array>
+
+<string-array name="gamepad_vibrate_entries">
+    <item>System (device vibrator)</item>
+    <item>Off</item>
+</string-array>
+<string-array name="gamepad_vibrate_values">
+    <item>system</item>
+    <item>off</item>
+</string-array>
     <string-array name="touchscreenInputModesEntries">
         <item>Trackpad</item>
         <item>Simulated touchscreen</item>

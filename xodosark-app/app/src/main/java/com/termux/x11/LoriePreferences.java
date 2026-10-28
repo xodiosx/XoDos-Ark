@@ -328,8 +328,10 @@ protected boolean isSettingsActivity() {
 
                 if (p instanceof ListPreference) {
                     ListPreference list = (ListPreference) p;
-                    list.setEntries(prefs.keys.get(p.getKey()).asList().getEntries());
-                    list.setEntryValues(prefs.keys.get(p.getKey()).asList().getValues());
+                    if (registered != null) {
+        list.setEntries(registered.asList().getEntries());
+        list.setEntryValues(registered.asList().getValues());
+    }
                     list.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
                 }
             }

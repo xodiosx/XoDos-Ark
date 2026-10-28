@@ -8,6 +8,100 @@
         <Preference app:title="@string/lorie_pref_kbd" app:fragment="kbd" />
         <Preference app:title="@string/lorie_pref_other" app:fragment="other" />
         <Preference app:key="version" app:title="@string/lorie_pref_version" />
+        <PreferenceCategory
+    android:title="@string/gamepad_category"
+    android:key="gamepad_section">
+
+    <SwitchPreferenceCompat
+        android:key="gamepad_sdlEnabled"
+        android:title="@string/gamepad_sdlEnabled_title"
+        android:summaryOn="@string/gamepad_sdlEnabled_summary_on"
+        android:summaryOff="@string/gamepad_sdlEnabled_summary_off"
+        android:defaultValue="false"/>
+
+    <EditTextPreference
+        android:key="gamepad_host"
+        android:title="@string/gamepad_host_title"
+        android:summary="@string/gamepad_host_summary"
+        android:defaultValue="127.0.0.1"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <EditTextPreference
+        android:key="gamepad_port"
+        android:title="@string/gamepad_port_title"
+        android:summary="@string/gamepad_port_summary"
+        android:defaultValue="4600"
+        android:inputType="number"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <EditTextPreference
+        android:key="gamepad_id"
+        android:title="@string/gamepad_id_title"
+        android:summary="@string/gamepad_id_summary"
+        android:defaultValue="1"
+        android:inputType="number"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <EditTextPreference
+        android:key="gamepad_name"
+        android:title="@string/gamepad_name_title"
+        android:summary="@string/gamepad_name_summary"
+        android:defaultValue="Termux-X11 Pad"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <ListPreference
+        android:key="gamepad_inputType"
+        android:title="@string/gamepad_inputType_title"
+        android:summary="@string/gamepad_inputType_summary"
+        android:entries="@array/gamepad_input_entries"
+        android:entryValues="@array/gamepad_input_values"
+        android:defaultValue="xinput"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <ListPreference
+        android:key="gamepad_mode"
+        android:title="@string/gamepad_mode_title"
+        android:summary="@string/gamepad_mode_summary"
+        android:entries="@array/gamepad_mode_entries"
+        android:entryValues="@array/gamepad_mode_values"
+        android:defaultValue="mapped"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <SeekBarPreference
+        android:key="gamepad_stateHz"
+        android:title="@string/gamepad_stateHz_title"
+        android:summary="@string/gamepad_stateHz_summary"
+        android:defaultValue="125"
+        android:min="10"
+        android:max="500"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <ListPreference
+        android:key="gamepad_vibrate"
+        android:title="@string/gamepad_vibrate_title"
+        android:summary="@string/gamepad_vibrate_summary"
+        android:entries="@array/gamepad_vibrate_entries"
+        android:entryValues="@array/gamepad_vibrate_values"
+        android:defaultValue="system"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <SeekBarPreference
+        android:key="gamepad_vibrateStrength"
+        android:title="@string/gamepad_vibrateStrength_title"
+        android:summary="@string/gamepad_vibrateStrength_summary"
+        android:defaultValue="128"
+        android:min="0"
+        android:max="255"
+        android:dependency="gamepad_sdlEnabled"/>
+
+    <SwitchPreferenceCompat
+        android:key="gamepad_forwardX11"
+        android:title="@string/gamepad_forwardX11_title"
+        android:summary="@string/gamepad_forwardX11_summary"
+        android:defaultValue="true"
+        android:dependency="gamepad_sdlEnabled"/>
+
+</PreferenceCategory>
     </PreferenceScreen>
     <PreferenceScreen app:key="output">
         <ListPreference app:key="displayResolutionMode" app:defaultValue="native" app:entries="@array/displayResolutionVariants" app:entryValues="@array/displayResolutionVariants"  />

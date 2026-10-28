@@ -784,6 +784,27 @@ public void regenerate() {
                 mIMM.restartInput(this);
         }, 10);
     }
+    
+    /** Called from the gamepad handler on hot-plug. Under Option A this is a no-op. */
+public void sendGamepadDevice(int deviceId, boolean present, int vendorId,
+                              int productId, int inputMode,
+                              boolean hasRumble, String name) {
+    // Option A: no-op, GamepadIpc.pump() reports device presence.
+}
+/** Called from the gamepad handler. Under Option A this is a no-op — IPC carries the state. */
+public void sendGamepadEvent(int button, boolean pressed,
+                             float axisX, float axisY, int axisID) {
+    // Option A (Java forwarding, no native rebuild):
+    // GamepadIpc.pump(gpState) is the real transport. Nothing to do here.
+    //
+    // If your libXlorie has the XoDos-style symbol, switch to:
+    // sendGamepadEventNative(button, pressed, axisX, axisY, axisID);
+}
+
+@FastNative public native void sendGamepadEvent(int button, boolean pressed,
+        float axisX, float axisY, int axisID);
+@FastNative public native void sendGamepadDevice(int deviceId, boolean present,
+        int vendorId, int productId, int inputMode, boolean hasRumble, String name);
 
     @FastNative private native void nativeInit();
     @FastNative private native void surfaceChanged(Surface surface);
