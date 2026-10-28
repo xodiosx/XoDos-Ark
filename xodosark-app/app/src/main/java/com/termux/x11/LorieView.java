@@ -1,5 +1,8 @@
 package com.termux.x11;
 
+
+
+
 //////// new
 import android.view.MotionEvent;
 import android.view.InputDevice;
@@ -87,6 +90,7 @@ public class LorieView extends SurfaceView implements InputStub {
     private static int rendererZoom = 100;
     private static final Rect NO_INSETS = new Rect();
     private int obscuredBottom = 0;   
+    private long mNativeContext = 0;
     public final Keyboard keyboard = Keyboard.createKeyboard(this);
     public final Pointer pointer = new Pointer(this);
     final public InputDeviceManager inputDeviceManager = new InputDeviceManager(this);
@@ -280,12 +284,12 @@ public boolean onGenericMotionEvent(MotionEvent event) {
                 for (int i=0; i < oldLen - newLen; i++)
                     sendKey(KeyEvent.KEYCODE_DEL);
                 for (int i=oldLen; i<newLen; i++)
-                    sendTextEvent(String.valueOf(newText.charAt(i)).getBytes(UTF_8));
+                    sendTextEvent(mNativeContext, String.valueOf(newText.charAt(i)).getBytes(UTF_8));
             } else {
                 for (int i = 0; i < oldLen; i++)
                     sendKey(KeyEvent.KEYCODE_DEL);
                 if (newText != null)
-                    sendTextEvent(newText.toString().getBytes(UTF_8));
+                    sendTextEvent(mNativeContext, newText.toString().getBytes(UTF_8));
             }
 
             currentComposingText = reuse ? newText : null;
@@ -367,7 +371,7 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         }
 
         @Override public void surfaceChanged(@NonNull SurfaceHolder holder, int f, int width, int height) {
-            LorieView.this.surfaceChanged(holder.getSurface());
+            LorieView.this.surfaceChanged(mNativeContext, holder.getSurface());
             width = getMeasuredWidth();
             height = getMeasuredHeight();
 
@@ -376,7 +380,7 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         }
 
         @Override public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
-            LorieView.this.surfaceChanged(null);
+            LorieView.this.surfaceChanged(mNativeContext, null);
         }
     };
 
@@ -389,7 +393,8 @@ public boolean onGenericMotionEvent(MotionEvent event) {
     private void init() {
         getHolder().addCallback(mSurfaceCallback);
         clipboard = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
-        nativeInit();
+        mNativeContext = nativeInit();
+        sViews.add(this);    
        screenInfo = new ScreenInfo(this);
         cursorLocker = new CursorLocker(this);
         setFocusable(true);
@@ -485,7 +490,7 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         else
             name = "external";
 
-        sendWindowChange(p.x, p.y, framerate, name);
+        sendWindowChange(mNativeContext, p.x, p.y, framerate, name);
     }
 
     @Keep
@@ -579,7 +584,7 @@ public boolean onGenericMotionEvent(MotionEvent event) {
             inputSourceWidth = p.x;
             inputSourceHeight = p.y;
         }
-        setViewport(viewport.left, viewport.top, viewport.width(), viewport.height(), p.x, p.y, hiddenBottom);
+        setViewport(mNativeContext, viewport.left, viewport.top, viewport.width(), viewport.height(), p.x, p.y, hiddenBottom);
 
         updateInputTransform();
         if (!dimensionsFrozen)
@@ -594,7 +599,7 @@ public boolean onGenericMotionEvent(MotionEvent event) {
 
     @Override
     public void sendMouseWheelEvent(float deltaX, float deltaY) {
-        sendMouseEvent(deltaX, deltaY, BUTTON_SCROLL, false, true);
+        sendMouseEvent(mNativeContext, deltaX, deltaY, BUTTON_SCROLL, false, true);
     }
 
     static final Set<Integer> imeBuggyKeys = Set.of(
@@ -645,10 +650,10 @@ public boolean onGenericMotionEvent(MotionEvent event) {
 
     public void reloadPreferences(Prefs p) {
         String filtering = p.displayFilteringMode.get();
-        setFiltering("nearest".equals(filtering) ? GLES20.GL_NEAREST : GLES20.GL_LINEAR);
+        setFiltering(mNativeContext, "nearest".equals(filtering) ? GLES20.GL_NEAREST : GLES20.GL_LINEAR);
         hardwareKbdScancodesWorkaround = p.hardwareKbdScancodesWorkaround.get();
         clipboardSyncEnabled = p.clipboardEnable.get();
-        setClipboardSyncEnabled(clipboardSyncEnabled, clipboardSyncEnabled);
+        setClipboardSyncEnabled(mNativeContext, clipboardSyncEnabled, clipboardSyncEnabled);
         TouchInputHandler.refreshInputDevices();
     }
 
@@ -683,7 +688,7 @@ public void injectKeyRelease(XKeycode xKeycode) {
 
 public void injectText(String text) {
     if (text.isEmpty()) return;
-    sendTextEvent(text.getBytes());
+    sendTextEvent(mNativeContext, text.getBytes());
 }
 
 public boolean isFullscreen() {
@@ -708,14 +713,14 @@ public void regenerate() {
     /** @noinspection unused*/ // It is used in native code
     void requestClipboard() {
         if (!clipboardSyncEnabled) {
-            sendClipboardEvent("".getBytes(UTF_8));
+            sendClipboardEvent(mNativeContext, "".getBytes(UTF_8));
             return;
         }
 
         CharSequence clip = clipboard.getText();
         if (clip != null) {
             String text = String.valueOf(clipboard.getText());
-            sendClipboardEvent(text.getBytes(UTF_8));
+            sendClipboardEvent(mNativeContext, text.getBytes(UTF_8));
             Log.d("CLIP", "sending clipboard contents: " + text);
         }
     }
@@ -785,74 +790,154 @@ public void regenerate() {
         }, 10);
     }
     
-    /** Called from the gamepad handler on hot-plug. Under Option A this is a no-op. */
+
+public void sendGamepadEvent(int button, boolean pressed,
+                             float axisX, float axisY, int axisID) {
+    if (mNativeContext != 0)
+        sendGamepadEvent(mNativeContext, button, pressed, axisX, axisY, axisID);
+}
+@FastNative private native void sendGamepadEvent(long ptr, int button, boolean pressed,
+        float axisX, float axisY, int axisID);
+
 public void sendGamepadDevice(int deviceId, boolean present, int vendorId,
                               int productId, int inputMode,
                               boolean hasRumble, String name) {
-    // Option A: no-op, GamepadIpc.pump() reports device presence.
+    if (mNativeContext != 0)
+        sendGamepadDevice(mNativeContext, deviceId, present, vendorId, productId,
+                          inputMode, hasRumble, name);
 }
-/** Called from the gamepad handler. Under Option A this is a no-op — IPC carries the state. */
-public void sendGamepadEvent(int button, boolean pressed,
-                             float axisX, float axisY, int axisID) {
-    // Option A (Java forwarding, no native rebuild):
-    // GamepadIpc.pump(gpState) is the real transport. Nothing to do here.
-    //
-    // If your libXlorie has the XoDos-style symbol, switch to:
-    // sendGamepadEventNative(button, pressed, axisX, axisY, axisID);
-}
-
-/*@FastNative public native void sendGamepadEvent(int button, boolean pressed,
-        float axisX, float axisY, int axisID);
-@FastNative public native void sendGamepadDevice(int deviceId, boolean present,
+@FastNative private native void sendGamepadDevice(long ptr, int deviceId, boolean present,
         int vendorId, int productId, int inputMode, boolean hasRumble, String name);
-*/
-    @FastNative private native void nativeInit();
-    @FastNative private native void surfaceChanged(Surface surface);
-    @FastNative private native void setFiltering(int filtering);
-    @FastNative static native void connect(int fd);
-    @CriticalNative static native boolean connected();
-    
 
+
+    @FastNative private native long nativeInit();
+    @FastNative private native void surfaceChanged(long ptr, Surface surface);
+    @FastNative private native void setFiltering(long ptr, int filtering);
+ //   @FastNative static native void connect(int fd);
+   // @CriticalNative static native boolean connected();
+    
+    public static void connect(int fd) {
+    long ctx = primaryCtx();
+    if (ctx != 0) connect(ctx, fd);
+}
+@FastNative private static native void connect(long ptr, int fd);
+
+    
+    /** Any-view semantics — closest match to the global conn_fd of the old .so. */
+public static boolean connected() {
+    synchronized (sViews) {
+        for (LorieView v : sViews) {
+            if (v.mNativeContext != 0 && connected(v.mNativeContext)) return true;
+        }
+    }
+    return false;
+}
+@CriticalNative private static native boolean connected(long ptr);
+    
+// --- registry so static callers can find "some connected view" ---
+private static final java.util.List<LorieView> sViews =
+        java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+private static long primaryCtx() {
+    MainActivity a = MainActivity.getInstance();
+    if (a != null) {
+        LorieView v = a.getLorieView();
+        if (v != null && v.mNativeContext != 0) return v.mNativeContext;
+    }
+    synchronized (sViews) {
+        for (LorieView v : sViews) if (v.mNativeContext != 0) return v.mNativeContext;
+    }
+    return 0;
+}
 /** Public accessor for {@link #connected()}. */
 public static boolean isConnected() {
     return connected();
 }
-    @FastNative static native void startLogcat(int fd);
-    @FastNative static native void setClipboardSyncEnabled(boolean enabled, boolean ignored);
-    @FastNative public native void sendClipboardAnnounce();
-    @FastNative public native void sendClipboardEvent(byte[] text);
-    @FastNative static native void sendWindowChange(int width, int height, int framerate, String name);
-    @FastNative static native void setViewport(int x, int y, int width, int height, int expectedWidth, int expectedHeight, int hiddenBottom);
-    @FastNative private static native void setRendererZoom(int percent);
+//    @FastNative static native void startLogcat(int fd);
+
+public static void startLogcat(int fd) {
+    long ctx = primaryCtx();
+    if (ctx != 0) startLogcat(ctx, fd);
+}
+@FastNative private static native void startLogcat(long ptr, int fd);
+    @FastNative private native void setClipboardSyncEnabled(long ptr, boolean enabled, boolean ignored);
+ void sendClipboardAnnounce() {
+    if (mNativeContext != 0) sendClipboardAnnounce(mNativeContext);
+}
+@FastNative private native void sendClipboardAnnounce(long ptr);
+    @FastNative public native void sendClipboardEvent(long ptr, byte[] text);
+    @FastNative private native void sendWindowChange(long ptr, int width, int height, int framerate, String name);
+    @FastNative private native void setViewport(long ptr, int x, int y, int width, int height, int expectedWidth, int expectedHeight, int hiddenBottom);
+    @FastNative private native void setRendererZoom(long ptr, int percent);
 
     public void adjustRendererZoom(int delta) {
         rendererZoom = MathUtils.clamp(rendererZoom + delta, 100, 400);
-        setRendererZoom(rendererZoom);
+        setRendererZoom(mNativeContext, rendererZoom);
     }
 
     public void resetRendererZoom() {
         rendererZoom = 100;
-        setRendererZoom(rendererZoom);
+        setRendererZoom(mNativeContext, rendererZoom);
     }
 
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
         freezeDimensions(isInPictureInPictureMode);
         // Zooming a floating window makes no sense, but the zoom is restored along with the size.
-        setRendererZoom(isInPictureInPictureMode ? 100 : rendererZoom);
+        setRendererZoom(mNativeContext, isInPictureInPictureMode ? 100 : rendererZoom);
     }
 
-    @FastNative public native void sendMouseEvent(float x, float y, int whichButton, boolean buttonDown, boolean relative);
-    @FastNative public native void sendTouchEvent(int action, int id, int x, int y);
-    @FastNative public native void sendStylusEvent(float x, float y, int pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouseMode);
-    @FastNative static public native void requestStylusEnabled(boolean enabled);
+@Override public void sendMouseEvent(float x, float y, int whichButton, boolean buttonDown, boolean relative) {
+    if (mNativeContext != 0) sendMouseEvent(mNativeContext, x, y, whichButton, buttonDown, relative);
+}
+@FastNative private native void sendMouseEvent(long ptr, float x, float y, int whichButton, boolean buttonDown, boolean relative);
+@Override public void sendTouchEvent(int action, int pointerId, int x, int y) {
+    if (mNativeContext != 0) sendTouchEvent(mNativeContext, action, pointerId, x, y);
+}
+@FastNative private native void sendTouchEvent(long ptr, int action, int id, int x, int y);
+@Override public void sendStylusEvent(float x, float y, int pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouseMode) {
+    if (mNativeContext != 0) sendStylusEvent(mNativeContext, x, y, pressure, tiltX, tiltY, orientation, buttons, eraser, mouseMode);
+}
+@FastNative private native void sendStylusEvent(long ptr, float x, float y, int pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouseMode);
+
+    public static void requestStylusEnabled(boolean enabled) {
+    long ctx = primaryCtx();
+    if (ctx != 0) requestStylusEnabled(ctx, enabled);
+}
+@FastNative private static native void requestStylusEnabled(long ptr, boolean enabled);
     public boolean sendKeyEvent(int scanCode, int keyCode, boolean keyDown) {
 //        if (keyCode == 67)
 //            new Exception().printStackTrace();
-        return sendKeyEvent(scanCode, keyCode, keyDown, 0);
+        return sendKeyEvent(mNativeContext, scanCode, keyCode, keyDown);
     }
-    @FastNative public native boolean sendKeyEvent(int scanCode, int keyCode, boolean keyDown, int a);
-    @FastNative public native void sendTextEvent(byte[] text);
-    @CriticalNative public static native boolean requestConnection();
+    @FastNative public native boolean sendKeyEvent(long ptr, int scanCode, int keyCode, boolean keyDown);
+@Override public void sendTextEvent(byte[] utf8Bytes) {
+    if (mNativeContext != 0) sendTextEvent(mNativeContext, utf8Bytes);
+}
+@FastNative private native void sendTextEvent(long ptr, byte[] text);
+    @FastNative private native void nativeDestroy(long ptr);
+
+public void sendLockKeysState(int state) {
+    if (mNativeContext != 0) sendLockKeysState(mNativeContext, state);
+}
+@FastNative private native void sendLockKeysState(long ptr, int state);
+
+@FastNative public static native long getLastInputTimestamp();
+@FastNative public static native void markUserActivity();
+//    @CriticalNative public static native boolean requestConnection();
+public static boolean requestConnection() {
+    long ctx = primaryCtx();
+    return ctx != 0 && requestConnection(ctx);
+}
+@CriticalNative private static native boolean requestConnection(long ptr);
+@Override
+protected void onDetachedFromWindow() {
+    super.onDetachedFromWindow();
+    sViews.remove(this);
+    if (mNativeContext != 0) {
+        nativeDestroy(mNativeContext);
+        mNativeContext = 0;
+    }
+}
 
     static {
         System.loadLibrary("Xlorie");
