@@ -13,14 +13,6 @@
         <Preference app:key="version" app:title="@string/lorie_pref_version" />
     </PreferenceScreen>
 
-    <PreferenceScreen app:key="audio" app:title="Audio">
-        <SwitchPreferenceCompat
-            app:key="audioPlaybackEnabled"
-            app:defaultValue="false"
-            app:title="Play audio through Termux:X11"
-            app:summary="Experimental. Allows screen recorders to capture game audio. Requires the Termux audio helper." />
-    </PreferenceScreen>
-
     <!-- OUTPUT -->
     <PreferenceScreen app:key="output" app:title="Output">
         <ListPreference
@@ -56,10 +48,10 @@
             app:title="Display filtering mode"
             app:useSimpleSummaryProvider="true" />
         <SwitchPreferenceCompat app:key="adjustResolution" app:defaultValue="false" app:title="Adjust resolution automatically" />
-        <SwitchPreferenceCompat app:key="displayStretch"   app:defaultValue="false" app:title="Stretch to fill" />
+        <SwitchPreferenceCompat app:key="displayStretch"   app:defaultValue="true" app:title="Stretch to fill" />
         <SwitchPreferenceCompat app:key="Reseed"            app:defaultValue="false" app:title="Reseed screen while keyboard is open" />
-        <SwitchPreferenceCompat app:key="PIP"               app:defaultValue="false" app:title="Picture-in-Picture mode" />
-        <SwitchPreferenceCompat app:key="fullscreen"        app:defaultValue="false" app:title="Fullscreen" />
+        <SwitchPreferenceCompat app:key="PIP"               app:defaultValue="true" app:title="Picture-in-Picture mode" />
+        <SwitchPreferenceCompat app:key="fullscreen"        app:defaultValue="true" app:title="Fullscreen" />
         <ListPreference
             app:key="forceOrientation"
             app:defaultValue="auto"
@@ -67,7 +59,7 @@
             app:entryValues="@array/forceOrientationVariants"
             app:title="Force orientation"
             app:useSimpleSummaryProvider="true" />
-        <SwitchPreferenceCompat app:key="hideCutout"   app:defaultValue="false" app:title="Hide display cutout" />
+        <SwitchPreferenceCompat app:key="hideCutout"   app:defaultValue="true" app:title="Hide display cutout" />
         <ListPreference
             app:key="screenIdleTimeout"
             app:defaultValue="system"
@@ -91,7 +83,7 @@
         <SwitchPreferenceCompat app:key="stylusIsMouse" app:defaultValue="false" app:title="Treat stylus as mouse" />
         <SwitchPreferenceCompat app:key="stylusButtonContactModifierMode" app:defaultValue="false" app:title="Stylus button = contact modifier" />
         <SwitchPreferenceCompat app:key="showMouseHelper" app:defaultValue="false" app:title="Show mouse helper" />
-        <SwitchPreferenceCompat app:key="pointerCapture" app:defaultValue="false" app:title="Capture pointer" />
+        <SwitchPreferenceCompat app:key="pointerCapture" app:defaultValue="true" app:title="Capture pointer" />
         <ListPreference
             app:key="transformCapturedPointer"
             app:defaultValue="no"
@@ -115,9 +107,9 @@
     <!-- KEYBOARD -->
     <PreferenceScreen app:key="kbd" app:title="Keyboard">
         <SwitchPreferenceCompat app:key="showAdditionalKbd" app:defaultValue="true"  app:title="Show extra key bar" />
-        <SwitchPreferenceCompat app:key="additionalKbdVisible" app:defaultValue="true" app:isPreferenceVisible="false" app:title="Extra key bar visible" />
+        <SwitchPreferenceCompat app:key="additionalKbdVisible" app:defaultValue="false" app:isPreferenceVisible="false" app:title="Extra key bar visible" />
         <SwitchPreferenceCompat app:key="showIMEWhileExternalConnected" app:defaultValue="true" app:title="Show IME with external keyboard" />
-        <SwitchPreferenceCompat app:key="preferScancodes" app:defaultValue="false" app:title="Prefer scancodes" />
+        <SwitchPreferenceCompat app:key="preferScancodes" app:defaultValue="true" app:title="Prefer scancodes" />
         <SwitchPreferenceCompat app:key="hardwareKbdScancodesWorkaround" app:defaultValue="true" app:title="Hardware keyboard scancode workaround" />
         <SwitchPreferenceCompat app:key="dexMetaKeyCapture" app:defaultValue="false" app:title="Capture DeX Meta key" />
         <Preference app:key="enableAccessibilityService" app:title="Open Accessibility settings">
@@ -144,7 +136,7 @@
         <SwitchPreferenceCompat app:key="ekbarPositionIgnoreOrientation" app:defaultValue="false" app:title="Keep position regardless of orientation" />
         <SeekBarPreference
             app:key="opacityEKBar"
-            app:defaultValue="100"
+            app:defaultValue="90"
             app:min="1"
             android:max="100"
             app:seekBarIncrement="1"
@@ -152,21 +144,8 @@
             app:updatesContinuously="true"
             app:title="Extra keys opacity (%)" />
         <EditTextPreference app:key="extra_keys_config" app:title="Extra keys config" />
-        <Preference
-            android:key="editVirtualKeys"
-            android:title="Customize Virtual Keys"
-            android:summary="Map, resize, and position virtual keys on the screen."
-            android:onClick="openVirtualKeyMapper" />
-        <Preference
-            android:key="export_virtual_keys"
-            android:title="Export Virtual Key Preset"
-            android:summary="Save the current virtual key layout to a file"
-            android:onClick="onExportVirtualKeys" />
-        <Preference
-            android:key="import_virtual_keys"
-            android:title="Import Virtual Key Preset"
-            android:summary="Load a saved virtual key layout from a file"
-            android:onClick="onImportVirtualKeys" />
+      
+     
     </PreferenceScreen>
 
     <!-- CONTROLLER -->
@@ -357,7 +336,7 @@
         <ListPreference app:key="swipeDownAction" app:defaultValue="toggle additional key bar" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
         <ListPreference app:key="volumeUpAction" app:defaultValue="no action" app:entries="@array/userActionsVolumeUpValues" app:entryValues="@array/userActionsVolumeUpValues" />
         <ListPreference app:key="volumeDownAction" app:defaultValue="no action" app:entries="@array/userActionsVolumeDownValues" app:entryValues="@array/userActionsVolumeDownValues" />
-        <ListPreference app:key="backButtonAction" app:defaultValue="toggle soft keyboard" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
+        <ListPreference app:key="backButtonAction" app:defaultValue="no action" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
         <ListPreference app:key="notificationTapAction" app:defaultValue="open preferences" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
         <ListPreference app:key="notificationButton0Action" app:defaultValue="open preferences" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
         <ListPreference app:key="notificationButton1Action" app:defaultValue="exit" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />

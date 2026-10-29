@@ -411,7 +411,7 @@ private void readConfigFromPrefs() {
     currMode           = gpS("gamepadMode",          "mapped");
     currVibrateMode    = gpS("gamepadVibrate",       "system");
     currVibrateStrength= gpI("gamepadVibrateStrength", 128);
-    currGpName         = gpS("gamepadName",          "XoDos");   // see Fix 3
+    currGpName         = gpS("gamepadName",          "XoDos");  
 }
 
 private void stopIpcAndHandler() {
