@@ -408,8 +408,8 @@ private void readConfigFromPrefs() {
     currStateHz        = clamp(gpI("gamepadStateHz",      125), 10, 500);
     currForwardX11     = gpB("gamepadForwardX11",    true);
     currInputType      = gpS("gamepadInputType",     "xinput");
-    currMode           = gpS("gamepadMode",          "mapped");
-    currVibrateMode    = gpS("gamepadVibrate",       "system");
+    currMode           = gpS("gamepadMode",          "Mapped");
+    currVibrateMode    = gpS("gamepadVibrate",       "Controller");
     currVibrateStrength= gpI("gamepadVibrateStrength", 128);
     currGpName         = gpS("gamepadName",          "XoDos");  
 }

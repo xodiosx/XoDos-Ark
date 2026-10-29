@@ -47,44 +47,43 @@
          Values MUST match the switch() in readConfigFromPrefs()/startIpcFromCurrentConfig():
            "xinput" | "dinput" | "all" | "none"  -->
     <string-array name="gamepadInputTypeValues">
+        <item>all</item>
         <item>xinput</item>
         <item>dinput</item>
-        <item>all</item>
+        <item>keys</item>
         <item>none</item>
     </string-array>
-    <string-array name="gamepadInputTypeEntries">
-        <item>XInput</item>
-        <item>DirectInput</item>
-        <item>All (XInput + DInput)</item>
-        <item>Disabled</item>
-    </string-array>
 
-    <!-- ===== Gamepad: mapped mode =====
-         "mapped" — real controller buttons passed through
-         "keys"   — physical buttons translated via extra-keys binds  -->
-    <string-array name="gamepadModeValues">
-        <item>mapped</item>
-        <item>keys</item>
-    </string-array>
-    <string-array name="gamepadModeEntries">
-        <item>Mapped (controller buttons)</item>
-        <item>Keyboard (extra-keys)</item>
-    </string-array>
-
-    <!-- ===== Gamepad: vibration ===== -->
-    <string-array name="gamepadVibrateValues">
-        <item>system</item>
-        <item>off</item>
-    </string-array>
     <string-array name="gamepadVibrateEntries">
-        <item>System vibrator</item>
+        <item>Controller</item>
+        <item>Phone</item>
+        <item>Both</item>
         <item>Off</item>
     </string-array>
+    <string-array name="gamepadVibrateValues">
+        <item>device</item>
+        <item>phone</item>
+        <item>both</item>
+        <item>off</item>
+    </string-array>
 
-    <!-- ===== Gamepad: ID slot list =====
-         Your preferences.xml references gamepadIDs directly. If that
-         reference is android:entries → entries labels. If android:entryValues
-         → values must be numeric strings 1..4. Both cases work with below. -->
+    <string-array name="gamepad_state_hz_values">
+        <item>60</item>
+        <item>90</item>
+        <item>125</item>
+        <item>250</item>
+        <item>500</item>
+    </string-array>
+
+    <string-array name="gamepadModeEntries">
+        <item>Raw</item>
+        <item>Mapped</item>
+    </string-array>
+    <string-array name="gamepadModeValues">
+        <item>raw</item>
+        <item>mapped</item>
+    </string-array>
+
     <string-array name="gamepadIDs">
         <item>1</item>
         <item>2</item>
@@ -92,52 +91,40 @@
         <item>4</item>
     </string-array>
 
-    <!-- ===== Gamepad: key-bind options =====
-         Referenced four times in preferences.xml (lines 272, 277, 282, 287).
-         These are per-binding options in "keys" mode. Values go into
-         SharedPreferences keys like gamepad_bind_dpad_up = disabled|keyboard|gamepad. -->
-    <string-array name="keybindOptionsValues">
-        <item>disabled</item>
-        <item>keyboard</item>
-        <item>gamepad</item>
-    </string-array>
     <string-array name="keybindOptionsEntries">
-        <item>Disabled</item>
-        <item>Keyboard</item>
-        <item>Gamepad</item>
+        <item>none</item>
+
+        <item>ESC</item><item>ENTER</item><item>SPACE</item><item>TAB</item>
+        <item>BACKSPACE</item>
+        <item>UP</item><item>DOWN</item><item>LEFT</item><item>RIGHT</item>
+
+        <item>0</item><item>1</item><item>2</item><item>3</item><item>4</item>
+        <item>5</item><item>6</item><item>7</item><item>8</item><item>9</item>
+
+        <item>A</item><item>B</item><item>C</item><item>D</item><item>E</item>
+        <item>F</item><item>G</item><item>H</item><item>I</item><item>J</item>
+        <item>K</item><item>L</item><item>M</item><item>N</item><item>O</item>
+        <item>P</item><item>Q</item><item>R</item><item>S</item><item>T</item>
+        <item>U</item><item>V</item><item>W</item><item>X</item><item>Y</item><item>Z</item>
     </string-array>
 
-<!-- ===== Gamepad (SDL) ===== -->
-<string-array name="gamepad_input_entries">
-    <item>XInput</item>
-    <item>DirectInput</item>
-    <item>All (XInput + DInput)</item>
-    <item>Disabled</item>
-</string-array>
-<string-array name="gamepad_input_values">
-    <item>xinput</item>
-    <item>dinput</item>
-    <item>all</item>
-    <item>none</item>
-</string-array>
+    <string-array name="keybindOptionsValues">
+        <item>none</item>
 
-<string-array name="gamepad_mode_entries">
-    <item>Mapped (physical buttons → controller buttons)</item>
-    <item>Keyboard (physical buttons → key binds)</item>
-</string-array>
-<string-array name="gamepad_mode_values">
-    <item>mapped</item>
-    <item>keys</item>
-</string-array>
+        <item>ESC</item><item>ENTER</item><item>SPACE</item><item>TAB</item>
+        <item>BACKSPACE</item>
+        <item>UP</item><item>DOWN</item><item>LEFT</item><item>RIGHT</item>
 
-<string-array name="gamepad_vibrate_entries">
-    <item>System (device vibrator)</item>
-    <item>Off</item>
-</string-array>
-<string-array name="gamepad_vibrate_values">
-    <item>system</item>
-    <item>off</item>
-</string-array>
+        <item>0</item><item>1</item><item>2</item><item>3</item><item>4</item>
+        <item>5</item><item>6</item><item>7</item><item>8</item><item>9</item>
+
+        <item>A</item><item>B</item><item>C</item><item>D</item><item>E</item>
+        <item>F</item><item>G</item><item>H</item><item>I</item><item>J</item>
+        <item>K</item><item>L</item><item>M</item><item>N</item><item>O</item>
+        <item>P</item><item>Q</item><item>R</item><item>S</item><item>T</item>
+        <item>U</item><item>V</item><item>W</item><item>X</item><item>Y</item><item>Z</item>
+    </string-array>
+
     <string-array name="touchscreenInputModesEntries">
         <item>Trackpad</item>
         <item>Simulated touchscreen</item>
