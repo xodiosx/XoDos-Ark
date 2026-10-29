@@ -137,6 +137,7 @@ public class GamepadInputHandler {
     }
 
     public void reloadPrefs(Prefs prefs){
+    this.prefsRef = prefs;
         boolean wasForwarding = forwardToLorie;
         int oldInputMode = inputMode;
         String oldAdvertisedName = advertisedName;
@@ -293,12 +294,7 @@ private void advertiseDevice(InputDevice device) {
             + " vid=" + Integer.toHexString(device.getVendorId())
             + " pid=" + Integer.toHexString(device.getProductId())
             + " mode=" + inputMode + " name=" + effectiveName);
-                if (isAutoName(advertisedName)) {
-        gpPrefs().edit()
-                 .putString("gamepadName", effectiveName)
-                 .apply();
-        // then, on next user toggle or onNext IpcStart, handshake will use it
-    }
+
 }
 
 private void advertiseFallback() {
