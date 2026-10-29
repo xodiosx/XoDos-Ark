@@ -466,7 +466,7 @@ private void startIpcFromCurrentConfig(LorieView lorieView) {
     ipc.start();
 
     gamepadHandler = new GamepadInputHandler(this, lorieView, ipc, gpState, currForwardX11);
-    gamepadHandler.reloadPrefs(gpPrefs()); 
+    gamepadHandler.reloadPrefs(prefs); 
     // If the real signature is (.., SharedPreferences) then call reloadPrefs(gpPrefs()) here.
     gamepadHandler.setupGamepadInput();
 }
@@ -499,7 +499,7 @@ private void maybeReloadGamepad(LorieView lorieView) {
             startIpcFromCurrentConfig(lorieView);
         } else {
             if (ipc != null) ipc.setPumpHz(currStateHz);
-            if (gamepadHandler != null) gamepadHandler.reloadPrefs(gpPrefs());
+            if (gamepadHandler != null) gamepadHandler.reloadPrefs(prefs);
         }
     }
 }
@@ -1940,7 +1940,8 @@ protected boolean isSettingsActivity() {
         }
 
         setWindowFlag(FLAG_FULLSCREEN, fullscreen);
-        setWindowFlag(FLAG_KEEP_SCREEN_ON, prefs.keepScreenOn.get());
+        // "never" = keep screen on permanently; any other value lets the system / screenIdleTimeout manage it.
+setWindowFlag(FLAG_KEEP_SCREEN_ON, "never".equals(prefs.screenIdleTimeout.get()));
         applyImmersiveMode();
 
         View contentChild = ((FrameLayout) findViewById(android.R.id.content)).getChildAt(0);

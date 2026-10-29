@@ -867,6 +867,27 @@ public static void startLogcat(int fd) {
 @FastNative private native void sendClipboardAnnounce(long ptr);
     @FastNative public native void sendClipboardEvent(long ptr, byte[] text);
     @FastNative private native void sendWindowChange(long ptr, int width, int height, int framerate, String name);
+    /**
+ * Static bridge for callers that don't hold a LorieView reference
+ * (e.g. EmbeddedX11Controller). Prefers the primary activity's view,
+ * falls back to the first connected view in the registry.
+ */
+public static void sendWindowChange(int width, int height, int framerate, String name) {
+    MainActivity a = MainActivity.getInstance();
+    LorieView primary = (a != null) ? a.getLorieView() : null;
+    if (primary != null && primary.mNativeContext != 0) {
+        primary.sendWindowChange(primary.mNativeContext, width, height, framerate, name);
+        return;
+    }
+    synchronized (sViews) {
+        for (LorieView v : sViews) {
+            if (v.mNativeContext != 0) {
+                v.sendWindowChange(v.mNativeContext, width, height, framerate, name);
+                return;
+            }
+        }
+    }
+}
     @FastNative private native void setViewport(long ptr, int x, int y, int width, int height, int expectedWidth, int expectedHeight, int hiddenBottom);
     @FastNative private native void setRendererZoom(long ptr, int percent);
 
