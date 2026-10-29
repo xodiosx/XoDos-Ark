@@ -50,6 +50,7 @@ public class GamepadInputHandler {
     private String vibrateMode = "device"; // device|phone|both|off
     private int vibrateStrength = 255;
     private SharedPreferences sp;
+    private Prefs prefsRef;
     private boolean useKeybinds = false;
 
     private final ExecutorService io = Executors.newSingleThreadExecutor(r -> {
