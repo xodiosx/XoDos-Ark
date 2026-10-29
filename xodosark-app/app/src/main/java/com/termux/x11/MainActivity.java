@@ -388,6 +388,9 @@ public void controllerRumble(int effect, int low, int high, int durationMs) {
 private SharedPreferences gpPrefs() {
     return PreferenceManager.getDefaultSharedPreferences(this);
 }
+private String  gpS(String k, String d)   { return gpPrefs().getString(k, d); }
+private int     gpI(String k, int d)      { return gpPrefs().getInt(k, d); }
+private boolean gpB(String k, boolean d)  { return gpPrefs().getBoolean(k, d); }
 
 private static int parseIntOr(String s, int def) {
     try { return Integer.parseInt(s.trim()); } catch (Exception e) { return def; }
@@ -838,8 +841,6 @@ public boolean dispatchKeyEvent(KeyEvent e) {
 public boolean onKeyDown(int keyCode, KeyEvent event) {
     final int src = event.getSource();
     if ((src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_DPAD)) != 0) {
-        // Let BACK through to the framework even from a gamepad source,
-        // otherwise Activity.onKeyUp → onBackPressed() is never reached.
         if (keyCode == KeyEvent.KEYCODE_BACK)
             return super.onKeyDown(keyCode, event);
         return false;
@@ -858,13 +859,6 @@ public boolean onKeyUp(int keyCode, KeyEvent event) {
     return super.onKeyUp(keyCode, event);
 }
 
-@Override
-public boolean onKeyUp(int keyCode, KeyEvent event) {
-    final int src = event.getSource();
-    if ((src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_DPAD)) != 0)
-        return false;
-    return super.onKeyUp(keyCode, event);
-}
 
 @Override
 public boolean onGenericMotionEvent(MotionEvent event) {
@@ -2286,24 +2280,20 @@ setWindowFlag(FLAG_KEEP_SCREEN_ON, "never".equals(prefs.screenIdleTimeout.get())
         return false;
     }
 
-    @Override
-    public boolean onPreferenceChange(Preference preference, Object newValue) {
-        String key = preference.getKey();
-        if (key == null) return false;
+ @Override
+public boolean onPreferenceChange(Preference preference, Object newValue) {
+    String key = preference.getKey();
+    if (key == null) return false;
 
-        switch (key) {
-            case "hud_enabled":   // must match the key in XML
-                boolean enable = (Boolean) newValue;
-                if (enable) {
-                    startHudService();
-                } else {
-                    stopHudService();
-                }
-                // Return true to accept the change (the switch will update)
-                return true;
-        }
-        return false;
+    switch (key) {
+        case "hud_enabled":
+            boolean enable = (Boolean) newValue;
+            if (enable) startHudService();
+            else        stopHudService();
+            break;      // let framework persist it after
     }
+    return true;        // persist everything else
+}
 
     private void startHudService() {
     activity.startHudService();
