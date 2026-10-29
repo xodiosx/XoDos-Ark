@@ -328,7 +328,9 @@ protected boolean isSettingsActivity() {
 
                 if (p instanceof ListPreference) {
                     ListPreference list = (ListPreference) p;
-                    if (registered != null) {
+                    
+                    PrefsProto.Preference registered = prefs.keys.get(p.getKey());
+    if (registered != null) {
         list.setEntries(registered.asList().getEntries());
         list.setEntryValues(registered.asList().getValues());
     }

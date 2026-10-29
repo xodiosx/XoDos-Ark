@@ -1,6 +1,8 @@
 package com.termux.x11;
 
-// Add these imports at the top with other imports
+// 
+import com.termux.x11.ipc.GamepadIpc;
+import com.termux.x11.input.GamepadInputHandler;
 import android.net.Uri;
 import androidx.fragment.app.FragmentManager;
 import androidx.preference.Preference;
@@ -464,6 +466,7 @@ private void startIpcFromCurrentConfig(LorieView lorieView) {
     ipc.start();
 
     gamepadHandler = new GamepadInputHandler(this, lorieView, ipc, gpState, currForwardX11);
+    gamepadHandler.reloadPrefs(gpPrefs()); 
     // If the real signature is (.., SharedPreferences) then call reloadPrefs(gpPrefs()) here.
     gamepadHandler.setupGamepadInput();
 }
