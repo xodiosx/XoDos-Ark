@@ -1,5 +1,112 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+    <!-- ============ (keep whatever you already have here) ============ -->
+
+    <!-- ===== screenIdleTimeout (pre-existing termux-x11) ===== -->
+    <string-array name="screenIdleTimeoutValues">
+        <item>never</item>
+        <item>system</item>
+        <item>1</item>
+        <item>2</item>
+        <item>5</item>
+        <item>10</item>
+        <item>15</item>
+        <item>30</item>
+        <item>60</item>
+    </string-array>
+    <string-array name="screenIdleTimeoutEntries">
+        <item>Never</item>
+        <item>System</item>
+        <item>1 minute</item>
+        <item>2 minutes</item>
+        <item>5 minutes</item>
+        <item>10 minutes</item>
+        <item>15 minutes</item>
+        <item>30 minutes</item>
+        <item>1 hour</item>
+    </string-array>
+
+    <!-- ===== ekbarPosition (pre-existing termux-x11) =====
+         Keep names lowercase — they are parsed by getPagerPosition():
+           "top" / "left" / "bottom" / "right"  -->
+    <string-array name="ekbarPositionValues">
+        <item>top</item>
+        <item>left</item>
+        <item>bottom</item>
+        <item>right</item>
+    </string-array>
+    <string-array name="ekbarPositionEntries">
+        <item>Top</item>
+        <item>Left</item>
+        <item>Bottom</item>
+        <item>Right</item>
+    </string-array>
+
+    <!-- ===== Gamepad: input type =====
+         Values MUST match the switch() in readConfigFromPrefs()/startIpcFromCurrentConfig():
+           "xinput" | "dinput" | "all" | "none"  -->
+    <string-array name="gamepadInputTypeValues">
+        <item>xinput</item>
+        <item>dinput</item>
+        <item>all</item>
+        <item>none</item>
+    </string-array>
+    <string-array name="gamepadInputTypeEntries">
+        <item>XInput</item>
+        <item>DirectInput</item>
+        <item>All (XInput + DInput)</item>
+        <item>Disabled</item>
+    </string-array>
+
+    <!-- ===== Gamepad: mapped mode =====
+         "mapped" — real controller buttons passed through
+         "keys"   — physical buttons translated via extra-keys binds  -->
+    <string-array name="gamepadModeValues">
+        <item>mapped</item>
+        <item>keys</item>
+    </string-array>
+    <string-array name="gamepadModeEntries">
+        <item>Mapped (controller buttons)</item>
+        <item>Keyboard (extra-keys)</item>
+    </string-array>
+
+    <!-- ===== Gamepad: vibration ===== -->
+    <string-array name="gamepadVibrateValues">
+        <item>system</item>
+        <item>off</item>
+    </string-array>
+    <string-array name="gamepadVibrateEntries">
+        <item>System vibrator</item>
+        <item>Off</item>
+    </string-array>
+
+    <!-- ===== Gamepad: ID slot list =====
+         Your preferences.xml references gamepadIDs directly. If that
+         reference is android:entries → entries labels. If android:entryValues
+         → values must be numeric strings 1..4. Both cases work with below. -->
+    <string-array name="gamepadIDs">
+        <item>1</item>
+        <item>2</item>
+        <item>3</item>
+        <item>4</item>
+    </string-array>
+
+    <!-- ===== Gamepad: key-bind options =====
+         Referenced four times in preferences.xml (lines 272, 277, 282, 287).
+         These are per-binding options in "keys" mode. Values go into
+         SharedPreferences keys like gamepad_bind_dpad_up = disabled|keyboard|gamepad. -->
+    <string-array name="keybindOptionsValues">
+        <item>disabled</item>
+        <item>keyboard</item>
+        <item>gamepad</item>
+    </string-array>
+    <string-array name="keybindOptionsEntries">
+        <item>Disabled</item>
+        <item>Keyboard</item>
+        <item>Gamepad</item>
+    </string-array>
+
 <!-- ===== Gamepad (SDL) ===== -->
 <string-array name="gamepad_input_entries">
     <item>XInput</item>
