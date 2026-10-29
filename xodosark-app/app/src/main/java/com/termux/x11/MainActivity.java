@@ -388,9 +388,6 @@ public void controllerRumble(int effect, int low, int high, int durationMs) {
 private SharedPreferences gpPrefs() {
     return PreferenceManager.getDefaultSharedPreferences(this);
 }
-private String  gpS(String k, String d)   { return gpPrefs().getString(GP + k, d); }
-private int     gpI(String k, int d)      { return gpPrefs().getInt(GP + k, d); }
-private boolean gpB(String k, boolean d)  { return gpPrefs().getBoolean(GP + k, d); }
 
 private static int parseIntOr(String s, int def) {
     try { return Integer.parseInt(s.trim()); } catch (Exception e) { return def; }
@@ -398,20 +395,20 @@ private static int parseIntOr(String s, int def) {
 private static int clamp(int v, int lo, int hi) { return Math.max(lo, Math.min(hi, v)); }
 
 private void readConfigFromPrefs() {
-    sdlEnabled = gpB("sdlEnabled", false);
+    sdlEnabled         = gpB("gamepadSdlEnabled",    false);
 
-    String host = gpS("host", "127.0.0.1");
-    currHost        = host.isEmpty() ? "127.0.0.1" : host;
-    currClientPort  = clamp(parseIntOr(gpS("port", "4600"), 4600), 1, 65535);
-    currServerPort  = currClientPort + 1;
-    currGpId        = clamp(parseIntOr(gpS("id", "1"), 1), 0, Integer.MAX_VALUE);
-    currStateHz     = clamp(gpI("stateHz", 125), 10, 500);
-    currForwardX11  = gpB("forwardX11", true);
-    currInputType   = gpS("inputType", "xinput");
-    currMode        = gpS("mode", "mapped");
-    currVibrateMode = gpS("vibrate", "system");
-    currVibrateStrength = gpI("vibrateStrength", 128);
-    currGpName      = gpS("name", "Termux-X11 Pad");
+    String host        = gpS("gamepadHost",          "127.0.0.1");
+    currHost           = host.isEmpty() ? "127.0.0.1" : host;
+    currClientPort     = clamp(parseIntOr(gpS("gamepadPortRumble", "4600"), 4600), 1, 65535);
+    currServerPort     = currClientPort + 1;
+    currGpId           = clamp(parseIntOr(gpS("gamepadID",          "1"),    1), 0, Integer.MAX_VALUE);
+    currStateHz        = clamp(gpI("gamepadStateHz",      125), 10, 500);
+    currForwardX11     = gpB("gamepadForwardX11",    true);
+    currInputType      = gpS("gamepadInputType",     "xinput");
+    currMode           = gpS("gamepadMode",          "mapped");
+    currVibrateMode    = gpS("gamepadVibrate",       "system");
+    currVibrateStrength= gpI("gamepadVibrateStrength", 128);
+    currGpName         = gpS("gamepadName",          "XoDos");   // see Fix 3
 }
 
 private void stopIpcAndHandler() {
@@ -840,9 +837,25 @@ public boolean dispatchKeyEvent(KeyEvent e) {
 @Override
 public boolean onKeyDown(int keyCode, KeyEvent event) {
     final int src = event.getSource();
-    if ((src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_DPAD)) != 0)
+    if ((src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_DPAD)) != 0) {
+        // Let BACK through to the framework even from a gamepad source,
+        // otherwise Activity.onKeyUp → onBackPressed() is never reached.
+        if (keyCode == KeyEvent.KEYCODE_BACK)
+            return super.onKeyDown(keyCode, event);
         return false;
+    }
     return super.onKeyDown(keyCode, event);
+}
+
+@Override
+public boolean onKeyUp(int keyCode, KeyEvent event) {
+    final int src = event.getSource();
+    if ((src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_DPAD)) != 0) {
+        if (keyCode == KeyEvent.KEYCODE_BACK)
+            return super.onKeyUp(keyCode, event);
+        return false;
+    }
+    return super.onKeyUp(keyCode, event);
 }
 
 @Override

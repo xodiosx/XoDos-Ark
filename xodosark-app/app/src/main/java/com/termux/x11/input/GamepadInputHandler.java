@@ -258,17 +258,7 @@ public class GamepadInputHandler {
         }
     }
 
-    private void advertiseDevice(InputDevice device) {
-        if (device == null || lorieView == null || !forwardToLorie) return;
-        advertisedDeviceId = device.getId();
-        lorieView.sendGamepadDevice(device.getId(), true, device.getVendorId(),
-                device.getProductId(), inputMode, hasVibrator(device),
-                advertisedName.isEmpty() ? device.getName() : advertisedName);
-        Log.i(TAG, "advertise add id=" + device.getId() + " vid=" +
-                Integer.toHexString(device.getVendorId()) + " pid=" +
-                Integer.toHexString(device.getProductId()) + " mode=" + inputMode +
-                " name=" + (advertisedName.isEmpty() ? device.getName() : advertisedName));
-    }
+
 
     private void advertiseRemoved(int deviceId) {
         if (lorieView != null)
@@ -277,15 +267,47 @@ public class GamepadInputHandler {
         advertisedDeviceId = -1;
     }
 
-    private void advertiseFallback() {
-        if (lorieView == null || !forwardToLorie) return;
-        advertisedDeviceId = FALLBACK_DEVICE_ID;
-        String name = advertisedName.isEmpty() ? "Lorie gamepad" : advertisedName;
-        lorieView.sendGamepadDevice(FALLBACK_DEVICE_ID, true, 0, 0, inputMode,
-                true, name);
-        Log.i(TAG, "advertise virtual fallback mode=" + inputMode +
-                " name=" + name);
+    private boolean isAutoName(String n) {
+    return n == null || n.trim().isEmpty()
+        || "auto".equalsIgnoreCase(n)
+        || "".equals(n);          // legacy default → treat as auto
+}
+
+private void advertiseDevice(InputDevice device) {
+    if (device == null || lorieView == null || !forwardToLorie) return;
+    advertisedDeviceId = device.getId();
+
+    String effectiveName;
+    if (isAutoName(advertisedName)) {
+        String devName = device.getName();
+        if (devName == null || devName.trim().isEmpty()) devName = "gamepad";
+        effectiveName = "XoDos-" + devName.trim();
+    } else {
+        effectiveName = advertisedName;
     }
+
+    lorieView.sendGamepadDevice(device.getId(), true, device.getVendorId(),
+            device.getProductId(), inputMode, hasVibrator(device), effectiveName);
+
+    Log.i(TAG, "advertise add id=" + device.getId()
+            + " vid=" + Integer.toHexString(device.getVendorId())
+            + " pid=" + Integer.toHexString(device.getProductId())
+            + " mode=" + inputMode + " name=" + effectiveName);
+                if (isAutoName(advertisedName)) {
+        gpPrefs().edit()
+                 .putString("gamepadName", effectiveName)
+                 .apply();
+        // then, on next user toggle or onNext IpcStart, handshake will use it
+    }
+}
+
+private void advertiseFallback() {
+    if (lorieView == null || !forwardToLorie) return;
+    advertisedDeviceId = FALLBACK_DEVICE_ID;
+    String name = isAutoName(advertisedName) ? "XoDos-gamepad" : advertisedName;
+    lorieView.sendGamepadDevice(FALLBACK_DEVICE_ID, true, 0, 0, inputMode, true, name);
+    Log.i(TAG, "advertise virtual fallback mode=" + inputMode + " name=" + name);
+}
 
     public void shutdown() {
         if (advertisedDeviceId != -1) advertiseRemoved(advertisedDeviceId);
@@ -457,6 +479,24 @@ public class GamepadInputHandler {
             sendAsync();
             return true;
         }
+        
+        // Digital trigger buttons → synthesize full analog trigger press.
+// The XI2 gamepad has no L2/R2 buttons; triggers exist only as axes
+// (valuators 4/5), so a digital press must be forwarded as 1.0.
+if (!useKeybinds && (keyCode == KeyEvent.KEYCODE_BUTTON_L2
+                  || keyCode == KeyEvent.KEYCODE_BUTTON_R2)) {
+    float lt, rt;
+    synchronized (state) {
+        lt = state.left_trigger  / 255f;
+        rt = state.right_trigger / 255f;
+    }
+    if (keyCode == KeyEvent.KEYCODE_BUTTON_L2) lt = 1f;
+    if (keyCode == KeyEvent.KEYCODE_BUTTON_R2) rt = 1f;
+    sendGamepadAxisEvent(lt, rt, GamepadAxis.TRIGGERS);
+    return true;
+}
+        
+        
         return false;
     }
 
@@ -483,6 +523,20 @@ public class GamepadInputHandler {
             sendAsync();
             return true;
         }
+        
+        if (!useKeybinds && (keyCode == KeyEvent.KEYCODE_BUTTON_L2
+                  || keyCode == KeyEvent.KEYCODE_BUTTON_R2)) {
+    float lt, rt;
+    synchronized (state) {
+        lt = state.left_trigger  / 255f;
+        rt = state.right_trigger / 255f;
+    }
+    if (keyCode == KeyEvent.KEYCODE_BUTTON_L2) lt = 0f;
+    if (keyCode == KeyEvent.KEYCODE_BUTTON_R2) rt = 0f;
+    sendGamepadAxisEvent(lt, rt, GamepadAxis.TRIGGERS);
+    return true;
+}
+        
         return false;
     }
 
@@ -519,9 +573,18 @@ public class GamepadInputHandler {
             sendGamepadAxisEvent(rx, ry, GamepadAxis.RIGHT_STICK);
 
             // TRIGGERS
-            float lt = event.getAxisValue(MotionEvent.AXIS_LTRIGGER);
-            float rt = event.getAxisValue(MotionEvent.AXIS_RTRIGGER);
-            sendGamepadAxisEvent(lt, rt, GamepadAxis.TRIGGERS);
+         //   float lt = event.getAxisValue(MotionEvent.AXIS_LTRIGGER);
+          //  float rt = event.getAxisValue(MotionEvent.AXIS_RTRIGGER);
+            //sendGamepadAxisEvent(lt, rt, GamepadAxis.TRIGGERS);
+            
+            // TRIGGERS — Xbox / modern HID pads report AXIS_LTRIGGER/RTRIGGER;
+// older DX-style pads report AXIS_BRAKE (left) / AXIS_GAS (right).
+// Fall back through them so both families are covered.
+float lt = event.getAxisValue(MotionEvent.AXIS_LTRIGGER);
+float rt = event.getAxisValue(MotionEvent.AXIS_RTRIGGER);
+if (lt == 0f) lt = event.getAxisValue(MotionEvent.AXIS_BRAKE);
+if (rt == 0f) rt = event.getAxisValue(MotionEvent.AXIS_GAS);
+sendGamepadAxisEvent(lt, rt, GamepadAxis.TRIGGERS);
 
             return true;
         }

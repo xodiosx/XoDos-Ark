@@ -20,28 +20,29 @@
             android:icon="@android:drawable/ic_menu_set_as"
             android:summary="Toggle software keyboard" />
             
-            <PreferenceCategory android:title="Gamepad (SDL)">
-    <SwitchPreferenceCompat
-        android:key="gamepad_sdlEnabled"
-        android:title="Route controller to SDL gamepad"
-        android:summary="When off, controller keys go to WinHandler (Wine) as before"
-        android:defaultValue="false"/>
-    <SwitchPreferenceCompat
-        android:key="gamepad_forwardX11"
-        android:title="Forward X11 input back to Android"
-        android:defaultValue="true"
-        android:dependency="gamepad_sdlEnabled"/>
-    <EditTextPreference
-        android:key="gamepad_host"
-        android:title="Host"
-        android:defaultValue="127.0.0.1"
-        android:dependency="gamepad_sdlEnabled"/>
-    <EditTextPreference
-        android:key="gamepad_port"
-        android:title="Client port (server = port + 1)"
-        android:defaultValue="4600"
-        android:dependency="gamepad_sdlEnabled"/>
-</PreferenceCategory>
+          <SwitchPreferenceCompat
+    android:key="gamepadSdlEnabled"
+    android:title="Route controller to SDL gamepad"
+    android:summary="When off, controller keys go to WinHandler (Wine) as before"
+    android:defaultValue="false"/>
+
+<SwitchPreferenceCompat
+    android:key="gamepadForwardX11"
+    android:title="Forward X11 input back to Android"
+    android:defaultValue="true"
+    android:dependency="gamepadSdlEnabled"/>
+
+<EditTextPreference
+    android:key="gamepadHost"
+    android:title="Host"
+    android:defaultValue="127.0.0.1"
+    android:dependency="gamepadSdlEnabled"/>
+
+<EditTextPreference
+    android:key="gamepadPortRumble"
+    android:title="Client port (server = port + 1)"
+    android:defaultValue="4600"
+    android:dependency="gamepadSdlEnabled"/>
 
         <Preference
             android:key="select_controller"

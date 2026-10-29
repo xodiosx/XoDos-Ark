@@ -224,7 +224,7 @@
         <EditTextPreference
             app:key="gamepadName"
             app:title="Gamepad name"
-            app:defaultValue="Termux-X11 Pad"
+            app:defaultValue="auto"
             app:useSimpleSummaryProvider="true" />
 
         <ListPreference
