@@ -347,7 +347,7 @@ xfce4-session
                 killall -9 xfce4-session xfce4* 2>/dev/null
                 if [ -f /data/data/app.xodos2/files/usr/bin/xfce4-session ]; then
                 export PREFIX="/data/data/app.xodos2/files/usr"
-                export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin
+                #export PATH=${'$'}PATH:/data/data/app.xodos2/files/usr/bin
                  export XDG_DATA_DIRS="/usr/local/share:/usr/share:/data/data/app.xodos2/files/usr/local/share:/data/data/app.xodos2/files/usr/share"
                  export XDG_CONFIG_DIRS='/etc/xdg:/data/data/app.xodos2/files/usr/etc/xdg'
                  fi
@@ -396,7 +396,7 @@ xfce4-session
             # Native XoDos-Ark (Termux-style) environment
             export PREFIX="$prefix"
             export HOME="$home"
-            export PATH="$prefix/bin:/system/bin:/system/xbin"
+            #export PATH="$prefix/bin:/system/bin:/system/xbin"
             #export LD_LIBRARY_PATH="$prefix/lib"
             #export SHELL="$prefix/bin/bash"
             export PULSE_SERVER=127.0.0.1
