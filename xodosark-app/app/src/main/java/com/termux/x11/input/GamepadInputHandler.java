@@ -16,7 +16,7 @@ import androidx.preference.PreferenceManager;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-
+import com.termux.x11.MainActivity;
 import com.termux.x11.LorieView;
 import com.termux.x11.Prefs;
 import com.termux.x11.ipc.GamepadIpc;
