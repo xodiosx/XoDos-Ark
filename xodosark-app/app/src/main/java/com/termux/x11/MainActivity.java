@@ -891,12 +891,7 @@ private static boolean isControllerEvent(KeyEvent e) {
 public boolean dispatchKeyEvent(KeyEvent e) {
     // ★ SDL takes priority — nothing else sees this event when SDL is on
     if (sdlEnabled && gamepadHandler != null && isControllerEvent(e)) {
-    Log.d("GPKEY", "action=" + e.getAction()
-                + " keyCode=" + e.getKeyCode()
-                + " repeat=" + e.getRepeatCount()
-                + " sdl=" + sdlEnabled
-                + " handler=" + (gamepadHandler != null)
-                + " isCtrl=" + isControllerEvent(e));
+    
         if (e.getAction() == KeyEvent.ACTION_DOWN) {
             if (e.getRepeatCount() == 0) gamepadHandler.handleKeyDown(e.getKeyCode(), e);
             return true;

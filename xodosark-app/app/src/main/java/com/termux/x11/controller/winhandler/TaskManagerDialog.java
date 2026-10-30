@@ -45,7 +45,7 @@ public class TaskManagerDialog extends ContentDialog implements OnGetProcessInfo
         cancelButton.setText(R.string.new_task);
         cancelButton.setOnClickListener((v) -> {
             dismiss();
-            ContentDialog.prompt(activity, R.string.new_task, "CMD", (command) -> {
+            ContentDialog.prompt(activity, R.string.new_task, "", (command) -> {
                 if (command == null || command.trim().isEmpty()) return;
                 String cmd = command.trim();
                 if (cmd.toLowerCase().endsWith(".exe")) {
