@@ -358,8 +358,8 @@ public boolean isWineRunning() {
 
 
 /// sdl gamepad 
-// ===== Physical gamepad: dual-path (SDL ↔ WinHandler) =====
-private static final String GP = "gamepad_";
+// ===== Physical gamepad: dual-path (SDL WinHandler) =====
+//private static final String GP = "gamepad_";
 private boolean sdlEnabled = false;               // ← the toggle
 
 private GamepadIpc ipc;
@@ -369,7 +369,7 @@ private GamepadInputHandler gamepadHandler;
 private String  currHost = "127.0.0.1";
 private int     currClientPort = 4600, currServerPort = 4601, currGpId = 1, currStateHz = 125;
 private boolean currForwardX11 = true;
-private String  currInputType = "both", currMode = "mapped",
+private String  currInputType = "all", currMode = "mapped",
                 currVibrateMode = "device", currGpName = "XoDos-X11";
 private int     currVibrateStrength = 128;
 
@@ -407,8 +407,8 @@ private void readConfigFromPrefs() {
     currGpId           = clamp(parseIntOr(gpS("gamepadID",          "1"),    1), 0, Integer.MAX_VALUE);
     currStateHz        = clamp(gpI("gamepadStateHz",      125), 10, 500);
     currForwardX11     = gpB("gamepadForwardX11",    true);
-    currInputType      = gpS("gamepadInputType",     "both");
-    currMode           = gpS("gamepadMode",          "Mapped");
+    currInputType      = gpS("gamepadInputType",     "all");
+    currMode           = gpS("gamepadMode",          "mapped");
     currVibrateMode    = gpS("gamepadVibrate",       "device");
     currVibrateStrength= gpI("gamepadVibrateStrength", 128);
     currGpName      = resolveGamepadName(gpS("gamepadName", "auto"));
@@ -420,17 +420,15 @@ public static boolean isAutoGamepadName(String n) {
             || "XoDos-X1".equals(n);
 }
 
-public String getGamepadName() { return currGpName; }
-
-/** Re-resolve the auto gamepad name and restart IPC so the handshake + XI2 announce both refresh. */
-public void reloadGamepadForAutoNameChange() {
-    LorieView lv = getLorieView();
-    if (lv == null) return;
-    if (!sdlEnabled) {          // only refresh if SDL is currently active
-        readConfigFromPrefs();
-        return;
+//public String getGamepadName() { return currGpName; }
+public void refreshGamepadHandshakeNameIfChanged() {
+    String resolved = resolveGamepadName(gpS("gamepadName", "auto"));
+    if (resolved.equals(currGpName)) return;
+    currGpName = resolved;
+    if (ipc != null) {
+        ipc.setName(currGpName);
+        ipc.sendRelease();   // tells Wine "gamepad gone" → Wine re-queries → new name used
     }
-    startIpcFromCurrentConfig(lv);   // tears down old handler + IPC, starts new with resolved name
 }
 
 /**

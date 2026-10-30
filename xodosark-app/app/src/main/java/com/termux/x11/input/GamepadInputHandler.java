@@ -50,7 +50,7 @@ public class GamepadInputHandler {
     private String vibrateMode = "device"; // device|phone|both|off
     private int vibrateStrength = 255;
     private SharedPreferences sp;
-    private Prefs prefsRef;
+    
     private boolean useKeybinds = false;
 
     private final ExecutorService io = Executors.newSingleThreadExecutor(r -> {
@@ -138,7 +138,7 @@ public class GamepadInputHandler {
     }
 
     public void reloadPrefs(Prefs prefs){
-    this.prefsRef = prefs;
+   
         boolean wasForwarding = forwardToLorie;
         int oldInputMode = inputMode;
         String oldAdvertisedName = advertisedName;
@@ -236,32 +236,24 @@ public class GamepadInputHandler {
         }
     }
 
-    private void onDeviceChanged(int deviceId) {
-        InputDevice device = InputDevice.getDevice(deviceId);
-        if (isGamepadDevice(device) &&
-                (advertisedDeviceId == -1 ||
-                 advertisedDeviceId == FALLBACK_DEVICE_ID ||
-                 advertisedDeviceId == deviceId)) {
-            if (advertisedDeviceId == FALLBACK_DEVICE_ID)
-                advertiseRemoved(FALLBACK_DEVICE_ID);
-            advertiseDevice(device);
-        }
-        if (deviceId == lastGamepadDeviceId || lastGamepadDeviceId == -1) {
-            rebindVibratorFor(deviceId);
-        }
-        
-        MainActivity a = MainActivity.getInstance();
-    if (a != null && a.isSdlGamepadEnabled()) {
-        // Cheap path: just restart IPC if the *auto* name changed.
-        String newName = MainActivity.resolveGamepadName(
-                PreferenceManager.getDefaultSharedPreferences(context)
-                                 .getString("gamepadName", "auto"));
-        if (!newName.equals(a.getGamepadName())) {   // add getter below
-            a.runOnUiThread(() -> a.reloadGamepadForAutoNameChange());
-        }
+   private void onDeviceChanged(int deviceId) {
+    InputDevice device = InputDevice.getDevice(deviceId);
+    if (isGamepadDevice(device) &&
+            (advertisedDeviceId == -1 ||
+             advertisedDeviceId == FALLBACK_DEVICE_ID ||
+             advertisedDeviceId == deviceId)) {
+        if (advertisedDeviceId == FALLBACK_DEVICE_ID)
+            advertiseRemoved(FALLBACK_DEVICE_ID);
+        advertiseDevice(device);
     }
+    if (deviceId == lastGamepadDeviceId || lastGamepadDeviceId == -1) {
+        rebindVibratorFor(deviceId);
+    }
+
+    MainActivity a = MainActivity.getInstance();
+    if (a != null && a.isSdlGamepadEnabled())
+        a.refreshGamepadHandshakeNameIfChanged();
 }
-    
 
     private boolean hasVibrator(InputDevice device) {
         try {
@@ -282,13 +274,12 @@ public class GamepadInputHandler {
     }
 
     private boolean isAutoName(String n) {
-    return n == null || n.trim().isEmpty()
-        || "auto".equalsIgnoreCase(n)
-        || "".equals(n);          // legacy default → treat as auto
+    return MainActivity.isAutoGamepadName(n);
 }
 
 private void advertiseDevice(InputDevice device) {
     if (device == null || lorieView == null || !forwardToLorie) return;
+    if (advertisedDeviceId == device.getId() && advertisedDeviceId != -1) return;
     advertisedDeviceId = device.getId();
 
     String effectiveName;
@@ -302,12 +293,7 @@ private void advertiseDevice(InputDevice device) {
 
     lorieView.sendGamepadDevice(device.getId(), true, device.getVendorId(),
             device.getProductId(), inputMode, hasVibrator(device), effectiveName);
-
-    Log.i(TAG, "advertise add id=" + device.getId()
-            + " vid=" + Integer.toHexString(device.getVendorId())
-            + " pid=" + Integer.toHexString(device.getProductId())
-            + " mode=" + inputMode + " name=" + effectiveName);
-
+    Log.i(TAG, "advertise add id=" + device.getId() + " name=" + effectiveName);
 }
 
 private void advertiseFallback() {
