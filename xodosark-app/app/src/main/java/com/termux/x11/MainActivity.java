@@ -424,10 +424,12 @@ public static boolean isAutoGamepadName(String n) {
 public void refreshGamepadHandshakeNameIfChanged() {
     String resolved = resolveGamepadName(gpS("gamepadName", "auto"));
     if (resolved.equals(currGpName)) return;
+    // Ignore transient enumerations where the device briefly disappears.
+    if ("XoDos-gamepad".equals(resolved)) return;
     currGpName = resolved;
     if (ipc != null) {
         ipc.setName(currGpName);
-        ipc.sendRelease();   // tells Wine "gamepad gone" → Wine re-queries → new name used
+        ipc.sendRelease();
     }
 }
 
@@ -843,7 +845,7 @@ public boolean dispatchTouchEvent(MotionEvent ev) {
     // If not handled by input controls, pass to normal touch handling
     return super.dispatchTouchEvent(ev);
 }
-
+/*
 
 private static boolean isControllerEvent(KeyEvent e) {
     final int kc = e.getKeyCode();
@@ -868,11 +870,33 @@ private static boolean isControllerEvent(KeyEvent e) {
     return isDpadKey && !hasKb && (hasGp || hasDpad);
 }
 
+*/
+private static boolean isControllerEvent(KeyEvent e) {
+    final InputDevice dev = e.getDevice();
+    final int src = (dev != null) ? dev.getSources() : e.getSource();
+    final boolean hasKb   = (src & InputDevice.SOURCE_KEYBOARD) != 0;
+    final boolean hasGp   = (src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK)) != 0;
+    final boolean hasDpad = (src & InputDevice.SOURCE_DPAD) != 0;
+    final int kc = e.getKeyCode();
+    final boolean isDpadKey =
+            kc == KeyEvent.KEYCODE_DPAD_UP || kc == KeyEvent.KEYCODE_DPAD_RIGHT
+         || kc == KeyEvent.KEYCODE_DPAD_DOWN || kc == KeyEvent.KEYCODE_DPAD_LEFT
+         || kc == KeyEvent.KEYCODE_DPAD_CENTER;
+    return (KeyEvent.isGamepadButton(kc) && (hasGp || hasDpad))
+        || (isDpadKey && !hasKb && (hasGp || hasDpad));
+}
+
 
 @Override
 public boolean dispatchKeyEvent(KeyEvent e) {
     // ★ SDL takes priority — nothing else sees this event when SDL is on
     if (sdlEnabled && gamepadHandler != null && isControllerEvent(e)) {
+    Log.d("GPKEY", "action=" + e.getAction()
+                + " keyCode=" + e.getKeyCode()
+                + " repeat=" + e.getRepeatCount()
+                + " sdl=" + sdlEnabled
+                + " handler=" + (gamepadHandler != null)
+                + " isCtrl=" + isControllerEvent(e));
         if (e.getAction() == KeyEvent.ACTION_DOWN) {
             if (e.getRepeatCount() == 0) gamepadHandler.handleKeyDown(e.getKeyCode(), e);
             return true;
@@ -1710,6 +1734,7 @@ private void setupInputController() {
               //  mNotification = buildNotification();
                 //mNotificationManager.notify(mNotificationId, mNotification);
             }
+            maybeReloadGamepad(getLorieView());
     }
 
     @Override
