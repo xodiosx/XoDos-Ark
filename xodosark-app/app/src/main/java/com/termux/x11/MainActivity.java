@@ -806,19 +806,28 @@ public boolean dispatchTouchEvent(MotionEvent ev) {
 
 
 private static boolean isControllerEvent(KeyEvent e) {
+    final int kc = e.getKeyCode();
+
+    // Gamepad button codes are unambiguously from a controller, regardless
+    // of what source flags Android reports. Some controllers (8BitDo BT
+    // HID, some Xbox, generic USB pads) surface buttons with SOURCE_KEYBOARD.
+    if (KeyEvent.isGamepadButton(kc)) return true;
+
+    // D-pad arrow keys: only when it really is a gamepad, otherwise we'd
+    // swallow arrow keys from a normal hardware keyboard.
     final InputDevice dev = e.getDevice();
     final int src = (dev != null) ? dev.getSources() : e.getSource();
     final boolean hasKb   = (src & InputDevice.SOURCE_KEYBOARD) != 0;
     final boolean hasGp   = (src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK)) != 0;
     final boolean hasDpad = (src & InputDevice.SOURCE_DPAD) != 0;
-    final int kc = e.getKeyCode();
     final boolean isDpadKey =
             kc == KeyEvent.KEYCODE_DPAD_UP || kc == KeyEvent.KEYCODE_DPAD_RIGHT
          || kc == KeyEvent.KEYCODE_DPAD_DOWN || kc == KeyEvent.KEYCODE_DPAD_LEFT
          || kc == KeyEvent.KEYCODE_DPAD_CENTER;
-    return (KeyEvent.isGamepadButton(kc) && (hasGp || hasDpad))
-        || (isDpadKey && !hasKb && (hasGp || hasDpad));
+
+    return isDpadKey && !hasKb && (hasGp || hasDpad);
 }
+
 
 @Override
 public boolean dispatchKeyEvent(KeyEvent e) {
