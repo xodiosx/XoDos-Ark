@@ -30,100 +30,97 @@
     <!-- ===== ekbarPosition (pre-existing termux-x11) =====
          Keep names lowercase — they are parsed by getPagerPosition():
            "top" / "left" / "bottom" / "right"  -->
-    <string-array name="ekbarPositionValues">
-        <item>top</item>
-        <item>left</item>
-        <item>bottom</item>
-        <item>right</item>
-    </string-array>
-    <string-array name="ekbarPositionEntries">
-        <item>Top</item>
-        <item>Left</item>
-        <item>Bottom</item>
-        <item>Right</item>
-    </string-array>
+<string-array name="ekbarPositionValues">
+    <item>top</item>
+    <item>bottom</item>
+    <item>left</item>
+    <item>right</item>
+</string-array>
 
     <!-- ===== Gamepad: input type =====
          Values MUST match the switch() in readConfigFromPrefs()/startIpcFromCurrentConfig():
            "xinput" | "dinput" | "all" | "none"  -->
-    <string-array name="gamepadInputTypeValues">
-        <item>all</item>
-        <item>xinput</item>
-        <item>dinput</item>
-        <item>keys</item>
-        <item>none</item>
-    </string-array>
+<string-array name="gamepadInputTypeEntries">
+    <item>XDInput</item>
+    <item>XInput</item>
+    <item>DirectInput</item>
+    <item>Gamepad → Keys</item>
+    <item>None</item>
+</string-array>
 
-    <string-array name="gamepadVibrateEntries">
-        <item>Controller</item>
-        <item>Phone</item>
-        <item>Both</item>
-        <item>Off</item>
-    </string-array>
-    <string-array name="gamepadVibrateValues">
-        <item>device</item>
-        <item>phone</item>
-        <item>both</item>
-        <item>off</item>
-    </string-array>
+<string-array name="gamepadInputTypeValues">
+    <item>all</item>
+    <item>xinput</item>
+    <item>dinput</item>
+    <item>keys</item>
+    <item>none</item>
+</string-array>
 
-    <string-array name="gamepad_state_hz_values">
-        <item>60</item>
-        <item>90</item>
-        <item>125</item>
-        <item>250</item>
-        <item>500</item>
-    </string-array>
+<string-array name="gamepadVibrateEntries">
+    <item>Controller</item>
+    <item>Phone</item>
+    <item>Both</item>
+    <item>Off</item>
+</string-array>
+<string-array name="gamepadVibrateValues">
+    <item>device</item>
+    <item>phone</item>
+    <item>both</item>
+    <item>off</item>
+</string-array>
 
-    <string-array name="gamepadModeEntries">
-        <item>Raw</item>
-        <item>Mapped</item>
-    </string-array>
-    <string-array name="gamepadModeValues">
-        <item>raw</item>
-        <item>mapped</item>
-    </string-array>
+<string-array name="gamepad_state_hz_values">
+    <item>60</item>
+    <item>90</item>
+    <item>125</item>
+    <item>250</item>
+    <item>500</item>
+</string-array>
 
-    <string-array name="gamepadIDs">
-        <item>1</item>
-        <item>2</item>
-        <item>3</item>
-        <item>4</item>
-    </string-array>
+<string-array name="gamepadModeEntries">
+    <item>Raw</item>
+    <item>Mapped</item>
+</string-array>
+<string-array name="gamepadModeValues">
+    <item>raw</item>
+    <item>mapped</item>
+</string-array>
 
-    <string-array name="keybindOptionsEntries">
-        <item>none</item>
+<string-array name="gamepadIDs">
+    <item>1</item>
+    <item>2</item>
+    <item>3</item>
+    <item>4</item>
+</string-array>
 
-        <item>ESC</item><item>ENTER</item><item>SPACE</item><item>TAB</item>
-        <item>BACKSPACE</item>
-        <item>UP</item><item>DOWN</item><item>LEFT</item><item>RIGHT</item>
+<string-array name="keybindOptionsEntries">
+    <item>none</item>
+    <item>ESC</item><item>ENTER</item><item>SPACE</item><item>TAB</item>
+    <item>BACKSPACE</item>
+    <item>UP</item><item>DOWN</item><item>LEFT</item><item>RIGHT</item>
+    <item>0</item><item>1</item><item>2</item><item>3</item><item>4</item>
+    <item>5</item><item>6</item><item>7</item><item>8</item><item>9</item>
+    <item>A</item><item>B</item><item>C</item><item>D</item><item>E</item>
+    <item>F</item><item>G</item><item>H</item><item>I</item><item>J</item>
+    <item>K</item><item>L</item><item>M</item><item>N</item><item>O</item>
+    <item>P</item><item>Q</item><item>R</item><item>S</item><item>T</item>
+    <item>U</item><item>V</item><item>W</item><item>X</item><item>Y</item><item>Z</item>
+</string-array>
 
-        <item>0</item><item>1</item><item>2</item><item>3</item><item>4</item>
-        <item>5</item><item>6</item><item>7</item><item>8</item><item>9</item>
+<string-array name="keybindOptionsValues">
+    <item>none</item>
+    <item>ESC</item><item>ENTER</item><item>SPACE</item><item>TAB</item>
+    <item>BACKSPACE</item>
+    <item>UP</item><item>DOWN</item><item>LEFT</item><item>RIGHT</item>
+    <item>0</item><item>1</item><item>2</item><item>3</item><item>4</item>
+    <item>5</item><item>6</item><item>7</item><item>8</item><item>9</item>
+    <item>A</item><item>B</item><item>C</item><item>D</item><item>E</item>
+    <item>F</item><item>G</item><item>H</item><item>I</item><item>J</item>
+    <item>K</item><item>L</item><item>M</item><item>N</item><item>O</item>
+    <item>P</item><item>Q</item><item>R</item><item>S</item><item>T</item>
+    <item>U</item><item>V</item><item>W</item><item>X</item><item>Y</item><item>Z</item>
+</string-array>
 
-        <item>A</item><item>B</item><item>C</item><item>D</item><item>E</item>
-        <item>F</item><item>G</item><item>H</item><item>I</item><item>J</item>
-        <item>K</item><item>L</item><item>M</item><item>N</item><item>O</item>
-        <item>P</item><item>Q</item><item>R</item><item>S</item><item>T</item>
-        <item>U</item><item>V</item><item>W</item><item>X</item><item>Y</item><item>Z</item>
-    </string-array>
-
-    <string-array name="keybindOptionsValues">
-        <item>none</item>
-
-        <item>ESC</item><item>ENTER</item><item>SPACE</item><item>TAB</item>
-        <item>BACKSPACE</item>
-        <item>UP</item><item>DOWN</item><item>LEFT</item><item>RIGHT</item>
-
-        <item>0</item><item>1</item><item>2</item><item>3</item><item>4</item>
-        <item>5</item><item>6</item><item>7</item><item>8</item><item>9</item>
-
-        <item>A</item><item>B</item><item>C</item><item>D</item><item>E</item>
-        <item>F</item><item>G</item><item>H</item><item>I</item><item>J</item>
-        <item>K</item><item>L</item><item>M</item><item>N</item><item>O</item>
-        <item>P</item><item>Q</item><item>R</item><item>S</item><item>T</item>
-        <item>U</item><item>V</item><item>W</item><item>X</item><item>Y</item><item>Z</item>
-    </string-array>
 
     <string-array name="touchscreenInputModesEntries">
         <item>Trackpad</item>

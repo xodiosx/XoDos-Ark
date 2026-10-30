@@ -249,7 +249,19 @@ public class GamepadInputHandler {
         if (deviceId == lastGamepadDeviceId || lastGamepadDeviceId == -1) {
             rebindVibratorFor(deviceId);
         }
+        
+        MainActivity a = MainActivity.getInstance();
+    if (a != null && a.isSdlGamepadEnabled()) {
+        // Cheap path: just restart IPC if the *auto* name changed.
+        String newName = MainActivity.resolveGamepadName(
+                PreferenceManager.getDefaultSharedPreferences(context)
+                                 .getString("gamepadName", "auto"));
+        if (!newName.equals(a.getGamepadName())) {   // add getter below
+            a.runOnUiThread(() -> a.reloadGamepadForAutoNameChange());
+        }
     }
+}
+    
 
     private boolean hasVibrator(InputDevice device) {
         try {

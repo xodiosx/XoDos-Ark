@@ -199,12 +199,11 @@
             app:title="Forward gamepad to X11"
             app:defaultValue="true" />
 
-        <EditTextPreference
-            app:key="gamepadName"
-            app:title="Gamepad name"
-            app:defaultValue="auto"
-            app:useSimpleSummaryProvider="true" />
-
+       <EditTextPreference
+    app:key="gamepadName"
+    app:title="Gamepad name"
+    app:defaultValue="auto" />
+    
         <ListPreference
             app:key="gamepadID"
             app:title="Gamepad ID"

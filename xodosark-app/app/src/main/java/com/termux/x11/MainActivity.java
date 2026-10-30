@@ -369,8 +369,8 @@ private GamepadInputHandler gamepadHandler;
 private String  currHost = "127.0.0.1";
 private int     currClientPort = 4600, currServerPort = 4601, currGpId = 1, currStateHz = 125;
 private boolean currForwardX11 = true;
-private String  currInputType = "xinput", currMode = "mapped",
-                currVibrateMode = "system", currGpName = "Termux-X11 Pad";
+private String  currInputType = "both", currMode = "mapped",
+                currVibrateMode = "device", currGpName = "XoDos-X11";
 private int     currVibrateStrength = 128;
 
 public GamepadIpc getGamepadIpc() { return ipc; }
@@ -407,11 +407,53 @@ private void readConfigFromPrefs() {
     currGpId           = clamp(parseIntOr(gpS("gamepadID",          "1"),    1), 0, Integer.MAX_VALUE);
     currStateHz        = clamp(gpI("gamepadStateHz",      125), 10, 500);
     currForwardX11     = gpB("gamepadForwardX11",    true);
-    currInputType      = gpS("gamepadInputType",     "xinput");
+    currInputType      = gpS("gamepadInputType",     "both");
     currMode           = gpS("gamepadMode",          "Mapped");
-    currVibrateMode    = gpS("gamepadVibrate",       "Controller");
+    currVibrateMode    = gpS("gamepadVibrate",       "device");
     currVibrateStrength= gpI("gamepadVibrateStrength", 128);
-    currGpName         = gpS("gamepadName",          "XoDos");  
+    currGpName      = resolveGamepadName(gpS("gamepadName", "auto"));
+}
+/** True when the user has not pinned a gamepad name (empty, "auto", or the legacy default). */
+public static boolean isAutoGamepadName(String n) {
+    return n == null || n.trim().isEmpty()
+            || "auto".equalsIgnoreCase(n)
+            || "XoDos-X1".equals(n);
+}
+
+public String getGamepadName() { return currGpName; }
+
+/** Re-resolve the auto gamepad name and restart IPC so the handshake + XI2 announce both refresh. */
+public void reloadGamepadForAutoNameChange() {
+    LorieView lv = getLorieView();
+    if (lv == null) return;
+    if (!sdlEnabled) {          // only refresh if SDL is currently active
+        readConfigFromPrefs();
+        return;
+    }
+    startIpcFromCurrentConfig(lv);   // tears down old handler + IPC, starts new with resolved name
+}
+
+/**
+ * Resolves the displayed / handshake gamepad name.
+ * Auto → "XoDos-<device>" for the first non-virtual gamepad, or "XoDos-gamepad".
+ * User override → returned as-is.
+ */
+public static String resolveGamepadName(String configured) {
+    if (!isAutoGamepadName(configured)) return configured;
+    try {
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice d = InputDevice.getDevice(id);
+            if (d == null || d.isVirtual()) continue;
+            int src = d.getSources();
+            if ((src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_JOYSTICK)) == 0) continue;
+            String n = d.getName();
+            if (n == null || n.trim().isEmpty()) n = "gamepad";
+            n = n.trim();
+            if (n.length() > 40) n = n.substring(0, 40).trim();
+            return "XoDos-" + n;
+        }
+    } catch (Throwable ignored) {}
+    return "XoDos-gamepad";
 }
 
 private void stopIpcAndHandler() {
