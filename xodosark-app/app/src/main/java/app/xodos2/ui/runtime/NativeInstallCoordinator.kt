@@ -748,15 +748,7 @@ private fun writeNativeAptRepos(context: Context) {
         defaultMirror.setReadable(true, false)
         defaultMirror.setWritable(true, false)
         defaultMirror.setExecutable(false)
-// Inside writeNativeAptRepos, after writing sources.list:
 
-// Remove any *.list files that would re-add upstream Termux repos.
-val sourcesListD = File(aptDir, "sources.list.d").apply { mkdirs() }
-sourcesListD.listFiles { f -> f.name.endsWith(".list") }?.forEach { stale ->
-    if (stale.delete()) {
-        Log.i("NativeInstall", "Removed stale apt source: ${stale.name}")
-    }
-}
         Log.i("NativeInstall", "Wrote native apt sources + termux mirror")
     } catch (e: Exception) {
         Log.e("NativeInstall", "Failed to write native apt/mirror files", e)
