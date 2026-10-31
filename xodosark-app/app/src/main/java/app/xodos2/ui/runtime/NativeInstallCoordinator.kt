@@ -703,6 +703,104 @@ private fun writeXodosVerFile(context: Context) {
     }
 }
 
+// ── Mali GPU detection ────────────────────────────────────────
+@Volatile private var cachedIsMali: Boolean? = null
+
+/**
+ * True when the device uses an Arm Mali GPU (Panfrost / Bifrost / Valhall).
+ *
+ * Uses multiple independent probes because Android properties vary per
+ * vendor, ROM and Android version:
+ *
+ *   1. SystemProperties (ro.hardware.egl etc.) — most reliable, needs no
+ *      file permissions, works on locked-down ROMs.
+ *   2. Driver file existence — catches OEMs that stub out the props.
+ *   3. /proc/gpuinfo — Samsung / some MTK ROMs.
+ *   4. getprop dump — last-resort fallback for exotic ROMs.
+ *
+ * Result is cached per process; GPU does not change while the app runs.
+ */
+fun isMaliGpu(context: Context): Boolean {
+    cachedIsMali?.let { return it }
+    val result = detectMaliGpu()
+    cachedIsMali = result
+    Log.i("MaliDetect", "isMaliGpu = $result")
+    return result
+}
+
+private fun detectMaliGpu(): Boolean {
+    // ── 1. System properties (fast + reliable) ───────────────
+    for (prop in listOf(
+        "ro.hardware.egl", "ro.hardware.vulkan", "ro.hardware.gralloc",
+        "ro.board.platform", "ro.hardware"
+    )) {
+        val v = readSystemProperty(prop)?.lowercase() ?: continue
+        if (v.contains("mali") || v.contains("exynos") ||
+            v.contains("panfrost") || v.contains("bifrost") ||
+            v.contains("valhall")) {
+            Log.d("MaliDetect", "hit on $prop = '$v'")
+            return true
+        }
+    }
+
+    // ── 2. Driver file existence ─────────────────────────────
+    for (p in listOf(
+        "/vendor/lib64/egl/libGLES_mali.so",
+        "/vendor/lib/egl/libGLES_mali.so",
+        "/system/lib64/egl/libGLES_mali.so",
+        "/system/lib/egl/libGLES_mali.so",
+        "/vendor/lib64/hw/vulkan.mali.so",
+        "/vendor/lib/hw/vulkan.mali.so",
+        "/sys/class/misc/mali0",
+        "/sys/devices/platform/mali.0"
+    )) {
+        if (File(p).exists()) {
+            Log.d("MaliDetect", "hit on file: $p")
+            return true
+        }
+    }
+
+    // ── 3. /proc/gpuinfo (Samsung, some MTK) ─────────────────
+    try {
+        val f = File("/proc/gpuinfo")
+        if (f.exists()) {
+            val txt = f.readText()
+            if (txt.contains("mali", ignoreCase = true)) {
+                Log.d("MaliDetect", "hit on /proc/gpuinfo")
+                return true
+            }
+        }
+    } catch (_: Throwable) {}
+
+    // ── 4. getprop dump fallback ─────────────────────────────
+    try {
+        val p = ProcessBuilder("/system/bin/getprop")
+            .redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().use { it.readText() }
+        p.waitFor()
+        if (out.contains("mali", ignoreCase = true)) {
+            Log.d("MaliDetect", "hit on getprop dump")
+            return true
+        }
+    } catch (_: Throwable) {}
+
+    return false
+}
+
+/** Reads an Android system property via reflection, falling back to `getprop`. */
+private fun readSystemProperty(key: String): String? = try {
+    val cls = Class.forName("android.os.SystemProperties")
+    val get = cls.getMethod("get", String::class.java)
+    (get.invoke(null, key) as? String)?.takeIf { it.isNotEmpty() }
+} catch (_: Throwable) {
+    try {
+        val p = ProcessBuilder("/system/bin/getprop", key)
+            .redirectErrorStream(true).start()
+        val out = p.inputStream.bufferedReader().use { it.readText().trim() }
+        p.waitFor()
+        out.ifEmpty { null }
+    } catch (_: Throwable) { null }
+}
 
 /**
  * Writes the native wrapper script to $PREFIX/bin/nt and marks it executable.
@@ -748,7 +846,15 @@ private fun writeNativeAptRepos(context: Context) {
         defaultMirror.setReadable(true, false)
         defaultMirror.setWritable(true, false)
         defaultMirror.setExecutable(false)
+// Inside writeNativeAptRepos, after writing sources.list:
 
+// Remove any *.list files that would re-add upstream Termux repos.
+val sourcesListD = File(aptDir, "sources.list.d").apply { mkdirs() }
+sourcesListD.listFiles { f -> f.name.endsWith(".list") }?.forEach { stale ->
+    if (stale.delete()) {
+        Log.i("NativeInstall", "Removed stale apt source: ${stale.name}")
+    }
+}
         Log.i("NativeInstall", "Wrote native apt sources + termux mirror")
     } catch (e: Exception) {
         Log.e("NativeInstall", "Failed to write native apt/mirror files", e)

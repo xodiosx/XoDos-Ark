@@ -441,14 +441,20 @@ fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): String {
                 sb.append("export TU_DEBUG=noconform\n")
                 sb.append("export PAN_I_WANT_A_BROKEN_VULKAN_DRIVER=1\n")
             }
-        "WRAPPER" -> {
-        // Native‑only wrapper driver – does not affect proot environment
-        sb.append("export VK_ICD_FILENAMES=${nativePath("/usr/share/vulkan/icd.d/wrapper_icd.aarch64.json")}\n")
-        sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/wrapper_icd.aarch64.json")}\n")
-        sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
-        sb.append("export TU_DEBUG=noconform\n")
-        sb.append("export TU_DEBUG=noconform\n")
+       "WRAPPER" -> {
+    // Native‑only wrapper driver – does not affect proot environment
+    sb.append("export VK_ICD_FILENAMES=${nativePath("/usr/share/vulkan/icd.d/wrapper_icd.aarch64.json")}\n")
+    sb.append("export VK_DRIVER_FILES=${nativePath("/usr/share/vulkan/icd.d/wrapper_icd.aarch64.json")}\n")
+    sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
+    sb.append("export TU_DEBUG=noconform\n")
+
+    // Mali-only extras — required for AHardwareBuffer-backed surfaces on Panfrost/PANVK
+    if (NativeInstallCoordinator.isMaliGpu(context)) {
+        sb.append("export LD_PRELOAD=/system/lib64/liblzma.so\n")
+        sb.append("export PANVK_TEST_AHB_LINEAR=1\n")
+        sb.append("export PANVK_TEST_AHB_FD1=1\n")
     }
+}
         else -> {
             sb.append("unset VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VK_DRIVER_FILES VN_DEBUG || true\n")
         }
