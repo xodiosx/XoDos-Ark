@@ -138,7 +138,21 @@ Include = /etc/pacman.d/mirrorlist
 #SigLevel = Optional TrustAll
 #Server = file:///home/custompkgs
 """.trimIndent()
+// $PREFIX/etc/apt/sources.list — always overwritten on startup
+private val NATIVE_APT_SOURCES = """
+deb [trusted=yes] https://huggingface.co/datasets/xodiosx/xodos-packages/resolve/main/xodos-main stable main
+deb [trusted=yes] https://huggingface.co/datasets/xodiosx/xodos-packages/resolve/main/xodos-x11 x11 main
+deb [trusted=yes] https://huggingface.co/datasets/xodiosx/xodos-packages/resolve/main/xodos-root root stable
+deb [trusted=yes] https://huggingface.co/datasets/xodiosx/xodos-packages/resolve/main/xodos-glibc glibc main
+deb [trusted=yes] https://huggingface.co/datasets/xodiosx/xodos-packages/resolve/main/xodos-tur tur-packages tur tur-on-device tur-continuous
+""".trimIndent() + "\n"
 
+// $PREFIX/etc/termux/mirrors/default — always overwritten on startup
+private val NATIVE_MIRROR_DEFAULT = """
+# This file is sourced by pkg
+WEIGHT=10
+MAIN="https://huggingface.co/datasets/xodiosx/xodos-packages/resolve/main/xodos-main"
+""".trimIndent() + "\n"
 
 // $PREFIX/bin/nt — native wrapper, written on every distro install
 private val NATIVE_WRAPPER_SCRIPT = """
@@ -712,6 +726,44 @@ private fun writeNativeWrapper(context: Context) {
     }
 }
 
+/**
+ * Writes the native apt sources and termux mirror files, overwriting
+ * whatever was there. Safe to call on every launch — the two files
+ * are always forced back to the XoDos-hosted repos.
+ */
+private fun writeNativeAptRepos(context: Context) {
+    try {
+        // 1. $PREFIX/etc/apt/sources.list
+        val aptDir = File(context.filesDir, "usr/etc/apt").apply { mkdirs() }
+        val sourcesList = File(aptDir, "sources.list")
+        sourcesList.writeText(NATIVE_APT_SOURCES)
+        sourcesList.setReadable(true, false)    // rw-r--r--
+        sourcesList.setWritable(true, false)
+        sourcesList.setExecutable(false)
+
+        // 2. $PREFIX/etc/termux/mirrors/default
+        val mirrorsDir = File(context.filesDir, "usr/etc/termux/mirrors").apply { mkdirs() }
+        val defaultMirror = File(mirrorsDir, "default")
+        defaultMirror.writeText(NATIVE_MIRROR_DEFAULT)
+        defaultMirror.setReadable(true, false)
+        defaultMirror.setWritable(true, false)
+        defaultMirror.setExecutable(false)
+// Inside writeNativeAptRepos, after writing sources.list:
+
+// Remove any *.list files that would re-add upstream Termux repos.
+val sourcesListD = File(aptDir, "sources.list.d").apply { mkdirs() }
+sourcesListD.listFiles { f -> f.name.endsWith(".list") }?.forEach { stale ->
+    if (stale.delete()) {
+        Log.i("NativeInstall", "Removed stale apt source: ${stale.name}")
+    }
+}
+        Log.i("NativeInstall", "Wrote native apt sources + termux mirror")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write native apt/mirror files", e)
+    }
+}
+
+
 private const val PROOT_OPTIONS_DIR = "proot_options"
 
 data class ProotOptions(
@@ -1209,6 +1261,7 @@ private fun refreshNativeBinariesAndAssets(context: Context) {
      writeXodosVerFile(context)
     writeXodosEnvScript(context) 
     writeNativeEnvironmentHook(context)
+    writeNativeAptRepos(context)   
 
     // 2. Refresh assets + env into every container that already has a rootfs.
     val assetDirsToRefresh = listOf("usr/bin")
