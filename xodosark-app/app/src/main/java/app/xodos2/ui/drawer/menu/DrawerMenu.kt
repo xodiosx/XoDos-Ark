@@ -24,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun DrawerMenu(
@@ -270,7 +272,7 @@ private fun DrawerPrimaryItem(
             )
             Icon(
                 imageVector = Icons.Rounded.PlayArrow,
-                contentDescription = "Launch",
+                contentDescription = stringResource(R.string.appscreen_launch),
                 tint = MaterialTheme.colorScheme.secondary,
                 modifier = Modifier.size(20.dp)
             )
@@ -332,7 +334,7 @@ private fun DrawerTextItem(
             )
             Icon(
                 imageVector = Icons.Rounded.Build,
-                contentDescription = "Action",
+                contentDescription = stringResource(R.string.appscreen_action),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )

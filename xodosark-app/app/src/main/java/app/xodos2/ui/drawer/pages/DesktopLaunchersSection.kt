@@ -20,6 +20,8 @@ import app.xodos2.ui.glass.GlassButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun DesktopLaunchersSection(
@@ -63,7 +65,7 @@ fun DesktopLaunchersSection(
         ) {
             Icon(Icons.Default.Refresh, null, Modifier.size(18.dp))
             Spacer(Modifier.width(4.dp))
-            Text("Scan for installed desktops")
+            Text(stringResource(R.string.appscreen_scan_for_installed_desktops))
         }
 
         Spacer(Modifier.height(8.dp))
@@ -96,7 +98,7 @@ fun DesktopLaunchersSection(
                             ) {
                                 Icon(
                                     Icons.Default.Edit,
-                                    "Edit startup script",
+                                    stringResource(R.string.appscreen_edit_startup_script_2),
                                     tint = MaterialTheme.colorScheme.outline,
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -115,7 +117,7 @@ fun DesktopLaunchersSection(
                     onClick = { manualDropdownExpanded = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Select desktop environment to launch")
+                    Text(stringResource(R.string.appscreen_select_desktop_environment_to_launch))
                 }
                 DropdownMenu(
                     expanded = manualDropdownExpanded,
@@ -141,12 +143,12 @@ fun DesktopLaunchersSection(
 
         AlertDialog(
             onDismissRequest = { editingBinary = null },
-            title = { Text("Edit startup script: $displayName") },
+            title = { Text(stringResource(R.string.appscreen_edit_startup_script_title, displayName)) },
             text = {
                 OutlinedTextField(
                     value = editScript,
                     onValueChange = { editScript = it },
-                    label = { Text("Shell script") },
+                    label = { Text(stringResource(R.string.appscreen_shell_script)) },
                     singleLine = false,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -158,7 +160,7 @@ fun DesktopLaunchersSection(
                     saveCustomScript(prefs, containerId, binary, editScript.trim())
                     editingBinary = null
                 }) {
-                    Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_save), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -168,11 +170,11 @@ fun DesktopLaunchersSection(
                         editScript = DesktopDetector.defaultLaunchScript(binary, isNative)
                         deleteCustomScript(prefs, containerId, binary)
                     }) {
-                        Text("Reset", color = Color(0xFFFF6B6B))
+                        Text(stringResource(R.string.appscreen_reset), color = Color(0xFFFF6B6B))
                     }
                     Spacer(Modifier.width(8.dp))
                     GlassButton(onClick = { editingBinary = null }) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                        Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
                     }
                 }
             }

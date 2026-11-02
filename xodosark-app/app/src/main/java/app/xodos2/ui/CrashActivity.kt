@@ -14,6 +14,8 @@ import androidx.compose.material3.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.xodos2.ui.theme.xodos2Theme
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 class CrashActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,13 +33,13 @@ class CrashActivity : ComponentActivity() {
                             .padding(16.dp)
                     ) {
                         Text(
-                            text = "App Crashed",
+                            text = stringResource(R.string.appscreen_app_crashed),
                             style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.error
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "An unexpected error occurred. Please copy the logs below.",
+                            text = stringResource(R.string.appscreen_an_unexpected_error_occurred_please_copy_the_log),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Spacer(modifier = Modifier.height(16.dp))
@@ -48,13 +50,13 @@ class CrashActivity : ComponentActivity() {
                                 clipboard.setPrimaryClip(clip)
                                 Toast.makeText(this@CrashActivity, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                             }) {
-                                Text("Copy Log")
+                                Text(stringResource(R.string.appscreen_copy_log))
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Button(onClick = {
                                 finishAffinity()
                             }) {
-                                Text("Close")
+                                Text(stringResource(R.string.appscreen_close))
                             }
                         }
                         Spacer(modifier = Modifier.height(16.dp))

@@ -40,6 +40,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import app.xodos2.ui.glassDialogStyle
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 
 // ----------------------------------------------------------------
@@ -152,13 +154,13 @@ fun ArchDrawerPage(
     if (!hasArchRootfs) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
-                "Linux distro not installed.",
+                stringResource(R.string.appscreen_linux_distro_not_installed),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Container Manager",
+                text = stringResource(R.string.appscreen_container_manager),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
@@ -290,7 +292,7 @@ fun ArchDrawerPage(
                     )
                 } else {
                     Text(
-                        text = "Edit X11 startup script",
+                        text = stringResource(R.string.appscreen_edit_x11_startup_script),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
@@ -362,7 +364,7 @@ DxvkSelectorSection(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit Startup Script Package Setup",
+                                contentDescription = stringResource(R.string.appscreen_edit_startup_script_package_setup),
                                 tint = MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -373,7 +375,7 @@ DxvkSelectorSection(
 
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Commands",
+                text = stringResource(R.string.appscreen_commands),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
@@ -384,7 +386,7 @@ DxvkSelectorSection(
 
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Container Manager",
+                text = stringResource(R.string.appscreen_container_manager),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
@@ -405,13 +407,13 @@ DxvkSelectorSection(
 
         AlertDialog(
             onDismissRequest = { editingDeName = null },
-            title = { Text("Edit Setup Script: $targetDe") },
+            title = { Text(stringResource(R.string.appscreen_edit_setup_script_title, targetDe)) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = deScriptText,
                         onValueChange = { deScriptText = it },
-                        label = { Text("Installation Sequence (.sh)") },
+                        label = { Text(stringResource(R.string.appscreen_installation_sequence_sh)) },
                         singleLine = false,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -426,7 +428,7 @@ DxvkSelectorSection(
                         editingDeName = null
                     }
                 ) {
-                    Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_save), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -436,11 +438,11 @@ DxvkSelectorSection(
                             deScriptText = DesktopInstallScripts.buildDesktopInstallScript(distroId, targetDe)
                         }
                     ) {
-                        Text("Reset", color = Color(0xFFFF6B6B))
+                        Text(stringResource(R.string.appscreen_reset), color = Color(0xFFFF6B6B))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     GlassButton(onClick = { editingDeName = null }) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                        Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
                     }
                 }
             }
@@ -453,7 +455,7 @@ DxvkSelectorSection(
             onDismissRequest = { showCommandsDialog = false },
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text("Saved Commands", fontWeight = FontWeight.Bold, color = Color.White) },
+            title = { Text(stringResource(R.string.appscreen_saved_commands), fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column {
                     GlassButton(
@@ -466,13 +468,13 @@ DxvkSelectorSection(
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFC3B6F9))
                         Spacer(Modifier.width(4.dp))
-                        Text("Add command", color = Color(0xFFC3B6F9))
+                        Text(stringResource(R.string.appscreen_add_command), color = Color(0xFFC3B6F9))
                     }
                     Spacer(Modifier.height(8.dp))
 
                     if (savedCommands.isEmpty()) {
                         Text(
-                            "No saved commands.",
+                            stringResource(R.string.appscreen_no_saved_commands),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.6f)
                         )
@@ -508,7 +510,7 @@ DxvkSelectorSection(
                                     }) {
                                         Icon(
                                             Icons.Default.Edit,
-                                            contentDescription = "Edit",
+                                            contentDescription = stringResource(R.string.appscreen_edit),
                                             modifier = Modifier.size(20.dp),
                                             tint = Color.White.copy(alpha = 0.7f)
                                         )
@@ -521,7 +523,7 @@ DxvkSelectorSection(
             },
             confirmButton = {
                 GlassButton(onClick = { showCommandsDialog = false }) {
-                    Text("Close", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_close), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -532,13 +534,13 @@ DxvkSelectorSection(
             onDismissRequest = { showAddEditDialog = false },
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text(if (editingIndex == null) "Add command" else "Edit command", fontWeight = FontWeight.Bold, color = Color.White) },
+            title = { Text(if (editingIndex == null) stringResource(R.string.appscreen_add_command) else stringResource(R.string.appscreen_edit_command), fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = editTitle,
                         onValueChange = { editTitle = it },
-                        label = { Text("Title") },
+                        label = { Text(stringResource(R.string.appscreen_title)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -554,7 +556,7 @@ DxvkSelectorSection(
                     OutlinedTextField(
                         value = editText,
                         onValueChange = { editText = it },
-                        label = { Text("Shell command") },
+                        label = { Text(stringResource(R.string.appscreen_shell_command)) },
                         singleLine = false,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -581,10 +583,10 @@ DxvkSelectorSection(
                         persistCommands()
                     }
                     showAddEditDialog = false
-                }) { Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.appscreen_save), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                GlassButton(onClick = { showAddEditDialog = false }) { Text("Cancel", color = Color.White.copy(alpha = 0.8f)) }
+                GlassButton(onClick = { showAddEditDialog = false }) { Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f)) }
             }
         )
     }
@@ -595,17 +597,17 @@ DxvkSelectorSection(
             onDismissRequest = { showDeleteConfirm = null },
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text("Delete command?", fontWeight = FontWeight.Bold, color = Color.White) },
-            text = { Text("Remove \"${savedCommands[idx].title.ifBlank { savedCommands[idx].command }}\"?", color = Color.White.copy(alpha = 0.85f)) },
+            title = { Text(stringResource(R.string.appscreen_delete_command), fontWeight = FontWeight.Bold, color = Color.White) },
+            text = { Text(stringResource(R.string.appscreen_remove_command_title, savedCommands[idx].title.ifBlank { savedCommands[idx].command }), color = Color.White.copy(alpha = 0.85f)) },
             confirmButton = {
                 GlassButton(onClick = {
                     savedCommands.removeAt(idx)
                     persistCommands()
                     showDeleteConfirm = null
-                }) { Text("Delete", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.appscreen_delete), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                GlassButton(onClick = { showDeleteConfirm = null }) { Text("Cancel", color = Color.White.copy(alpha = 0.8f)) }
+                GlassButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f)) }
             }
         )
     }
@@ -630,7 +632,7 @@ private fun ArchExtraContent(
             )
         } else {
             Text(
-                text = "Edit Wayland startup script",
+                text = stringResource(R.string.appscreen_edit_wayland_startup_script),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier

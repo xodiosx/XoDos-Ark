@@ -22,6 +22,8 @@ import app.xodos2.ui.prefs.AppPrefs
 import app.xodos2.ui.glass.GlassButton
 import org.json.JSONObject
 import app.xodos2.ui.glassDialogStyle
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 
 //private data class SavedCommand(val title: String, val command: String)
@@ -71,7 +73,7 @@ fun CommandsSection(
     }
 
     Text(
-        text = "Commands",
+        text = stringResource(R.string.appscreen_commands),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.primary,
         modifier = modifier
@@ -85,7 +87,7 @@ fun CommandsSection(
             onDismissRequest = { showCommandsDialog = false },
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text("Saved Commands", fontWeight = FontWeight.Bold, color = Color.White) },
+            title = { Text(stringResource(R.string.appscreen_saved_commands), fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column {
                     GlassButton(
@@ -98,12 +100,12 @@ fun CommandsSection(
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFC3B6F9))
                         Spacer(Modifier.width(4.dp))
-                        Text("Add command", color = Color(0xFFC3B6F9))
+                        Text(stringResource(R.string.appscreen_add_command), color = Color(0xFFC3B6F9))
                     }
                     Spacer(Modifier.height(8.dp))
                     if (savedCommands.isEmpty()) {
                         Text(
-                            "No saved commands.",
+                            stringResource(R.string.appscreen_no_saved_commands),
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White.copy(alpha = 0.6f)
                         )
@@ -139,7 +141,7 @@ fun CommandsSection(
                                     }) {
                                         Icon(
                                             Icons.Default.Edit,
-                                            contentDescription = "Edit",
+                                            contentDescription = stringResource(R.string.appscreen_edit),
                                             modifier = Modifier.size(20.dp),
                                             tint = Color.White.copy(alpha = 0.7f)
                                         )
@@ -152,7 +154,7 @@ fun CommandsSection(
             },
             confirmButton = {
                 GlassButton(onClick = { showCommandsDialog = false }) {
-                    Text("Close", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_close), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -163,13 +165,13 @@ fun CommandsSection(
             onDismissRequest = { showAddEditDialog = false },
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text(if (editingIndex == null) "Add command" else "Edit command", fontWeight = FontWeight.Bold, color = Color.White) },
+            title = { Text(if (editingIndex == null) stringResource(R.string.appscreen_add_command) else stringResource(R.string.appscreen_edit_command), fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column {
                     OutlinedTextField(
                         value = editTitle,
                         onValueChange = { editTitle = it },
-                        label = { Text("Title") },
+                        label = { Text(stringResource(R.string.appscreen_title)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -185,7 +187,7 @@ fun CommandsSection(
                     OutlinedTextField(
                         value = editText,
                         onValueChange = { editText = it },
-                        label = { Text("Shell command") },
+                        label = { Text(stringResource(R.string.appscreen_shell_command)) },
                         singleLine = false,
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -212,10 +214,10 @@ fun CommandsSection(
                         persistCommands()
                     }
                     showAddEditDialog = false
-                }) { Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.appscreen_save), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                GlassButton(onClick = { showAddEditDialog = false }) { Text("Cancel", color = Color.White.copy(alpha = 0.8f)) }
+                GlassButton(onClick = { showAddEditDialog = false }) { Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f)) }
             }
         )
     }
@@ -226,17 +228,17 @@ fun CommandsSection(
             onDismissRequest = { showDeleteConfirm = null },
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text("Delete command?", fontWeight = FontWeight.Bold, color = Color.White) },
-            text = { Text("Remove \"${savedCommands[idx].title.ifBlank { savedCommands[idx].command }}\"?", color = Color.White.copy(alpha = 0.85f)) },
+            title = { Text(stringResource(R.string.appscreen_delete_command), fontWeight = FontWeight.Bold, color = Color.White) },
+            text = { Text(stringResource(R.string.appscreen_remove_command_title, savedCommands[idx].title.ifBlank { savedCommands[idx].command }), color = Color.White.copy(alpha = 0.85f)) },
             confirmButton = {
                 GlassButton(onClick = {
                     savedCommands.removeAt(idx)
                     persistCommands()
                     showDeleteConfirm = null
-                }) { Text("Delete", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
+                }) { Text(stringResource(R.string.appscreen_delete), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
-                GlassButton(onClick = { showDeleteConfirm = null }) { Text("Cancel", color = Color.White.copy(alpha = 0.8f)) }
+                GlassButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f)) }
             }
         )
     }

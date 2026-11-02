@@ -26,6 +26,8 @@ import app.xodos2.ui.glassDialogStyle
 import app.xodos2.ui.runtime.AdrenotoolsDriverManager
 import kotlinx.coroutines.launch
 import java.io.File
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun AdrenotoolsDrawerButton(
@@ -38,7 +40,7 @@ fun AdrenotoolsDrawerButton(
     var showDialog by remember { mutableStateOf(false) }
 
     Text(
-        text = "Adrenotools",
+        text = stringResource(R.string.appscreen_adrenotools),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
@@ -116,7 +118,7 @@ private fun AdrenotoolsDialog(
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
         title = {
-            Text("Adrenotools GPU Drivers", fontWeight = FontWeight.Bold, color = Color.White)
+            Text(stringResource(R.string.appscreen_adrenotools_gpu_drivers), fontWeight = FontWeight.Bold, color = Color.White)
         },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -126,7 +128,7 @@ private fun AdrenotoolsDialog(
                 }) {
                     Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp), tint = Color(0xFFC3B6F9))
                     Spacer(Modifier.width(4.dp))
-                    Text("Add driver ZIP", color = Color(0xFFC3B6F9))
+                    Text(stringResource(R.string.appscreen_add_driver_zip), color = Color(0xFFC3B6F9))
                 }
 
                 Spacer(Modifier.height(10.dp))
@@ -160,7 +162,7 @@ private fun AdrenotoolsDialog(
                     if (drivers.isEmpty()) {
                         item {
                             Text(
-                                text = "No custom drivers installed.",
+                                text = stringResource(R.string.appscreen_no_custom_drivers_installed),
                                 color = Color.White.copy(alpha = 0.6f),
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(vertical = 12.dp, horizontal = 4.dp)
@@ -222,7 +224,7 @@ private fun AdrenotoolsDialog(
         },
         confirmButton = {
             GlassButton(onClick = { if (!busy) onDismiss() }) {
-                Text("Close", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.appscreen_close), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
             }
         }
     )
@@ -234,11 +236,11 @@ private fun AdrenotoolsDialog(
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
             title = {
-                Text("Delete ${entry.meta.name}?", color = Color.White, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.appscreen_delete_driver_title, entry.meta.name), color = Color.White, fontWeight = FontWeight.Bold)
             },
             text = {
                 Text(
-                    "The ZIP and its entry will be removed.",
+                    stringResource(R.string.appscreen_the_zip_and_its_entry_will_be_removed),
                     color = Color.White.copy(alpha = 0.85f)
                 )
             },
@@ -252,12 +254,12 @@ private fun AdrenotoolsDialog(
                     // to system — just source it into the current terminal.
                     if (wasActive) sourceDrvInTerminal()
                 }) {
-                    Text("Delete", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_delete), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 GlassButton(onClick = { pendingDelete = null }) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                    Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
                 }
             }
         )
@@ -306,7 +308,7 @@ private fun DriverRow(
 
         if (isActive) {
             Text(
-                text = "Active",
+                text = stringResource(R.string.appscreen_active),
                 color = Color(0xFFC3B6F9),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Bold,
@@ -314,13 +316,13 @@ private fun DriverRow(
             )
         } else {
             IconButton(onClick = onActivate, enabled = enabled) {
-                Icon(Icons.Default.PlayArrow, "Activate", tint = Color(0xFFC3B6F9))
+                Icon(Icons.Default.PlayArrow, stringResource(R.string.appscreen_activate), tint = Color(0xFFC3B6F9))
             }
         }
 
         if (onDelete != null) {
             IconButton(onClick = onDelete, enabled = enabled) {
-                Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF6B6B))
+                Icon(Icons.Default.Delete, stringResource(R.string.appscreen_delete), tint = Color(0xFFFF6B6B))
             }
         }
     }

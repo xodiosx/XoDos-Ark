@@ -32,6 +32,8 @@ import app.xodos2.ui.runtime.NativeInstallCoordinator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import app.xodos2.ui.glassDialogStyle
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 
 @Composable
@@ -88,13 +90,13 @@ fun WineDrawerPage(
     if (!hasWineRootfs) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Text(
-                "Linux distro not installed.",
+                stringResource(R.string.appscreen_linux_distro_not_installed),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Container Manager",
+                text = stringResource(R.string.appscreen_container_manager),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
@@ -226,7 +228,7 @@ fun WineDrawerPage(
                     )
                 } else {
                     Text(
-                        text = "Edit X11 startup script",
+                        text = stringResource(R.string.appscreen_edit_x11_startup_script),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
@@ -294,7 +296,7 @@ AdrenotoolsDrawerButton(
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit Startup Script",
+                                contentDescription = stringResource(R.string.appscreen_edit_startup_script),
                                 tint = MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -310,7 +312,7 @@ AdrenotoolsDrawerButton(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Container Manager",
+                text = stringResource(R.string.appscreen_container_manager),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
@@ -330,13 +332,13 @@ AdrenotoolsDrawerButton(
 
         AlertDialog(
             onDismissRequest = { editingDeName = null },
-            title = { Text("Edit Setup Script: $targetDe") },
+            title = { Text(stringResource(R.string.appscreen_edit_setup_script_title, targetDe)) },
             text = {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = deScriptText,
                         onValueChange = { deScriptText = it },
-                        label = { Text("Installation Sequence (.sh)") },
+                        label = { Text(stringResource(R.string.appscreen_installation_sequence_sh)) },
                         singleLine = false,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -351,7 +353,7 @@ AdrenotoolsDrawerButton(
                         editingDeName = null
                     }
                 ) {
-                    Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_save), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -361,11 +363,11 @@ AdrenotoolsDrawerButton(
                             deScriptText = DesktopInstallScripts.buildDesktopInstallScript(distroId, targetDe)
                         }
                     ) {
-                        Text("Reset", color = Color(0xFFFF6B6B))
+                        Text(stringResource(R.string.appscreen_reset), color = Color(0xFFFF6B6B))
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     GlassButton(onClick = { editingDeName = null }) {
-                        Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                        Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
                     }
                 }
             }
@@ -392,7 +394,7 @@ private fun WineExtraContent(
             )
         } else {
             Text(
-                text = "Edit Wayland startup script",
+                text = stringResource(R.string.appscreen_edit_wayland_startup_script),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier

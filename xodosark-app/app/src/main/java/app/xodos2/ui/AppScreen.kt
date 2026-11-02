@@ -98,6 +98,7 @@ import kotlin.coroutines.coroutineContext
 import android.view.WindowManager
 import app.xodos2.ui.shell.TerminalBackgroundX11
 import app.xodos2.ui.glassDialogStyle
+import androidx.compose.ui.res.stringResource
 
 private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")
 private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
@@ -284,7 +285,7 @@ var showExitDialog by remember { mutableStateOf(false) }
 
     // ----- core state -----
     var initialized by remember { mutableStateOf(false) }
-    var installProgress by remember { mutableStateOf(0 to "Preparing...") }
+    var installProgress by remember { mutableStateOf(0 to context.getString(R.string.appscreen_preparing)) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var installInProgress by remember { mutableStateOf(false) }
    var installDone by remember { mutableStateOf(false) }       
@@ -348,7 +349,7 @@ fun removeNativeEnvironment() {
             removingNativeEnvInProgress = false
             Toast.makeText(
                 context,
-                "Native environment not found or failed to remove",
+                context.getString(R.string.appscreen_native_environment_not_found_or_failed_to_remove),
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -412,7 +413,7 @@ val pickBootstrapFile = rememberLauncherForActivityResult(
         if (exists) {
             bootstrapUri = uri
         } else {
-            Toast.makeText(context, "Selected file no longer exists.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.appscreen_selected_file_no_longer_exists), Toast.LENGTH_LONG).show()
         }
     }
 }
@@ -673,7 +674,7 @@ fun extractLocalIntoSlot(uri: Uri, containerId: Int) {
             pendingLocalUri = uri
             showSlotPicker = true
         } else {
-            Toast.makeText(context, "Selected file no longer exists. Please pick a valid archive.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, context.getString(R.string.appscreen_selected_file_no_longer_exists_please_pick_a_val), Toast.LENGTH_LONG).show()
         }
     }
 }
@@ -726,7 +727,7 @@ TerminalBackgroundX11.releaseBeforePrimaryAttaches()
         }
         context.startActivity(intent)
     } catch (e: Exception) {
-        Toast.makeText(context, "Failed to open X11 desktop", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.appscreen_failed_to_open_x11_desktop), Toast.LENGTH_SHORT).show()
     }
     AppLogger.log("Entered Arch X11 desktop")
 }
@@ -819,7 +820,7 @@ fun enterWineDesktop() {
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(context, "Failed to open X11 desktop", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.appscreen_failed_to_open_x11_desktop), Toast.LENGTH_SHORT).show()
         }
         return
     }
@@ -847,7 +848,7 @@ fun enterWineDesktop() {
         }
         context.startActivity(intent)
     } catch (e: Exception) {
-        Toast.makeText(context, "Failed to open X11 desktop", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.appscreen_failed_to_open_x11_desktop), Toast.LENGTH_SHORT).show()
     }
     AppLogger.log("Entered Wine X11 desktop")
 }
@@ -921,7 +922,7 @@ fun openX11Settings() {
         }
         context.startActivity(intent)
     } catch (e: Exception) {
-        Toast.makeText(context, "Failed to open X11 settings", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.appscreen_failed_to_open_x11_settings), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -943,7 +944,7 @@ fun openX11Settings() {
             }
             context.startActivity(intent)
         } catch (e: Exception) {
-            Toast.makeText(context, "Failed to open X11 desktop", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.appscreen_failed_to_open_x11_desktop), Toast.LENGTH_SHORT).show()
         }
         return
     }
@@ -970,7 +971,7 @@ fun openX11Settings() {
         }
         context.startActivity(intent)
     } catch (e: Exception) {
-        Toast.makeText(context, "Failed to open X11 desktop", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.appscreen_failed_to_open_x11_desktop), Toast.LENGTH_SHORT).show()
     }
     AppLogger.log("Entered Debian X11 desktop")
 }
@@ -1034,7 +1035,7 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
 
     if (!gl4esFile.exists() || gl4esFile.length() == 0L) {
         withContext(Dispatchers.Main) {
-            turnipDownloadProgress = 0 to "Downloading gl4es driver…"
+            turnipDownloadProgress = 0 to context.getString(R.string.appscreen_downloading_gl4es_driver)
         }
         gl4esTmpFile.delete()
         try {
@@ -1054,7 +1055,7 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
             if (!gl4esTmpFile.renameTo(gl4esFile)) throw Exception("Failed to rename gl4es archive")
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
-                turnipDownloadProgress = -1 to "Gl4es download failed: ${e.message}"
+                turnipDownloadProgress = -1 to context.getString(R.string.appscreen_gl4es_download_failed_with_message, e.message ?: "")
             }
             return@withContext
         }
@@ -1071,7 +1072,7 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
         // If Turnip archive already exists, just extract (and also extract gl4es)
         if (destFile.exists() && destFile.length() > 0) {
             withContext(Dispatchers.Main) {
-                turnipDownloadProgress = 80 to "Turnip already downloaded, extracting…"
+                turnipDownloadProgress = 80 to context.getString(R.string.appscreen_turnip_already_downloaded_extracting)
             }
             val ok = DisplayOrchestrator.extractTurnipDriver(context, id, distro)
             if (ok) {
@@ -1079,7 +1080,7 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
                 DisplayOrchestrator.extractDriverTarball(context, id, gl4esFile)
             }
             withContext(Dispatchers.Main) {
-                turnipDownloadProgress = if (ok) 100 to "Done" else -1 to "Extraction failed"
+                turnipDownloadProgress = if (ok) 100 to context.getString(R.string.appscreen_done) else -1 to context.getString(R.string.appscreen_extraction_failed_2)
             }
             continue
         }
@@ -1101,7 +1102,7 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
                         bytesCopied += read
                         val pct = if (totalSize > 0) (bytesCopied * 100 / totalSize).toInt() else 0
                         withContext(Dispatchers.Main) {
-                            turnipDownloadProgress = pct to "Downloading Turnip for container $id…"
+                            turnipDownloadProgress = pct to context.getString(R.string.appscreen_downloading_turnip_for_container, id)
                         }
                     }
                 }
@@ -1109,18 +1110,18 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
             if (tmpFile.length() == 0L) throw Exception("Turnip download empty")
             if (!tmpFile.renameTo(destFile)) throw Exception("Failed to rename Turnip archive")
 
-            withContext(Dispatchers.Main) { turnipDownloadProgress = 80 to "Extracting…" }
+            withContext(Dispatchers.Main) { turnipDownloadProgress = 80 to context.getString(R.string.appscreen_extracting) }
             val turnipOk = DisplayOrchestrator.extractTurnipDriver(context, id, distro)
             if (turnipOk) {
                 // Extract gl4es into the same container
                 DisplayOrchestrator.extractDriverTarball(context, id, gl4esFile)
             }
             withContext(Dispatchers.Main) {
-                turnipDownloadProgress = if (turnipOk) 100 to "Done" else -1 to "Turnip extraction failed"
+                turnipDownloadProgress = if (turnipOk) 100 to context.getString(R.string.appscreen_done) else -1 to context.getString(R.string.appscreen_turnip_extraction_failed)
             }
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
-                turnipDownloadProgress = -1 to "Download failed: ${e.message}"
+                turnipDownloadProgress = -1 to context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
             }
             tmpFile.delete()
         } finally {
@@ -1138,7 +1139,7 @@ fun downloadBootstrapArchive() {
     bootstrapDownloadJob?.cancel()
     bootstrapDownloadJob = scope.launch {
         bootstrapDownloadInProgress = true
-        bootstrapDownloadProgress = 0 to "Starting download…"
+        bootstrapDownloadProgress = 0 to context.getString(R.string.appscreen_starting_download)
 
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         if (!downloadsDir.exists()) downloadsDir.mkdirs()
@@ -1169,7 +1170,7 @@ fun downloadBootstrapArchive() {
                             if (totalSize > 0) {
                                 val pct = (bytesCopied * 100 / totalSize).toInt()
                                 withContext(Dispatchers.Main) {
-                                    bootstrapDownloadProgress = pct to "Downloading… $pct%"
+                                    bootstrapDownloadProgress = pct to context.getString(R.string.appscreen_downloading_percent, pct)
                                 }
                             }
                         }
@@ -1181,8 +1182,8 @@ fun downloadBootstrapArchive() {
             if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename downloaded file")
 
             withContext(Dispatchers.Main) {
-                bootstrapDownloadProgress = 100 to "Download complete"
-                Toast.makeText(context, "Archive saved to Downloads", Toast.LENGTH_LONG).show()
+                bootstrapDownloadProgress = 100 to context.getString(R.string.appscreen_download_complete)
+                Toast.makeText(context, context.getString(R.string.appscreen_archive_saved_to_downloads), Toast.LENGTH_LONG).show()
             }
         } catch (e: CancellationException) {
             tmpFile.delete()
@@ -1191,8 +1192,8 @@ fun downloadBootstrapArchive() {
             Log.e("BootstrapDownload", "Download failed", e)
             tmpFile.delete()
             withContext(Dispatchers.Main) {
-                bootstrapDownloadProgress = -1 to "Download failed: ${e.message}"
-                Toast.makeText(context, "Download failed", Toast.LENGTH_LONG).show()
+                bootstrapDownloadProgress = -1 to context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
+                Toast.makeText(context, context.getString(R.string.appscreen_download_failed), Toast.LENGTH_LONG).show()
             }
         } finally {
             withContext(Dispatchers.Main) {
@@ -1206,7 +1207,7 @@ fun downloadFullDesktopGUIArchive() {
     fullDesktopDownloadJob?.cancel()
     fullDesktopDownloadJob = scope.launch {
         fullDesktopDownloadInProgress = true
-        fullDesktopDownloadProgress = 0 to "Starting download…"
+        fullDesktopDownloadProgress = 0 to context.getString(R.string.appscreen_starting_download)
 
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         if (!downloadsDir.exists()) downloadsDir.mkdirs()
@@ -1237,7 +1238,7 @@ fun downloadFullDesktopGUIArchive() {
                             if (totalSize > 0) {
                                 val pct = (bytesCopied * 100 / totalSize).toInt()
                                 withContext(Dispatchers.Main) {
-                                    fullDesktopDownloadProgress = pct to "Downloading… $pct%"
+                                    fullDesktopDownloadProgress = pct to context.getString(R.string.appscreen_downloading_percent, pct)
                                 }
                             }
                         }
@@ -1248,8 +1249,8 @@ fun downloadFullDesktopGUIArchive() {
             if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename downloaded file")
 
             withContext(Dispatchers.Main) {
-                fullDesktopDownloadProgress = 100 to "Download complete"
-                Toast.makeText(context, "xfce4 desktop GUI archive saved to Downloads", Toast.LENGTH_LONG).show()
+                fullDesktopDownloadProgress = 100 to context.getString(R.string.appscreen_download_complete)
+                Toast.makeText(context, context.getString(R.string.appscreen_xfce4_desktop_gui_archive_saved_to_downloads), Toast.LENGTH_LONG).show()
             }
         } catch (e: CancellationException) {
             tmpFile.delete()
@@ -1258,8 +1259,8 @@ fun downloadFullDesktopGUIArchive() {
             Log.e("FullDesktopDownload", "Download failed", e)
             tmpFile.delete()
             withContext(Dispatchers.Main) {
-                fullDesktopDownloadProgress = -1 to "Download failed: ${e.message}"
-                Toast.makeText(context, "Full desktop GUI download failed", Toast.LENGTH_LONG).show()
+                fullDesktopDownloadProgress = -1 to context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
+                Toast.makeText(context, context.getString(R.string.appscreen_full_desktop_gui_download_failed), Toast.LENGTH_LONG).show()
             }
         } finally {
             withContext(Dispatchers.Main) {
@@ -1300,7 +1301,7 @@ for (id in 1..3) {
         if (!pkgPath.exists()) {
             bootstrapError = bootstrapProgress.second
         } else {
-            errorMsg = "Failed to initialize native layer"
+            errorMsg = context.getString(R.string.appscreen_failed_to_init_native_layer)
             AppLogger.log("Native init FAILED")
         }
         return@LaunchedEffect
@@ -1473,7 +1474,7 @@ LaunchedEffect(bootstrapUri) {
     if (bootstrapInProgress) return@LaunchedEffect
 
     bootstrapInProgress = true
-    bootstrapProgress = 0 to "Copying archive…"
+    bootstrapProgress = 0 to context.getString(R.string.appscreen_copying_archive)
 
     val dataDir = context.filesDir          // /data/data/app.xodos2/files
     val usrDir = File(dataDir, "usr")       // /data/data/app.xodos2/files/usr
@@ -1539,7 +1540,7 @@ val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
                         val percent = line.toIntOrNull()
                         if (percent != null && percent in 0..100) {
                             withContext(Dispatchers.Main) {
-                                bootstrapProgress = percent to "Extracting… $percent%"
+                                bootstrapProgress = percent to context.getString(R.string.appscreen_extracting_percent, percent)
                             }
                         }
                         line = reader.readLine()
@@ -1556,21 +1557,21 @@ val shellCmd = "rm -rf ${dataDir.absolutePath}/usr/share/X11/xkb && " +
 
             withContext(Dispatchers.Main) {
                 if (exitCode == 0) {
-                    bootstrapProgress = 100 to "installed"
-                    Toast.makeText(context, "Package installed", Toast.LENGTH_SHORT).show()
+                    bootstrapProgress = 100 to context.getString(R.string.appscreen_installed)
+                    Toast.makeText(context, context.getString(R.string.appscreen_package_installed), Toast.LENGTH_SHORT).show()
                     installWineDependenciesInNativeSession()
                 } else {
                     val errMsg = if (stderrLog.isNotEmpty()) stderrLog else "unknown error"
-                    bootstrapError = "Extraction failed (exit $exitCode): $errMsg"
-                    Toast.makeText(context, "extraction failed", Toast.LENGTH_LONG).show()
+                    bootstrapError = context.getString(R.string.appscreen_extraction_failed_exit, exitCode, errMsg)
+                    Toast.makeText(context, context.getString(R.string.appscreen_extraction_failed), Toast.LENGTH_LONG).show()
                 }
             }
         }
     } catch (e: Exception) {
         Log.e("BootstrapExtract", "Extraction error", e)
         withContext(Dispatchers.Main) {
-            bootstrapError = "Error: ${e.message}"
-            Toast.makeText(context, "Installation error", Toast.LENGTH_LONG).show()
+            bootstrapError = context.getString(R.string.appscreen_error_with_message, e.message ?: "")
+            Toast.makeText(context, context.getString(R.string.appscreen_installation_error), Toast.LENGTH_LONG).show()
         }
     } finally {
         // Clear the URI only after everything finishes – prevents early cancellation
@@ -1636,7 +1637,7 @@ suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContex
 
     if (!gl4esFile.exists() || gl4esFile.length() == 0L) {
         withContext(Dispatchers.Main) {
-            panvkDownloadProgress = 0 to "Downloading gl4es driver…"
+            panvkDownloadProgress = 0 to context.getString(R.string.appscreen_downloading_gl4es_driver)
         }
         gl4esTmpFile.delete()
         try {
@@ -1656,7 +1657,7 @@ suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContex
             if (!gl4esTmpFile.renameTo(gl4esFile)) throw Exception("Failed to rename gl4es archive")
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
-                panvkDownloadProgress = -1 to "gl4es download failed: ${e.message}"
+                panvkDownloadProgress = -1 to context.getString(R.string.appscreen_gl4es_download_failed_lower_with_message, e.message ?: "")
             }
             return@withContext
         }
@@ -1669,7 +1670,7 @@ suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContex
 
     if (!panvkFile.exists() || panvkFile.length() == 0L) {
         withContext(Dispatchers.Main) {
-            panvkDownloadProgress = 0 to "Downloading PANVK driver…"
+            panvkDownloadProgress = 0 to context.getString(R.string.appscreen_downloading_panvk_driver)
         }
         panvkTmpFile.delete()
         try {
@@ -1687,7 +1688,7 @@ suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContex
                         bytesCopied += read
                         val pct = if (totalSize > 0) (bytesCopied * 100 / totalSize).toInt() else 0
                         withContext(Dispatchers.Main) {
-                            panvkDownloadProgress = pct to "Downloading PANVK… $pct%"
+                            panvkDownloadProgress = pct to context.getString(R.string.appscreen_downloading_panvk_percent, pct)
                         }
                     }
                 }
@@ -1696,7 +1697,7 @@ suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContex
             if (!panvkTmpFile.renameTo(panvkFile)) throw Exception("Failed to rename PANVK archive")
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
-                panvkDownloadProgress = -1 to "PANVK download failed: ${e.message}"
+                panvkDownloadProgress = -1 to context.getString(R.string.appscreen_panvk_download_failed, e.message ?: "")
             }
             return@withContext
         }
@@ -1705,25 +1706,25 @@ suspend fun downloadAndExtractPanvkDrivers(containerIds: List<Int>) = withContex
     // ---- Extract PANVK + gl4es into each container ----
     for (id in containerIds) {
         withContext(Dispatchers.Main) {
-            panvkDownloadProgress = 80 to "Extracting PANVK into container $id…"
+            panvkDownloadProgress = 80 to context.getString(R.string.appscreen_extracting_panvk_into_container, id)
         }
         val panvkOk = DisplayOrchestrator.extractPanvkDriver(context, id)
         if (!panvkOk) {
             withContext(Dispatchers.Main) {
-                panvkDownloadProgress = -1 to "PANVK extraction failed for container $id"
+                panvkDownloadProgress = -1 to context.getString(R.string.appscreen_panvk_extraction_failed_container, id)
             }
             return@withContext
         }
 
         // Extract the shared gl4es archive into the same container
         withContext(Dispatchers.Main) {
-            panvkDownloadProgress = 90 to "Extracting gl4es into container $id…"
+            panvkDownloadProgress = 90 to context.getString(R.string.appscreen_extracting_gl4es_into_container, id)
         }
         DisplayOrchestrator.extractDriverTarball(context, id, gl4esFile)
     }
 
     withContext(Dispatchers.Main) {
-        panvkDownloadProgress = 100 to "Done"
+        panvkDownloadProgress = 100 to context.getString(R.string.appscreen_done)
         DisplayOrchestrator.updateContainersSystemEnvironment(context, prefs)
     }
 }
@@ -1929,8 +1930,8 @@ if (deleteInProgress || removingNativeEnvInProgress) {
                 CircularProgressIndicator(modifier = Modifier.size(48.dp), color = Color(0xFFC3B6F9))
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    if (removingNativeEnvInProgress) "Removing native environment…"
-                    else "Deleting container…",
+                    if (removingNativeEnvInProgress) stringResource(R.string.appscreen_removing_native_environment)
+                    else stringResource(R.string.appscreen_deleting_container),
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White
                 )
@@ -1957,10 +1958,10 @@ if (bootstrapError != null) {
         onDismissRequest = { bootstrapError = null },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Package installation", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_package_installation), fontWeight = FontWeight.Bold, color = Color.White) },
         text = { Text(bootstrapError ?: "", color = Color.White.copy(alpha = 0.85f)) },
         confirmButton = {
-            GlassButton(onClick = { bootstrapError = null }) { Text("OK", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
+            GlassButton(onClick = { bootstrapError = null }) { Text(stringResource(R.string.appscreen_ok), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold) }
         }
     )
 }
@@ -1971,7 +1972,7 @@ if (bootstrapDownloadInProgress) {
         onDismissRequest = { /* cannot dismiss while downloading */ },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Downloading wine (≈250Mb)", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_downloading_wine_250mb), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (bootstrapDownloadProgress.first >= 0) {
@@ -2001,7 +2002,7 @@ if (bootstrapDownloadInProgress) {
         bootstrapDownloadJob = null
         bootstrapDownloadInProgress = false
     }) {
-        Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.appscreen_cancel), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
     }
 }
         
@@ -2013,7 +2014,7 @@ if (fullDesktopDownloadInProgress) {
         onDismissRequest = { /* cannot dismiss while downloading */ },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Downloading XFCE4 desktop GUI≈800mb", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_downloading_xfce4_desktop_gui_800mb), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (fullDesktopDownloadProgress.first >= 0) {
@@ -2043,7 +2044,7 @@ if (fullDesktopDownloadInProgress) {
         fullDesktopDownloadJob = null
         fullDesktopDownloadInProgress = false
     }) {
-        Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.appscreen_cancel), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
     }
 }
     )
@@ -2072,17 +2073,17 @@ if (showPanvkDriverDialog) {
         },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("PANVK drivers needed", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_panvk_drivers_needed), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column {
                 if (!isDownloading) {
-                    Text("PANVK Vulkan driver not found for containers:", color = Color.White.copy(alpha = 0.85f))
+                    Text(stringResource(R.string.appscreen_panvk_vulkan_driver_not_found_for_containers), color = Color.White.copy(alpha = 0.85f))
                     Spacer(Modifier.height(8.dp))
                     panvkMissingContainers.forEach { id ->
                         val distro = DisplayOrchestrator.getContainerDistroType(context, id) ?: "unknown"
-                        Text("• Container $id ($distro)", color = Color.White.copy(alpha = 0.85f))
+                        Text(stringResource(R.string.appscreen_bullet_container, id, distro), color = Color.White.copy(alpha = 0.85f))
                     }
-                    Text("\nDo you want to download and install them now?", color = Color.White.copy(alpha = 0.85f))
+                    Text(stringResource(R.string.appscreen_do_you_want_to_download_and_install_them_now), color = Color.White.copy(alpha = 0.85f))
                 } else {
                     // Download progress UI
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2096,14 +2097,14 @@ if (showPanvkDriverDialog) {
                             color = Color(0xFFC3B6F9),
                             trackColor = Color.White.copy(alpha = 0.1f)
                         )
-                        Text("${panvkDownloadProgress.first}%", color = Color.White.copy(alpha = 0.65f))
+                        Text(stringResource(R.string.appscreen_percent, panvkDownloadProgress.first), color = Color.White.copy(alpha = 0.65f))
                     }
                 }
             }
         },
         confirmButton = {
             if (isDownloading) {
-                GlassButton(onClick = {}) { Text("Downloading…", color = Color.White.copy(alpha = 0.5f)) }
+                GlassButton(onClick = {}) { Text(stringResource(R.string.appscreen_downloading), color = Color.White.copy(alpha = 0.5f)) }
             } else {
                 GlassButton(onClick = {
                     panvkDownloadInProgress = true
@@ -2113,14 +2114,14 @@ if (showPanvkDriverDialog) {
                         showPanvkDriverDialog = false
                     }
                 }) {
-                    Text("Download & Install", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_download_install), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             }
         },
         dismissButton = {
             if (!isDownloading) {
                 GlassButton(onClick = { showPanvkDriverDialog = false }) {
-                    Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_cancel), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -2137,18 +2138,18 @@ if (showTurnipDriverDialog) {
         },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Turnip drivers needed", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_turnip_drivers_needed), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column {
                 if (!isDownloading) {
                     // Pre‑download summary
-                    Text("Turnip Vulkan driver not found for containers:", color = Color.White.copy(alpha = 0.85f))
+                    Text(stringResource(R.string.appscreen_turnip_vulkan_driver_not_found_for_containers), color = Color.White.copy(alpha = 0.85f))
                     Spacer(Modifier.height(8.dp))
                     turnipMissingContainers.forEach { id ->
                         val distro = DisplayOrchestrator.getContainerDistroType(context, id) ?: "unknown"
-                        Text("• Container $id ($distro)", color = Color.White.copy(alpha = 0.85f))
+                        Text(stringResource(R.string.appscreen_bullet_container, id, distro), color = Color.White.copy(alpha = 0.85f))
                     }
-                    Text("\nDo you want to download and install them now?", color = Color.White.copy(alpha = 0.85f))
+                    Text(stringResource(R.string.appscreen_do_you_want_to_download_and_install_them_now), color = Color.White.copy(alpha = 0.85f))
                 } else {
                     // Download progress
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2167,7 +2168,7 @@ if (showTurnipDriverDialog) {
                             trackColor = Color.White.copy(alpha = 0.1f)
                         )
                         Text(
-                            "${turnipDownloadProgress.first}%",
+                            stringResource(R.string.appscreen_percent, turnipDownloadProgress.first),
                             color = Color.White.copy(alpha = 0.65f),
                             style = MaterialTheme.typography.labelSmall,
                             modifier = Modifier.padding(top = 4.dp)
@@ -2183,7 +2184,7 @@ if (showTurnipDriverDialog) {
                     // You can implement cancellation logic here if needed
                     // For now, just allow closing only after completion
                 }) {
-                    Text("Downloading…", color = Color.White.copy(alpha = 0.5f))
+                    Text(stringResource(R.string.appscreen_downloading), color = Color.White.copy(alpha = 0.5f))
                 }
             } else {
                 GlassButton(onClick = {
@@ -2196,7 +2197,7 @@ if (showTurnipDriverDialog) {
                         showTurnipDriverDialog = false
                     }
                 }) {
-                    Text("Download & Install", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_download_install), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             }
         },
@@ -2205,7 +2206,7 @@ if (showTurnipDriverDialog) {
                 GlassButton(onClick = {
                     showTurnipDriverDialog = false
                 }) {
-                    Text("Cancel", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_cancel), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
                 }
             } else {
                 // Optionally add a "Cancel download" button here
@@ -2228,11 +2229,11 @@ if (showTurnipDriverDialog) {
         },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Select installation slot", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_select_installation_slot), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Column {
                 val target = distro?.distroName ?: "archive"
-                Text("Install \"$target\" to which container?", color = Color.White.copy(alpha = 0.85f))
+                Text(stringResource(R.string.appscreen_install_target_to_which_container, target), color = Color.White.copy(alpha = 0.85f))
                 Spacer(modifier = Modifier.height(16.dp))
                 for (id in 1..3) {
                     val occupied = when (id) {
@@ -2241,7 +2242,7 @@ if (showTurnipDriverDialog) {
                         3 -> hasContainer3
                         else -> false
                     }
-                    val label = "Container $id" + if (occupied) " (occupied)" else " (empty)"
+                    val label = stringResource(R.string.appscreen_container_label, id, stringResource(if (occupied) R.string.appscreen_container_occupied else R.string.appscreen_container_empty))
                     Button(
                         onClick = {
                             showSlotPicker = false
@@ -2285,7 +2286,7 @@ if (showTurnipDriverDialog) {
                 showSlotPicker = false
                 pendingDistro = null
                 pendingLocalUri = null
-            }) { Text("Cancel", color = Color.White.copy(alpha = 0.8f)) }
+            }) { Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f)) }
         }
     )
 }
@@ -2301,21 +2302,21 @@ if (pendingOverwriteSlot != null) {
         },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Overwrite container $slot?", fontWeight = FontWeight.Bold, color = Color.White) },
-        text = { Text("This container already has a rootfs installed. All its files will be deleted and replaced. Make sure to backup if needed.", color = Color.White.copy(alpha = 0.85f)) },
+        title = { Text(stringResource(R.string.appscreen_overwrite_container_title, slot), fontWeight = FontWeight.Bold, color = Color.White) },
+        text = { Text(stringResource(R.string.appscreen_this_container_already_has_a_rootfs_installed_al), color = Color.White.copy(alpha = 0.85f)) },
         confirmButton = {
             GlassButton(onClick = {
                 pendingOverwriteSlot = null
                 confirmOverwriteContinuation?.resumeWith(Result.success(true))
                 confirmOverwriteContinuation = null
-            }) { Text("Overwrite", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
+            }) { Text(stringResource(R.string.appscreen_overwrite), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
         },
         dismissButton = {
             GlassButton(onClick = {
                 pendingOverwriteSlot = null
                 confirmOverwriteContinuation?.resumeWith(Result.success(false))
                 confirmOverwriteContinuation = null
-            }) { Text("Cancel", color = Color.White.copy(alpha = 0.8f)) }
+            }) { Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f)) }
         }
     )
 }
@@ -2351,13 +2352,13 @@ if (showContainerManager) {
                     ) {
                         Column {
                             Text(
-                                text = "Container Manager",
+                                text = stringResource(R.string.appscreen_container_manager),
                                 fontWeight = FontWeight.Black,
                                 color = Color.White,
                                 style = MaterialTheme.typography.headlineMedium.copy(fontSize = 32.sp)
                             )
                             Text(
-                                text = "Manage installed environments",
+                                text = stringResource(R.string.appscreen_manage_installed_environments),
                                 color = Color(0xFF9F92EC),
                                 style = MaterialTheme.typography.bodyMedium
                             )
@@ -2365,7 +2366,7 @@ if (showContainerManager) {
                         IconButton(onClick = { showContainerManager = false }) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Close",
+                                contentDescription = stringResource(R.string.appscreen_close),
                                 tint = Color.White
                             )
                         }
@@ -2402,7 +2403,7 @@ if (showContainerManager) {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Container $id" + if (occupied) " (installed)" else " (empty)",
+                                    text = stringResource(R.string.appscreen_container_label, id, stringResource(if (occupied) R.string.appscreen_container_installed else R.string.appscreen_container_empty)),
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier.weight(1f)
@@ -2413,7 +2414,7 @@ if (showContainerManager) {
                                 }) {
                                     Icon(
                                         imageVector = Icons.Default.AddCircle,
-                                        contentDescription = "Install to container $id",
+                                        contentDescription = stringResource(R.string.appscreen_install_to_container_desc, id),
                                         tint = Color(0xFFC3B6F9)
                                     )
                                 }
@@ -2421,13 +2422,13 @@ if (showContainerManager) {
                                     IconButton(onClick = { 
                                     showContainerManager = false
                                     showDeleteConfirmation = id }) {
-                                        Icon(Icons.Default.Delete, "Delete", tint = Color(0xFFFF6B6B))
+                                        Icon(Icons.Default.Delete, stringResource(R.string.appscreen_delete), tint = Color(0xFFFF6B6B))
                                     }
                                     IconButton(onClick = {
                                         pendingContainerForBackup = id
                                         backupFilePicker.launch("container${id}_backup.tar.xz")
                                     }) {
-                                        Icon(Icons.Default.Save, "Backup", tint = Color(0xFFE9D5FF))
+                                        Icon(Icons.Default.Save, stringResource(R.string.appscreen_backup), tint = Color(0xFFE9D5FF))
                                     }
                                 }
                             }
@@ -2460,7 +2461,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Install native Packages / wine", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.appscreen_install_native_packages_wine), fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -2483,7 +2484,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Download Wine 🍷 (≈250Mb)", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.appscreen_download_wine_250mb), fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -2506,7 +2507,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Download XFCE4 desktop GUI", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.appscreen_download_xfce4_desktop_gui), fontWeight = FontWeight.Bold)
                     }
                 }
 */
@@ -2528,7 +2529,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Clean cache and downloaded packages", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.appscreen_clean_cache_and_downloaded_packages), fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -2550,7 +2551,7 @@ if (showContainerManager) {
                             )
                         )
                     ) {
-                        Text("Remove Native Environment", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.appscreen_remove_native_environment), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -2567,9 +2568,9 @@ if (showDeleteConfirmation != null) {
         onDismissRequest = { showDeleteConfirmation = null },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("⚠️ Delete container $containerId?", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_delete_container_title, containerId), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
-            Text("This will permanently remove the installed distro and all its files from container $containerId. This action cannot be undone.\n\nAre you sure?", color = Color.White.copy(alpha = 0.85f))
+            Text(stringResource(R.string.appscreen_delete_container_warning, containerId), color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
             GlassButton(onClick = {
@@ -2586,12 +2587,12 @@ if (showDeleteConfirmation != null) {
                     }
                 }
             }) {
-                Text("Delete", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.appscreen_delete), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             GlassButton(onClick = { showDeleteConfirmation = null }) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
             }
         }
     )
@@ -2607,17 +2608,17 @@ if (showNativeContainerPrompt != null) {
         },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Use as native terminal?", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_use_as_native_terminal), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
-            Text("Container $containerId can be set up as a native Android terminal (using the Extra/GUI archives).\n\nThis will mark the container as installed without downloading a distribution.\n\nDo you want to continue?", color = Color.White.copy(alpha = 0.85f))
+            Text(stringResource(R.string.appscreen_use_native_body, containerId), color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
             GlassButton(onClick = {
                 markContainerAsNativeTerminal(containerId)
                 showNativeContainerPrompt = null
-                Toast.makeText(context, "Container $containerId set as native terminal", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.appscreen_native_terminal_set_toast, containerId), Toast.LENGTH_SHORT).show()
             }) {
-                Text("Yes, use as native", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.appscreen_yes_use_as_native), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -2625,7 +2626,7 @@ if (showNativeContainerPrompt != null) {
                 showNativeContainerPrompt = null
                 proceedToDistroSelection(containerId)
             }) {
-                Text("No, install a distro", color = Color.White.copy(alpha = 0.8f))
+                Text(stringResource(R.string.appscreen_no_install_a_distro), color = Color.White.copy(alpha = 0.8f))
             }
         }
     )
@@ -2636,9 +2637,9 @@ if (showCleanCacheConfirmation) {
         onDismissRequest = { showCleanCacheConfirmation = false },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("⚠️ Clean downloaded archives?", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_clean_downloaded_archives), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
-            Text("All distribution tarballs (*.tar.xz) stored in the app’s cache will be deleted. also downloaded drivers if they are corrupted, you’ll have to re‑download them again.\n\nDo you want to continue?", color = Color.White.copy(alpha = 0.85f))
+            Text(stringResource(R.string.appscreen_all_distribution_tarballs_tar_xz_stored_in_the_a), color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
             GlassButton(onClick = {
@@ -2647,12 +2648,12 @@ if (showCleanCacheConfirmation) {
                 }
                 showCleanCacheConfirmation = false
             }) {
-                Text("Clean", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.appscreen_clean), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             GlassButton(onClick = { showCleanCacheConfirmation = false }) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
             }
         }
     )
@@ -2663,10 +2664,10 @@ if (showRemoveNativeEnvConfirmation) {
         onDismissRequest = { showRemoveNativeEnvConfirmation = false },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Remove Native Environment?", fontWeight = FontWeight.Bold, color = Color.White) },
+        title = { Text(stringResource(R.string.appscreen_remove_native_environment_2), fontWeight = FontWeight.Bold, color = Color.White) },
         text = {
             Text(
-                "This will delete the installed  native rootfs / PREFIX and all native packages. This action cannot be undone.\n\nAre you sure?",
+                stringResource(R.string.appscreen_this_will_delete_the_installed_native_rootfs_pre),
                 color = Color.White.copy(alpha = 0.85f)
             )
         },
@@ -2675,12 +2676,12 @@ if (showRemoveNativeEnvConfirmation) {
                 showRemoveNativeEnvConfirmation = false
                 removeNativeEnvironment()
             }) {
-                Text("Remove", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.appscreen_remove), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             GlassButton(onClick = { showRemoveNativeEnvConfirmation = false }) {
-                Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
             }
         }
     )
@@ -2692,8 +2693,8 @@ if (showExitDialog) {
         onDismissRequest = { showExitDialog = false },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
-        title = { Text("Exit", fontWeight = FontWeight.Bold, color = Color.White) },
-        text = { Text("Are you sure you want to exit?", color = Color.White.copy(alpha = 0.85f)) },
+        title = { Text(stringResource(R.string.appscreen_exit), fontWeight = FontWeight.Bold, color = Color.White) },
+        text = { Text(stringResource(R.string.appscreen_are_you_sure_you_want_to_exit), color = Color.White.copy(alpha = 0.85f)) },
         confirmButton = {
             GlassButton(onClick = {
                 showExitDialog = false
@@ -2705,10 +2706,10 @@ if (showExitDialog) {
                 //    finishAffinity() ensures all activities are removed from the stack
                 (context as? Activity)?.finishAffinity()
                 System.exit(0)
-            }) { Text("Yes", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
+            }) { Text(stringResource(R.string.appscreen_yes), color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold) }
         },
         dismissButton = {
-            GlassButton(onClick = { showExitDialog = false }) { Text("No", color = Color.White.copy(alpha = 0.8f)) }
+            GlassButton(onClick = { showExitDialog = false }) { Text(stringResource(R.string.appscreen_no), color = Color.White.copy(alpha = 0.8f)) }
         }
     )
 }
@@ -2763,7 +2764,7 @@ if (showDistroSelection) {
                         horizontalAlignment = Alignment.Start
                     ) {
                         Text(
-                            text = "XoDos-Ark",
+                            text = stringResource(R.string.appscreen_xodos_ark),
                             fontWeight = FontWeight.Black,
                             color = Color.White,
                             style = MaterialTheme.typography.headlineMedium.copy(
@@ -2773,7 +2774,7 @@ if (showDistroSelection) {
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "SELECT ENVIRONMENT",
+                            text = stringResource(R.string.appscreen_select_environment),
                             fontWeight = FontWeight.ExtraBold,
                             color = Color(0xFFC3B6F9),
                             style = MaterialTheme.typography.labelSmall.copy(
@@ -2783,7 +2784,7 @@ if (showDistroSelection) {
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Choose your workspace template to install into your active container.",
+                            text = stringResource(R.string.appscreen_choose_your_workspace_template_to_install_into_y),
                             color = Color(0xFF9F92EC),
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -2819,9 +2820,9 @@ if (showDistroSelection) {
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         val tabs = listOf(
-                            "Latest" to NativeInstallCoordinator.DistroSource.EASYCLI,
-                            "Kali" to NativeInstallCoordinator.DistroSource.KALI,
-                            "Custom" to NativeInstallCoordinator.DistroSource.CUSTOM
+                            stringResource(R.string.appscreen_tab_latest) to NativeInstallCoordinator.DistroSource.EASYCLI,
+                            stringResource(R.string.appscreen_tab_kali) to NativeInstallCoordinator.DistroSource.KALI,
+                            stringResource(R.string.appscreen_tab_custom) to NativeInstallCoordinator.DistroSource.CUSTOM
                         )
                         tabs.forEach { (label, source) ->
                             val isActive = selectedSource == source
@@ -2871,7 +2872,7 @@ if (showDistroSelection) {
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "Direct URL Install",
+                                    text = stringResource(R.string.appscreen_direct_url_install),
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleMedium
@@ -2916,7 +2917,7 @@ if (showDistroSelection) {
                                                 RegexOption.IGNORE_CASE
                                             )
                                             if (!pattern.matches(trimmedUrl)) {
-                                                customUrlError = "Invalid URL. Must be http(s) and end with .tar.xz or .tar.gz"
+                                                customUrlError = context.getString(R.string.appscreen_invalid_url)
                                             } else {
                                                 customUrlError = ""
                                                 scope.launch {
@@ -2928,7 +2929,7 @@ if (showDistroSelection) {
                                                         fetchedDistro = descriptor
                                                         showCustomUrlDialog = true
                                                     } catch (e: Exception) {
-                                                        customUrlError = "Failed to fetch URL: ${e.message}"
+                                                        customUrlError = context.getString(R.string.appscreen_failed_to_fetch_url, e.message ?: "")
                                                     } finally {
                                                         isFetchingCustomUrl = false
                                                     }
@@ -2946,7 +2947,7 @@ if (showDistroSelection) {
                                         )
                                     } else {
                                         Text(
-                                            text = "Get it",
+                                            text = stringResource(R.string.appscreen_get_it),
                                             color = Color.White,
                                             fontWeight = FontWeight.Bold
                                         )
@@ -2992,7 +2993,7 @@ if (showDistroSelection) {
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Folder,
-                                    contentDescription = "Select local file",
+                                    contentDescription = stringResource(R.string.appscreen_select_local_file),
                                     modifier = Modifier.size(24.dp),
                                     tint = Color(0xFF7C3AED)
                                 )
@@ -3000,13 +3001,13 @@ if (showDistroSelection) {
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Select Local Distro",
+                                    text = stringResource(R.string.appscreen_select_local_distro),
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color.White,
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Text(
-                                    text = "Install from a local .tar.xz archive",
+                                    text = stringResource(R.string.appscreen_install_from_a_local_tar_xz_archive),
                                     color = Color(0xFF9F92EC),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontSize = 12.sp
@@ -3053,13 +3054,13 @@ if (showDistroSelection) {
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
-                                    text = "Connection offline",
+                                    text = stringResource(R.string.appscreen_connection_offline),
                                     style = MaterialTheme.typography.titleMedium,
                                     color = Color.White
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Check your internet connection and try again.",
+                                    text = stringResource(R.string.appscreen_check_your_internet_connection_and_try_again),
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = Color(0xFF9F92EC),
                                     textAlign = TextAlign.Center
@@ -3069,7 +3070,7 @@ if (showDistroSelection) {
                                     NativeInstallCoordinator.invalidateDistroCache()
                                     loadDistros(selectedSource)
                                 }) {
-                                    Text("Retry Connection", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                                    Text(stringResource(R.string.appscreen_retry_connection), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -3144,13 +3145,13 @@ if (showDistroSelection) {
                                             if (fallbackResId != 0) {
                                                 Image(
                                                     painter = painterResource(fallbackResId),
-                                                    contentDescription = "Linux Fallback",
+                                                    contentDescription = stringResource(R.string.appscreen_linux_fallback),
                                                     modifier = Modifier.size(32.dp)
                                                 )
                                             } else {
                                                 Icon(
                                                     imageVector = Icons.Default.Folder,
-                                                    contentDescription = "Generic Distro",
+                                                    contentDescription = stringResource(R.string.appscreen_generic_distro),
                                                     modifier = Modifier.size(28.dp),
                                                     tint = Color(0xFF9F92EC)
                                                 )
@@ -3209,7 +3210,7 @@ if (showDistroSelection) {
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Icon(
                                         imageVector = Icons.Default.AddCircle,
-                                        contentDescription = "Install distro",
+                                        contentDescription = stringResource(R.string.appscreen_install_distro),
                                         tint = Color(0xFF7C3AED),
                                         modifier = Modifier.size(24.dp)
                                     )
@@ -3247,7 +3248,7 @@ if (showDistroSelection) {
                         )
                     ) {
                         Text(
-                            text = "Continue without installing",
+                            text = stringResource(R.string.appscreen_continue_without_installing),
                             fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -3264,11 +3265,11 @@ if (showDistroSelection) {
             onDismissRequest = { showCustomUrlDialog = false },
             containerColor = Color.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text("Install from URL", fontWeight = FontWeight.Bold, color = Color.White) },
+            title = { Text(stringResource(R.string.appscreen_install_from_url), fontWeight = FontWeight.Bold, color = Color.White) },
             text = {
                 Column {
                     Text(
-                        text = "You are about to install:",
+                        text = stringResource(R.string.appscreen_you_are_about_to_install),
                         color = Color.White.copy(alpha = 0.8f),
                         style = MaterialTheme.typography.bodyMedium
                     )
@@ -3281,17 +3282,17 @@ if (showDistroSelection) {
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Version: ${descriptor.version}",
+                        text = stringResource(R.string.appscreen_version_prefix, descriptor.version),
                         color = Color(0xFFC3B6F9),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "Size: ${descriptor.size}",
+                        text = stringResource(R.string.appscreen_size_prefix, descriptor.size),
                         color = Color(0xFFC3B6F9),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        text = "Archive: ${descriptor.archiveName}",
+                        text = stringResource(R.string.appscreen_archive_prefix, descriptor.archiveName),
                         color = Color(0xFF9F92EC),
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -3317,12 +3318,12 @@ if (showDistroSelection) {
                         showSlotPicker = true
                     }
                 }) {
-                    Text("Install", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.appscreen_install), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 GlassButton(onClick = { showCustomUrlDialog = false }) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.8f))
+                    Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
                 }
             }
         )
@@ -3618,5 +3619,4 @@ ShellScreen(
         )
     }
 }
-
 

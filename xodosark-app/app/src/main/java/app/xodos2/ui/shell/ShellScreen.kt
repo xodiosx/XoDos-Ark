@@ -63,6 +63,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.res.stringResource
 
 private val DEFAULT_EXTRA_KEYS_JSON = """
 [
@@ -189,11 +190,11 @@ fun ShellScreen(
             onDismissRequest = { showCloseSessionDialog = false },
             containerColor = ComposeColor.Transparent,
             modifier = Modifier.glassDialogStyle(),
-            title = { Text("Close terminal", fontWeight = FontWeight.Bold, color = ComposeColor.White) },
+            title = { Text(stringResource(R.string.appscreen_close_terminal), fontWeight = FontWeight.Bold, color = ComposeColor.White) },
             text = {
                 Text(
-                    if (terminalSessionIds.size <= 1) "Are you sure you want to exit?"
-                    else "Close current terminal session?",
+                    if (terminalSessionIds.size <= 1) stringResource(R.string.appscreen_are_you_sure_you_want_to_exit)
+                    else stringResource(R.string.appscreen_close_current_terminal_session),
                     color = ComposeColor.White.copy(alpha = 0.85f)
                 )
             },
@@ -203,14 +204,14 @@ fun ShellScreen(
                     if (terminalSessionIds.size <= 1) onExitRequested() else onCloseCurrentSession()
                 }) {
                     Text(
-                        if (terminalSessionIds.size <= 1) "Exit" else "Close",
+                        if (terminalSessionIds.size <= 1) stringResource(R.string.appscreen_exit) else stringResource(R.string.appscreen_close),
                         color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold
                     )
                 }
             },
             dismissButton = {
                 GlassButton(onClick = { showCloseSessionDialog = false }) {
-                    Text("Cancel", color = ComposeColor.White.copy(alpha = 0.8f))
+                    Text(stringResource(R.string.appscreen_cancel), color = ComposeColor.White.copy(alpha = 0.8f))
                 }
             }
         )

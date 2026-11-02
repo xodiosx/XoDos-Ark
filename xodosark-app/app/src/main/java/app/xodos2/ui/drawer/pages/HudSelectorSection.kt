@@ -12,6 +12,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.runtime.HudManager
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun HudSelectorSection(
@@ -62,7 +64,7 @@ fun HudSelectorSection(
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                text = "DXVK HUD",
+                text = stringResource(R.string.appscreen_dxvk_hud),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -88,7 +90,7 @@ fun HudSelectorSection(
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                text = "MangoHud",
+                text = stringResource(R.string.appscreen_mangohud),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary
             )

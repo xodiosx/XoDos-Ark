@@ -10,6 +10,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun DrawerPlaceholderContent() {
@@ -20,10 +22,9 @@ fun DrawerPlaceholderContent() {
         contentAlignment = Alignment.TopStart
     ) {
         Text(
-            "Menu (placeholder)",
+            stringResource(R.string.appscreen_menu_placeholder),
             color = Color.White,
             style = MaterialTheme.typography.titleMedium
         )
     }
 }
-

@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.runtime.WineComponentManager
 import kotlinx.coroutines.launch
+import androidx.compose.ui.res.stringResource
 
 @Composable
 fun DxvkSelectorSection(
@@ -40,7 +41,7 @@ fun DxvkSelectorSection(
     DrawerExpandableSection(title = title, defaultExpanded = false) {
         if (archives.isEmpty()) {
             Text(
-                text = "No archives found in wincomponents/$category/",
+                text = stringResource(R.string.appscreen_no_archives_found_in, category),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)

@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun DrawerScriptEditor(
@@ -52,10 +54,10 @@ fun DrawerScriptEditor(
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
     ) {
         GlassButton(onClick = { text = "" }) {  // ← Reset clears the field
-            Text("Reset", color = Color.White.copy(alpha = 0.8f))
+            Text(stringResource(R.string.appscreen_reset), color = Color.White.copy(alpha = 0.8f))
         }
         GlassButton(onClick = { onSave(text.trimEnd()) }) {
-            Text("Save", color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.appscreen_save), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
         }
     }
 }

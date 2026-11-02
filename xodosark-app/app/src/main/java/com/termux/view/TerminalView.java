@@ -927,6 +927,14 @@ protected void onDraw(Canvas canvas) {
         // background show through to the Compose parent behind it.
         return;
     }
+    / The transcript can shrink (e.g. user types 'clear') while the view is
+    // scrolled up. If mTopRow is not clamped to the new bounds, externalToInternalRow()
+    // will throw an IllegalArgumentException.
+    final int maxTranscript = mEmulator.getScreen().getActiveTranscriptRows();
+    if (mTopRow < -maxTranscript) mTopRow = -maxTranscript;
+    if (mTopRow > 0) mTopRow = 0;
+    
+    
     int[] sel = mDefaultSelectors;
     if (mTextSelectionCursorController != null) {
         mTextSelectionCursorController.getSelectors(sel);

@@ -13,6 +13,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.runtime.NativeInstallCoordinator
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
@@ -65,7 +67,7 @@ fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
                 .verticalScroll(rememberScrollState())
         ) {
             Text(
-                "Applied on the next terminal spawn. Match proot-distro login semantics.",
+                stringResource(R.string.appscreen_applied_on_the_next_terminal_spawn_match_proot_d),
                 color = Color.White.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.bodySmall
             )
@@ -74,7 +76,7 @@ fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it; persist() },
-                label = { Text("Username (blank/root = root)") },
+                label = { Text(stringResource(R.string.appscreen_username_blank_root_root)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = fieldColors()
@@ -84,7 +86,7 @@ fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
             OutlinedTextField(
                 value = hostname,
                 onValueChange = { hostname = it; persist() },
-                label = { Text("Hostname") },
+                label = { Text(stringResource(R.string.appscreen_hostname)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = fieldColors()
@@ -94,7 +96,7 @@ fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
             OutlinedTextField(
                 value = kernel,
                 onValueChange = { kernel = it; persist() },
-                label = { Text("Kernel release (blank = default)") },
+                label = { Text(stringResource(R.string.appscreen_kernel_release_blank_default)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = fieldColors()
@@ -104,7 +106,7 @@ fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
             OutlinedTextField(
                 value = changeId,
                 onValueChange = { changeId = it; persist() },
-                label = { Text("change-id override (e.g. 0:0 — blank = auto)") },
+                label = { Text(stringResource(R.string.appscreen_change_id_override_e_g_0_0_blank_auto)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = fieldColors()
@@ -114,7 +116,7 @@ fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
             OutlinedTextField(
                 value = cwd,
                 onValueChange = { cwd = it; persist() },
-                label = { Text("Working directory (blank = home)") },
+                label = { Text(stringResource(R.string.appscreen_working_directory_blank_home)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 colors = fieldColors()
@@ -136,14 +138,14 @@ fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
                     colors = switchColors()
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Shared /tmp (forced)", color = Color.White.copy(alpha = 0.7f))
+                Text(stringResource(R.string.appscreen_shared_tmp_forced), color = Color.White.copy(alpha = 0.7f))
             }
 
             Spacer(Modifier.height(12.dp))
             OutlinedTextField(
                 value = bindsText,
                 onValueChange = { bindsText = it; persist() },
-                label = { Text("Custom binds (one per line, SRC:DST)") },
+                label = { Text(stringResource(R.string.appscreen_custom_binds_one_per_line_src_dst)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp),
                 colors = fieldColors()
             )
@@ -151,7 +153,7 @@ fun ProotOptionsSection(prefs: SharedPreferences, containerId: Int) {
             OutlinedTextField(
                 value = envsText,
                 onValueChange = { envsText = it; persist() },
-                label = { Text("Custom env vars (one per line, KEY=VALUE)") },
+                label = { Text(stringResource(R.string.appscreen_custom_env_vars_one_per_line_key_value)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 90.dp),
                 colors = fieldColors()
             )

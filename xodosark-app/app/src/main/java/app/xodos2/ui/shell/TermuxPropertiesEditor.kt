@@ -44,6 +44,8 @@ import app.xodos2.ui.glass.GlassButton
 import app.xodos2.ui.glassDialogStyle
 import org.json.JSONArray
 import java.io.File
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 private val EDITOR_DEFAULT_EXTRA_KEYS = """
 [
@@ -159,7 +161,7 @@ fun TermuxPropertiesEditorDialog(
             .heightIn(max = 760.dp),
         title = {
             Text(
-                "Terminal Properties",
+                stringResource(R.string.appscreen_terminal_properties),
                 color = ComposeColor.White,
                 fontWeight = FontWeight.Bold
             )
@@ -236,12 +238,12 @@ fun TermuxPropertiesEditorDialog(
                     error = "Invalid input: ${e.message}"
                 }
             }) {
-                Text("Save", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.appscreen_save), color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             GlassButton(onClick = onDismiss) {
-                Text("Cancel", color = ComposeColor.White.copy(alpha = 0.8f))
+                Text(stringResource(R.string.appscreen_cancel), color = ComposeColor.White.copy(alpha = 0.8f))
             }
         }
     )
@@ -330,7 +332,7 @@ private fun ColorRow(field: ColorField, onClick: () -> Unit) {
             )
         }
         Text(
-            "Edit",
+            stringResource(R.string.appscreen_edit),
             color = ComposeColor(0xFFC3B6F9),
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold
@@ -358,13 +360,13 @@ private fun ExtraKeysTab(
         ) {
             GlassButton(onClick = onReset) {
                 Text(
-                    "Reset to Default",
+                    stringResource(R.string.appscreen_reset_to_default),
                     color = ComposeColor(0xFFFF6B6B),
                     fontWeight = FontWeight.Bold
                 )
             }
             Text(
-                if (jsonValid) "✓ Valid" else "✗ Invalid",
+                if (jsonValid) stringResource(R.string.appscreen_valid) else stringResource(R.string.appscreen_invalid),
                 color = if (jsonValid) ComposeColor(0xFF10B981) else ComposeColor(0xFFFF6B6B),
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
@@ -391,14 +393,14 @@ private fun ExtraKeysTab(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Strings or {\"key\":\"…\",\"macro\":\"…\",\"display\":\"…\",\"meta\":\"CTRL\"}. " +
+                stringResource(R.string.appscreen_strings_or_key_macro_display_meta_ctrl) +
                         "Must be valid 2D JSON. Use \\n for newline, not a real line break.",
                 color = ComposeColor.White.copy(alpha = 0.55f),
                 style = MaterialTheme.typography.bodySmall
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Default layout:",
+                stringResource(R.string.appscreen_default_layout),
                 color = ComposeColor.White.copy(alpha = 0.55f),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
@@ -425,14 +427,14 @@ private fun ImageTab(
             .heightIn(max = 480.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Text("Background image", color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.appscreen_background_image), color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(8.dp))
 
         if (imagePath.isNotBlank() && File(imagePath).exists()) {
             Text(imagePath, color = ComposeColor.White.copy(alpha = 0.6f), fontSize = 11.sp)
         } else {
             Text(
-                "No image selected",
+                stringResource(R.string.appscreen_no_image_selected),
                 color = ComposeColor.White.copy(alpha = 0.6f),
                 fontSize = 13.sp
             )
@@ -442,14 +444,14 @@ private fun ImageTab(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassButton(onClick = onPickImage) {
                 Text(
-                    "Choose Image",
+                    stringResource(R.string.appscreen_choose_image),
                     color = ComposeColor(0xFFC3B6F9),
                     fontWeight = FontWeight.Bold
                 )
             }
             if (imagePath.isNotBlank()) {
                 GlassButton(onClick = onRemoveImage) {
-                    Text("Remove", color = ComposeColor(0xFFFF6B6B))
+                    Text(stringResource(R.string.appscreen_remove), color = ComposeColor(0xFFFF6B6B))
                 }
             }
         }
@@ -457,14 +459,14 @@ private fun ImageTab(
         Spacer(Modifier.height(20.dp))
 
         Text(
-            "Supported formats",
+            stringResource(R.string.appscreen_supported_formats),
             color = ComposeColor.White,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "PNG, JPG — static images\n" +
+            stringResource(R.string.appscreen_png_jpg_static_images) +
             "GIF — animated (all Android versions)\n" +
             "WebP, APNG — animated (Android 9+)",
             color = ComposeColor.White.copy(alpha = 0.6f),
@@ -474,14 +476,14 @@ private fun ImageTab(
         Spacer(Modifier.height(20.dp))
 
         Text(
-            "About the tint",
+            stringResource(R.string.appscreen_about_the_tint),
             color = ComposeColor.White,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Picking an image automatically sets the background color's alpha " +
+            stringResource(R.string.appscreen_picking_an_image_automatically_sets_the_backgrou) +
             "to 59 (~23 %) so it acts as a subtle tint for readability.\n\n" +
             "Change it in the Colors tab — set alpha to 0 for a pure, untinted image, " +
             "or raise it for a darker overlay.",
@@ -506,14 +508,14 @@ private fun AdvancedTab(
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            "Terminal background display",
+            stringResource(R.string.appscreen_terminal_background_display),
             color = ComposeColor.White,
             fontWeight = FontWeight.SemiBold,
             fontSize = 13.sp
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            "Run a live X11 surface behind the terminal text. " +
+            stringResource(R.string.appscreen_run_a_live_x11_surface_behind_the_terminal_text) +
             "Use it to watch GUI apps (glmark2, xterm, etc.) render while you keep " +
             "typing in the shell. Input still goes to the terminal, not the display.\n\n" +
             "Wayland background is not available because the Wayland bridge only " +
@@ -534,7 +536,7 @@ private fun AdvancedTab(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val options = listOf(
-                "" to "None",
+                "" to context.getString(R.string.appscreen_none),
                 "x11" to "X11"
             )
             options.forEach { (key, label) ->
@@ -565,7 +567,7 @@ private fun AdvancedTab(
         if (displayMode == "x11") {
             Spacer(Modifier.height(6.dp))
             Text(
-                "Tip: inside the terminal run something like  DISPLAY=:0 glxgears &  " +
+                stringResource(R.string.appscreen_tip_inside_the_terminal_run_something_like_displ) +
                 "to see the X11 output render behind the terminal.",
                 color = ComposeColor(0xFFC3B6F9).copy(alpha = 0.8f),
                 fontSize = 10.sp
@@ -579,7 +581,7 @@ private fun AdvancedTab(
             onValueChange = onBlink,
             label = {
                 Text(
-                    "Cursor blink rate (0 or 100–2000)",
+                    stringResource(R.string.appscreen_cursor_blink_rate_0_or_100_2000),
                     color = ComposeColor.White.copy(alpha = 0.7f)
                 )
             },
@@ -588,11 +590,11 @@ private fun AdvancedTab(
             colors = editorTextFieldColors()
         )
         Spacer(Modifier.height(16.dp))
-        Text("Config file", color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
+        Text(stringResource(R.string.appscreen_config_file), color = ComposeColor.White, fontWeight = FontWeight.SemiBold)
         Text(filePath, color = ComposeColor(0xFFC3B6F9), fontSize = 11.sp)
         Spacer(Modifier.height(16.dp))
         Text(
-            "Colors use #AARRGGBB. First two hex digits are alpha " +
+            stringResource(R.string.appscreen_colors_use_aarrggbb_first_two_hex_digits_are_alp) +
             "(00 = transparent, FF = opaque).\n" +
             "Setting only foreground/cursor will NOT clear the ANSI palette — " +
             "bash colors stay intact.",

@@ -36,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.xodos2.ui.glass.GlassButton
 import app.xodos2.ui.glassDialogStyle
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun ColorPickerDialog(
@@ -83,7 +85,7 @@ fun ColorPickerDialog(
                 ) {
                     Text(
                         preview?.let {
-                            "Alpha ${(alpha * 100 / 255)}%  •  #${Integer.toHexString(it).uppercase()}"
+                            stringResource(R.string.appscreen_alpha_preview, alpha * 100 / 255, Integer.toHexString(it).uppercase())
                         } ?: "Enter a valid color",
                         color = ComposeColor.White.copy(alpha = 0.9f),
                         fontSize = 12.sp,
@@ -103,7 +105,7 @@ fun ColorPickerDialog(
                         hexInput = v.uppercase().filter { it in "0123456789ABCDEF" }.take(6)
                         error = null
                     },
-                    label = { Text("HEX (RRGGBB)", color = ComposeColor.White.copy(alpha = 0.7f)) },
+                    label = { Text(stringResource(R.string.appscreen_hex_rrggbb), color = ComposeColor.White.copy(alpha = 0.7f)) },
                     prefix = { Text("#", color = ComposeColor.White.copy(alpha = 0.5f)) },
                     singleLine = true,
                     isError = rgb == null && hexInput.isNotEmpty(),
@@ -126,14 +128,14 @@ fun ColorPickerDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Alpha",
+                        stringResource(R.string.appscreen_alpha),
                         color = ComposeColor.White,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "${(alpha * 100 / 255)}%  (${alpha})",
+                        stringResource(R.string.appscreen_alpha_percent, alpha * 100 / 255, alpha),
                         color = ComposeColor(0xFFC3B6F9),
                         fontSize = 12.sp
                     )
@@ -152,7 +154,7 @@ fun ColorPickerDialog(
                 Spacer(Modifier.height(16.dp))
 
                 Text(
-                    "Presets",
+                    stringResource(R.string.appscreen_presets),
                     color = ComposeColor.White,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold
@@ -208,12 +210,12 @@ fun ColorPickerDialog(
                     onColorSelected(finalHex)
                 }
             }) {
-                Text("Apply", color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.appscreen_apply), color = ComposeColor(0xFFC3B6F9), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             GlassButton(onClick = onDismiss) {
-                Text("Cancel", color = ComposeColor.White.copy(alpha = 0.8f))
+                Text(stringResource(R.string.appscreen_cancel), color = ComposeColor.White.copy(alpha = 0.8f))
             }
         }
     )

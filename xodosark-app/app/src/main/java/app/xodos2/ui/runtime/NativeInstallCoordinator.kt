@@ -20,6 +20,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
+import app.xodos2.R
 
 object NativeInstallCoordinator {
 
@@ -1401,10 +1402,10 @@ private fun symlinksNeedRefresh(context: Context): Boolean {
         val usrLib = File(context.filesDir, "usr/lib").apply { mkdirs() }
 
         val libFiles = mapOf(
-            "libbusybox.so" to "libbusybox.so.1.37.0",
-            "liblzma.so" to "liblzma.so.5",
+            "libbusybox.so" to context.getString(R.string.appscreen_libbusybox_so_1_37_0),
+            "liblzma.so" to context.getString(R.string.appscreen_liblzma_so_5),
             "libproot_loader.so" to "libproot_loader.so",
-             "libtalloc.so" to "libtalloc.so.2",
+             "libtalloc.so" to context.getString(R.string.appscreen_libtalloc_so_2),
              "libandroid-shmem.so" to "libandroid-shmem.so"
         )
         for ((src, dst) in libFiles) {
@@ -1428,7 +1429,7 @@ private fun symlinksNeedRefresh(context: Context): Boolean {
             "libxz.so"          to "xz",
             "libpv.so"          to "pv",
             "libgzip.so"        to "gzip",
-            "libxodosh.so"          to "xodos-host"
+            "libxodosh.so"          to context.getString(R.string.appscreen_xodos_host)
         )
         for ((target, linkName) in symlinks) {
             val targetPath = "$nativeLibDir/$target"

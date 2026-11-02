@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun InstallScreen(
@@ -57,7 +59,7 @@ fun InstallScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "INSTALLATION IN PROGRESS",
+                        text = stringResource(R.string.appscreen_installation_in_progress),
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF7C3AED),
                         fontSize = 11.sp,
@@ -91,7 +93,7 @@ fun InstallScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "$progress%",
+                        text = stringResource(R.string.appscreen_percent, progress),
                         color = Color(0xFFC3B6F9),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
