@@ -1,6 +1,36 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="appscreen_removing_native_environment">Removing native environment…</string>
+    <string name="app_name">XoDos-Ark</string>
+    <string name="lorie_app_name">Termux:X11</string>
+<string name="lorie_notification_content_text">X11 is running</string>
+    <string name="x11_display_activity_label">X11 display</string>
+    <string name="shortcut_terminal_short">Terminal</string>
+    <string name="shortcut_terminal_long">Terminal</string>
+    <!-- Text selection action mode (terminal-view) -->
+    <string name="paste_text">Paste</string>
+    <string name="copy_text">Copy</string>
+    <string name="text_selection_more">More…</string>
+
+    <!-- Termux:X11 (embedded) — layouts/preferences reference these -->
+     <string name="pref_ignoreGamepadEvents">Ignore gamepad input events</string>
+   <string name="pref_ignoreGamepadEvents_summary">Prevent gamepad and joystick events from being forwarded to X server</string>
+ 
+    <string name="lorie_pref_main">Main</string>
+    <string name="lorie_pref_output">Output</string>
+    <string name="lorie_pref_pointer">Pointer</string>
+    <string name="lorie_pref_kbd">Keyboard</string>
+    <string name="lorie_pref_other">Other</string>
+    <string name="lorie_pref_version">Version</string>
+    <!-- Display filtering variants used in preferences -->
+    <string-array name="displayFilteringVariants">
+        <item>nearest</item>
+        <item>bilinear</item>
+    </string-array>
+    <string-array name="displayFilteringVariantsEntries">
+        <item>Nearest (sharp)</item>
+        <item>Bilinear (smooth)</item>
+    </string-array>
+    
+        <string name="appscreen_removing_native_environment">Removing native environment…</string>
     <string name="appscreen_deleting_container">Deleting container…</string>
     <string name="appscreen_package_installation">Package installation</string>
     <string name="appscreen_ok">OK</string>
