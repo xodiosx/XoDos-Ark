@@ -536,7 +536,7 @@ private fun AdvancedTab(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             val options = listOf(
-                "" to context.getString(R.string.appscreen_none),
+                "" to stringResource(R.string.appscreen_none),
                 "x11" to "X11"
             )
             options.forEach { (key, label) ->

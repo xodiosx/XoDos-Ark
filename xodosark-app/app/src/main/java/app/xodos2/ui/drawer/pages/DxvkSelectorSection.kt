@@ -15,6 +15,7 @@ import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.runtime.WineComponentManager
 import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 @Composable
 fun DxvkSelectorSection(

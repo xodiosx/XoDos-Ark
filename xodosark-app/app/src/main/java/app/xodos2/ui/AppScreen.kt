@@ -99,6 +99,7 @@ import android.view.WindowManager
 import app.xodos2.ui.shell.TerminalBackgroundX11
 import app.xodos2.ui.glassDialogStyle
 import androidx.compose.ui.res.stringResource
+import app.xodos2.R
 
 private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")
 private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")

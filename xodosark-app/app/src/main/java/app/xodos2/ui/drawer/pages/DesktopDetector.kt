@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import app.xodos2.ui.runtime.NativeInstallCoordinator
 import java.io.File
-import app.xodos2.R
 
 object DesktopDetector {
 
@@ -14,22 +13,22 @@ object DesktopDetector {
     // Known session binaries and their display names.
     // Matches every DE / WM that can be installed from Termux's x11-repo.
     internal val knownBinaries = mapOf(
-        "xfce4-session"       to context.getString(R.string.appscreen_xfce_desktop),
-        "lxqt-session"        to context.getString(R.string.appscreen_lxqt_desktop),
+        "xfce4-session"       to "XFCE Desktop",
+        "lxqt-session"        to "LXQt Desktop",
         "gnome-shell"         to "GNOME",
-        "startplasma-x11"     to context.getString(R.string.appscreen_kde_plasma_x11),
-        "startplasma-wayland" to context.getString(R.string.appscreen_kde_plasma_wayland),
+        "startplasma-x11"     to "KDE Plasma (X11)",
+        "startplasma-wayland" to "KDE Plasma (Wayland)",
         "mate-session"        to "MATE",
-        "cinnamon-session"    to context.getString(R.string.appscreen_cinnamon),
-        "budgie-desktop"      to context.getString(R.string.appscreen_budgie),
+        "cinnamon-session"    to "Cinnamon",
+        "budgie-desktop"      to "Budgie",
         "startlxde"           to "LXDE",
         "startlxqt"           to "LXQt",
         "startxfce4"          to "XFCE",
         "enlightenment_start" to "Enlightenment",
-        "openbox-session"     to context.getString(R.string.appscreen_openbox),
+        "openbox-session"     to "Openbox",
         "i3"                  to "i3 Window Manager",
         "fluxbox"             to "Fluxbox",
-        "icewm-session"       to context.getString(R.string.appscreen_icewm)
+        "icewm-session"       to "IceWM"
     )
 
     // Battery status script that works without termux-api
@@ -244,7 +243,7 @@ internal fun isNativeDistroId(id: String?): Boolean {
                     wrapperFile.setExecutable(true, false)
                     Log.d("DesktopDetector", "Created wrapper at ${wrapperFile.absolutePath}")
                     if (wrapperFile.exists()) {
-                        detected.add("XFCE Desktop" to context.getString(R.string.appscreen_xfce4_session))
+                        detected.add("XFCE Desktop" to "xfce4-session")
                     }
                 } catch (e: Exception) {
                     Log.e("DesktopDetector", "Failed to create wrapper", e)
