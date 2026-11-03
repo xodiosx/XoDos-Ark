@@ -1,75 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-ar/strings.xml -->
 <resources>
-    <!-- General -->
-    <string name="appscreen_linux_distro_not_installed">Linux distro not installed.</string>
-    <string name="appscreen_container_manager">Container Manager</string>
-
-    <!-- X11 Scripts -->
-    <string name="appscreen_x11_scripts">X11 Scripts</string>
-    <string name="appscreen_x11_startup_script">X11 startup script</string>
-    <string name="appscreen_edit_x11_startup_script">Edit X11 startup script</string>
-
-    <!-- Install Desktop -->
-    <string name="appscreen_install_desktop">Install Desktop</string>
-    <string name="appscreen_edit_startup_script">Edit Startup Script</string>
-    <string name="appscreen_edit_startup_script_package_setup">Edit Startup Script Package Setup</string>
-    <string name="appscreen_edit_setup_script_title">Edit Setup Script: %1$s</string>
-    <string name="appscreen_installation_sequence_sh">Installation Sequence (.sh)</string>
-
-    <!-- Common actions -->
-    <string name="appscreen_save">Save</string>
-    <string name="appscreen_reset">Reset</string>
-    <string name="appscreen_cancel">Cancel</string>
-    <string name="appscreen_close">Close</string>
-    <string name="appscreen_edit">Edit</string>
-    <string name="appscreen_delete">Delete</string>
-
-    <!-- Wayland Scripts -->
-    <string name="appscreen_wayland_scripts">Wayland scripts</string>
-    <string name="appscreen_wayland_desktop_startup_script">Wayland desktop startup script</string>
-    <string name="appscreen_edit_wayland_startup_script">Edit Wayland startup script</string>
-
-    <!-- Commands -->
-    <string name="appscreen_commands">Commands</string>
-    <string name="appscreen_saved_commands">Saved Commands</string>
-    <string name="appscreen_add_command">Add command</string>
-    <string name="appscreen_no_saved_commands">No saved commands.</string>
-    <string name="appscreen_edit_command">Edit command</string>
-    <string name="appscreen_title">Title</string>
-    <string name="appscreen_shell_command">Shell command</string>
-    <string name="appscreen_delete_command">Delete command?</string>
-    <string name="appscreen_remove_command_title">Remove &quot;%1$s&quot;?</string>
-
-    <!-- DXVK / D3D Components -->
-    <string name="appscreen_d3d_components_dxvk">D3D Components (DXVK)</string>
-    <string name="appscreen_d3d_components">D3D Components</string>
-    <string name="appscreen_no_archives_found_in">No archives found in wincomponents/%1$s/</string>
-    <string name="appscreen_dxvk_extracting">Extracting %1$s…</string>
-    <string name="appscreen_dxvk_installed">Installed %1$s</string>
-    <string name="appscreen_dxvk_failed">Failed: %1$s</string>
-
-    <!-- Adrenotools -->
-    <string name="appscreen_adrenotools">Adrenotools</string>
-    <string name="appscreen_adrenotools_gpu_drivers">Adrenotools GPU Drivers</string>
-    <string name="appscreen_add_driver_zip">Add driver ZIP</string>
-    <string name="appscreen_no_custom_drivers_installed">No custom drivers installed.</string>
-    <string name="appscreen_delete_driver_title">Delete %1$s?</string>
-    <string name="appscreen_the_zip_and_its_entry_will_be_removed">The ZIP and its entry will be removed.</string>
-    <string name="appscreen_active">Active</string>
-    <string name="appscreen_activate">Activate</string>
-
-    <!-- HUD -->
-    <string name="appscreen_dxvk_hud">DXVK HUD</string>
-    <string name="appscreen_mangohud">MangoHud</string>
-
-    <!-- Proot Options -->
-    <string name="appscreen_applied_on_the_next_terminal_spawn_match_proot_d">Applied on the next terminal spawn. Match proot-distro login semantics.</string>
-    <string name="appscreen_username_blank_root_root">Username (blank/root = root)</string>
-    <string name="appscreen_hostname">Hostname</string>
-    <string name="appscreen_kernel_release_blank_default">Kernel release (blank = default)</string>
-    <string name="appscreen_change_id_override_e_g_0_0_blank_auto">change-id override (e.g. 0:0 — blank = auto)</string>
-    <string name="appscreen_working_directory_blank_home">Working directory (blank = home)</string>
-    <string name="appscreen_shared_tmp_forced">Shared /tmp (forced)</string>
-    <string name="appscreen_custom_binds_one_per_line_src_dst">Custom binds (one per line, SRC:DST)</string>
-    <string name="appscreen_custom_env_vars_one_per_line_key_value">Custom env vars (one per line, KEY=VALUE)</string>
+    <string name="appscreen_x11_scripts">سكربتات X11</string>
+    <string name="appscreen_x11_startup_script">سكربت بدء X11</string>
+    <string name="appscreen_install_desktop">تثبيت سطح المكتب</string>
+    <string name="appscreen_wayland_scripts">سكربتات Wayland</string>
+    <string name="appscreen_wayland_desktop_startup_script">سكربت بدء سطح مكتب Wayland</string>
+    <string name="appscreen_d3d_components_dxvk">مكونات D3D (DXVK)</string>
+    <string name="appscreen_d3d_components">مكونات D3D</string>
+    <string name="appscreen_dxvk_extracting">جارٍ استخراج %1$s…</string>
+    <string name="appscreen_dxvk_installed">تم تثبيت %1$s</string>
+    <string name="appscreen_dxvk_failed">فشل: %1$s</string>
 </resources>
