@@ -4,7 +4,7 @@
     <!ENTITY TERMUX_X11_APP_NAME "Termux:X11">
     ]>
 <resources>
-    <string name="app_name">&TERMUX_X11_APP_NAME;</string>
+  
 
     <string name="not_connected">未連線</string>
     <string name="preferences_button_text">   偏好設定   </string>

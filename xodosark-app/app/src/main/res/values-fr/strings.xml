@@ -1,6 +1,6 @@
 <!DOCTYPE resources [<!ENTITY TERMUX_PACKAGE_NAME "com.termux"><!ENTITY TERMUX_APP_NAME "XoDos"><!ENTITY TERMUX_DISPLAY_APP_NAME "Termux:X11">]>
 <resources>
-    <string name="app_name">&TERMUX_DISPLAY_APP_NAME; </string>
+
     <string name="plugin_info">&TERMUX_DISPLAY_APP_NAME; est une application plugin pour l\'application &TERMUX_APP_NAME;.
         \n\nConsultez le GitHub de l\'application &TERMUX_APP_NAME; %1$s et le GitHub de l\'application &TERMUX_DISPLAY_APP_NAME; %2$s pour plus d\'informations.</string>
 

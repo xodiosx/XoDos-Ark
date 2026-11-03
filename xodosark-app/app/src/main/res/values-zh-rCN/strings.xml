@@ -1,6 +1,6 @@
 <!DOCTYPE resources [<!ENTITY TERMUX_PACKAGE_NAME "com.termux"><!ENTITY TERMUX_APP_NAME "XoDos"><!ENTITY TERMUX_DISPLAY_APP_NAME "Termux:X11">]>
 <resources>
-    <string name="app_name">&TERMUX_DISPLAY_APP_NAME; </string>
+   
     <string name="plugin_info">&TERMUX_DISPLAY_APP_NAME; 是 &TERMUX_APP_NAME; 应用的插件应用。
         \n\n查看 &TERMUX_APP_NAME; 应用 GitHub %1$s 和 &TERMUX_DISPLAY_APP_NAME; 应用 GitHub %2$s 获取更多信息。</string>
 
