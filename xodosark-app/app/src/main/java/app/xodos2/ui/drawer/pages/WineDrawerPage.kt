@@ -216,10 +216,10 @@ fun WineDrawerPage(
                 hasWineRootfs = true
             )
             Spacer(modifier = Modifier.height(16.dp))
-            DrawerExpandableSection(title = "X11 Scripts", defaultExpanded = false) {
+            DrawerExpandableSection(title = stringResource(R.string.appscreen_x11_scripts), defaultExpanded = false) {
                 if (wineX11ScriptEditorOpen) {
                     DrawerScriptEditor(
-                        title = "X11 startup script",
+                        title = stringResource(R.string.appscreen_x11_startup_script),
                         initialText = AppPrefs.readWineDesktopStartupScript(prefs),
                         onSave = {
                             AppPrefs.writeWineDesktopStartupScript(prefs, it)
@@ -251,7 +251,7 @@ DesktopLaunchersSection(
     
     DxvkSelectorSection(
         category = "d3d",
-        title = "D3D Components (DXVK)",
+        title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
     HudSelectorSection(
@@ -263,7 +263,7 @@ AdrenotoolsDrawerButton(
     onExecuteCommand = onExecuteCommand,
     
 )
-            DrawerExpandableSection(title = "Install Desktop", defaultExpanded = false) {
+            DrawerExpandableSection(title = stringResource(R.string.appscreen_install_desktop), defaultExpanded = false) {
                 desktopEnvNames.forEach { name ->
                     val prefKey = "custom_install_script_${distroId}_${name.replace(" ", "_")}"
                     Row(
@@ -382,10 +382,10 @@ private fun WineExtraContent(
     onWaylandScriptEditorOpenChange: (Boolean) -> Unit,
     hasWineRootfs: Boolean
 ) {
-    DrawerExpandableSection(title = "Wayland scripts", defaultExpanded = false) {
+    DrawerExpandableSection(title = stringResource(R.string.appscreen_wayland_scripts), defaultExpanded = false) {
         if (waylandScriptEditorOpen) {
             DrawerScriptEditor(
-                title = "Wayland desktop startup script",
+                title = stringResource(R.string.appscreen_wayland_desktop_startup_script),
                 initialText = prefs.getString("wdesktop_startup_script", "") ?: "",
                 onSave = {
                     prefs.edit().putString("wdesktop_startup_script", it).apply()

@@ -478,7 +478,7 @@
     <string name="exit_btn">Exit</string>
 <string name="gamepad_category">Gamepad (SDL)</string>
 <string name="gamepad_sdlEnabled_title">Route controller to SDL gamepad</string>
-<string name="gamepad_sdlEnabled_summary_on">Controller keys go to X11 as a virtual XInput gamepad. WinHandler is bypassed for controller input.</string>
+<string name="gamepad_sdlEnabled_summary_on">Controller keys go to X11 as a sdl gamepad.Requires apt reinstall sdl.</string>
 <string name="gamepad_sdlEnabled_summary_off">Controller keys go to WinHandler (Wine) as before.</string>
 
 <string name="gamepad_forwardX11_title">Forward X11 gamepad state back to Android</string>

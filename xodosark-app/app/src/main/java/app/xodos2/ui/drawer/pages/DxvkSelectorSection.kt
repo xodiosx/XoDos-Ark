@@ -20,7 +20,7 @@ import app.xodos2.R
 @Composable
 fun DxvkSelectorSection(
     category: String = "d3d",
-    title: String = "D3D Components",
+    title: String? = null,
     enabled: Boolean = true
 ) {
     val context = LocalContext.current
@@ -39,7 +39,7 @@ fun DxvkSelectorSection(
         selected = saved?.takeIf { name -> archives.any { it.name == name } }
     }
 
-    DrawerExpandableSection(title = title, defaultExpanded = false) {
+    DrawerExpandableSection(title = title ?: stringResource(R.string.appscreen_d3d_components), defaultExpanded = false) {
         if (archives.isEmpty()) {
             Text(
                 text = stringResource(R.string.appscreen_no_archives_found_in, category),
@@ -63,14 +63,14 @@ fun DxvkSelectorSection(
 
                             // Extract into the Wine prefix
                             busy = true
-                            status = "Extracting ${archive.name}..."
+                            status = context.getString(R.string.appscreen_dxvk_extracting, archive.name)
                             val ok = WineComponentManager.extractToWinePrefix(
                                 context = context,
                                 category = category,
                                 archiveName = archive.name
                             ) { _, msg -> status = msg }
                             busy = false
-                            status = if (ok) "Installed ${archive.name}" else "Failed: ${archive.name}"
+                            status = if (ok) context.getString(R.string.appscreen_dxvk_installed, archive.name) else context.getString(R.string.appscreen_dxvk_failed, archive.name)
                         }
                     }
                     .padding(horizontal = 4.dp, vertical = 4.dp),

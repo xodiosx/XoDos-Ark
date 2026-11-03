@@ -1,0 +1,441 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-hi/strings.xml (Romanized Hindi) -->
+<!DOCTYPE resources [<!ENTITY TERMUX_PACKAGE_NAME "com.termux"><!ENTITY TERMUX_APP_NAME "XoDos"><!ENTITY TERMUX_X11_APP_NAME "XoDos"><!ENTITY TERMUX_DISPLAY_APP_NAME "Termux:X11">]>
+<resources>
+    <string name="plugin_info">&TERMUX_DISPLAY_APP_NAME; &TERMUX_APP_NAME; app ke liye ek plugin app hai.
+        \n\nZyada info ke liye &TERMUX_APP_NAME; app GitHub %1$s aur &TERMUX_DISPLAY_APP_NAME; app GitHub %2$s check karein.</string>
+    <string name="x11_app_name">&TERMUX_X11_APP_NAME;</string>
+    <!-- TermuxX11Activity -->
+    <string name="msg_storage_permission_not_granted_warning">Storage permission &TERMUX_DISPLAY_APP_NAME; app ko grant kiya jana chahiye…</string>
+    <string name="action_grant_storage_permission">Storage Permission grant karein</string>
+
+    <string name="msg_battery_optimization_not_disabled_warning">Android battery optimizations &TERMUX_DISPLAY_APP_NAME; app ke liye disable ki jani chahiye taki…
+        Zyada info ke liye https://developer.android.com/about/versions/oreo/background check karein aur
+        https://developer.android.com/guide/components/foreground-services#background-start-restrictions
+        bhi dekhein.
+
+        \n\nVendor specific app killers ke liye https://dontkillmyapp.com bhi check karein.
+        Vendor ke hisaab se aapko AutoStart enable karna, DuraSpeed disable karna,
+        app ke liye `Display pop-up windows while running in the background` enable karna pad sakta hai.</string>
+    <string name="action_disable_battery_optimizations">Battery Optimizations disable karein</string>
+
+    <string name="msg_display_over_other_apps_permission_not_granted_warning">Display over other apps permission &TERMUX_DISPLAY_APP_NAME; app ko grant kiya jana chahiye background se foreground activities start karne ke liye. Zyada info ke liye https://developer.android.com/guide/components/activities/background-starts check karein.
+    </string>
+    <string name="action_grant_display_over_other_apps_permission">Draw Over Apps Permission grant karein</string>
+
+    <string name="action_already_granted">Pehle se Granted</string>
+    <string name="action_already_disabled">Pehle se Disabled</string>
+    <string name="not_connected">Connected nahi</string>
+    <string name="help_button_text">   Help   </string>
+    <string name="preferences_button_text">   Preferences   </string>
+    <string name="extra_keys_config_desc">Yahan aap Termux app ki tarah extra-keys variable ki value set kar sakte hain (<a href="http://wiki.termux.com/wiki/Touch_Keyboard#Extra_Keys_Row">ye</a> padhein) aur zyada (jaise META).</string>
+    <!--    preference-->
+    <string name="pref_main">Preferences</string>
+    <string name="pref_output">Output🖥️</string>
+    <string name="pref_pointer">Pointer🖱️</string>
+    <string name="pref_kbd">Keyboard⌨️</string>
+    <string name="pref_other">Other⚙️</string>
+    <string name="pref_version">Version</string>
+    <string name="pref_ekbar">Extra key bar preferences</string>
+    <string name="pref_userActions">User actions par response</string>
+
+    <string name="pref_displayResolutionMode">Display resolution mode</string>
+    <string name="pref_displayScale">Display scale, %</string>
+    <string name="pref_displayResolutionExact">Display resolution</string>
+    <string name="pref_displayResolutionCustom">Display resolution</string>
+    <string name="pref_adjustResolution">Set resolution ko screen orientation ke hisaab se adjust karein</string>
+    <string name="pref_displayStretch">Display fit karne ke liye stretch karein</string>
+    <string name="pref_Reseed">Soft keyboard khula ho to screen reseed karein</string>
+    <string name="pref_Reseed_summary">Soft Keyboard khula ho to screen size adjust hogi.</string>
+    <string name="pref_PIP">PIP mode</string>
+    <string name="pref_PIP_summary">Home button ya recents button dabane par app picture-in-picture mode mein dikhayein</string>
+    <string name="pref_fullscreen">Fullscreen</string>
+    <string name="pref_fullscreen_summary">Device display mein immersive mode toggle karein</string>
+    <string name="pref_forceOrientation">Screen orientation</string>
+    <string name="pref_hideCutout">Display cutout chhupayein (agar ho)</string>
+    <string name="pref_keepScreenOn">Screen On rakhein</string>
+
+    <string name="pref_touchMode">Touchscreen input mode</string>
+    <string name="pref_scaleTouchpad">Touchpad par display scale factor apply karein</string>
+    <string name="pref_showStylusClickOverride">Stylus click options dikhayein</string>
+    <string name="pref_showStylusClickOverride_summary">Stylus touch override, left, middle ya right click (sirf stylus)</string>
+    <string name="pref_stylusIsMouse">Stylus mouse mode enable karein</string>
+    <string name="pref_stylusIsMouse_summary">Apne stylus ko mouse ki tarah kaam karwayein. Activate hone par stylus sirf cursor move karega aur mouse clicks bhejega, pressure, angle, aur tilt ignore karke.</string>
+    <string name="pref_stylusButtonContactModifierMode">Stylus button contact modifier mode</string>
+    <string name="pref_stylusButtonContactModifierMode_summary">Ye option enable karein taki right ya middle mouse buttons sirf tab bhejein jab button dabaya ho aur stylus screen ko touch kare.</string>
+    <string name="pref_showMouseHelper">Mouse click helper overlay dikhayein</string>
+    <string name="pref_showMouseHelper_summary">Touchpad ke saath usable onscreen mouse buttons</string>
+    <string name="pref_pointerCapture">Jab possible ho external pointer devices capture karein</string>
+    <string name="pref_pointerCapture_summary">Sabhi hardware pointer events intercept karein. Escape key dabane ke baad pointer Android par wapas.</string>
+    <string name="pref_transformCapturedPointer">Captured pointer movements transform karein</string>
+    <string name="pref_capturedPointerSpeedFactor">Captured pointer speed factor, %</string>
+    <string name="pref_tapToMove">Touchpads ke liye tap-to-move enable karein</string>
+
+    <string name="pref_showAdditionalKbd">Additional keyboard dikhayein</string>
+    <string name="pref_showAdditionalKbd_summary">Additional keys ke saath keyboard dikhayein.</string>
+    <string name="pref_showIMEWhileExternalConnected">External keyboard ke saath IME dikhayein</string>
+    <string name="pref_showIMEWhileExternalConnected_summary">Hardware keyboard connected ho to software keyboard dikhayein.</string>
+    <string name="pref_preferScancodes">Jab possible ho scancodes prefer karein</string>
+    <string name="pref_preferScancodes_summary">X server ko hardware keyboard layout handle karne dein (DE settings ya setxkbmap ke saath).</string>
+    <string name="pref_hardwareKbdScancodesWorkaround">Hardware keyboard scancodes workaround</string>
+    <string name="pref_hardwareKbdScancodesWorkaround_summary">Kuch devices par scancodes fix karta hai. Multiple layouts ke saath problem ho sakti hai.</string>
+    <string name="pref_dexMetaKeyCapture">System shortcuts intercept karein</string>
+    <string name="pref_dexMetaKeyCapture_summary">Sirf Samsung Dex. &quot;Alt+F4&quot;, &quot;Meta+D&quot;, &quot;Meta+E&quot;, etc. intercept karne deta hai.</string>
+    <string name="pref_enableAccessibilityService">Manually system shortcuts intercept karne ke liye Accessibility service enable karein.</string>
+    <string name="pref_enableAccessibilityService_summary">Accessibility settings kholein.</string>
+    <string name="pref_enableAccessibilityServiceAutomatically">Automatically system shortcuts intercept karne ke liye Accessibility service enable karein.</string>
+    <string name="pref_enableAccessibilityServiceAutomatically_summary">WRITE_SECURE_SETTINGS permission chahiye.</string>
+    <string name="pref_pauseKeyInterceptingWithEsc">Esc key se key intercepting pause karein</string>
+    <string name="pref_filterOutWinkey">Intercepted Win (Meta/Mod4) key filter karein.</string>
+    <string name="pref_filterOutWinkey_summary">Intercept karte waqt Dex shortcuts use karne deta hai. Kaam karne ke liye Accessibility service chahiye.</string>
+    <string name="pref_enforceCharBasedInput">Char based input enforce karein</string>
+    <string name="pref_enforceCharBasedInput_summary">Suggestions, predictive typing aur CJK languages suppress karta hai</string>
+
+    <string name="pref_clipboardEnable">Clipboard sharing</string>
+    <string name="pref_requestNotificationPermission">Notification permission request karein</string>
+    <string name="pref_xrMode">Meta Oculus XR mode</string>
+    <string name="pref_configureResponseToUserActions">User actions par response configure karein</string>
+    <string name="pref_storeSecondaryDisplayPreferencesSeparately">Secondary displays ke preferences alag se store karein</string>
+    <string name="pref_storeSecondaryDisplayPreferencesSeparately_summary">Jis display ko configure karna hai us par ye screen kholein</string>
+
+    <string name="pref_adjustHeightForEK">Extra keys bar ke liye display height adjust karein</string>
+    <string name="pref_adjustHeightForEK_summary">EK bar toggle karte waqt screen flickering ho sakti hai.</string>
+    <string name="pref_useTermuxEKBarBehaviour">Har keypress ke baad additional key bar par special keys deactivate karein</string>
+    <string name="pref_useTermuxEKBarBehaviour_summary">Special keys lock karne ke liye long-tap use karein</string>
+    <string name="pref_opacityEKBar">Extra keys bar ki opacity, %</string>
+    <string name="pref_extra_keys_config">Extra keys config</string>
+
+    <string name="pref_swipeUpAction">Teen ungli upar swipe</string>
+    <string name="pref_swipeDownAction">Teen ungli neeche swipe</string>
+    <string name="pref_volumeUpAction">Volume up</string>
+    <string name="pref_volumeDownAction">Volume down</string>
+    <string name="pref_backButtonAction">Back button</string>
+    <string name="pref_notificationTapAction">Notification tap</string>
+    <string name="pref_notificationButton0Action">Notification pehla button</string>
+    <string name="pref_notificationButton1Action">Notification doosra button</string>
+    <string name="pref_mediaKeysAction">Media keys</string>
+
+    <string name="pref_summary_requiresExactOrCustom">&quot;Display resolution mode&quot; ko &quot;exact&quot; ya &quot;custom&quot; hona chahiye</string>
+    <string name="pref_summary_requiresIntercepting">Dex mode ya Accessibility service ke saath system shortcuts intercept karne chahiye</string>
+    <string name="pref_summary_requiresTrackpadAndNative">&quot;Touchscreen input mode&quot; ko &quot;Trackpad&quot; hona chahiye aur &quot;Display resolution mode&quot; ko &quot;native&quot; nahi hona chahiye</string>
+
+    <string name="touch_sensitivity">Touch sensitivity, x300ms</string>
+    <string name="open_keyboard">Keyboard kholein⌨️</string>
+    <string name="select_controller">Controller chunein🎮</string>
+    <string name="select_controller_summary">Input feature use karne ke liye, preferences-&gt;keyboard-&gt;scan code on karein</string>
+    <string name="progress_manager">Progress manager📊</string>
+    <string name="install_x11_server_bridge">XoDos x11 install karein</string>
+    <string name="stop_desktop">Desktop stop karein🚫</string>
+
+    <string name="add_button">key add karein</string>
+    <string name="launch_button_text">launch</string>
+    <string name="enabl_float_ball_menu">float ball menu enable karein</string>
+    <string name="enable_global_float_ball_menu">global float ball menu</string>
+    <string name="start_keyboard_x11">soft keyboard kholne ke liye back button dabayein</string>
+    <string name="stop_keyboard_x11">x11 soft keyboard input stop karein</string>
+    <string name="enabl_float_ball_menu_notice">ek baar on karne par, app content unlock sliding aur kuch other functions float ball menu mein move ho jayenge</string>
+    <string name="open_x11_settings">x11 settings dikhayein</string>
+    <string name="hide_x11_settings">x11 settings chhupayein</string>
+    <string name="enable_touch_screen">touch screen</string>
+    <string name="command">command</string>
+    <string name="title">title</string>
+
+    <!-- Log Level -->
+    <string name="log_level_title">Log Level</string>
+    <string name="log_level_off">Off</string>
+    <string name="log_level_normal">Normal</string>
+    <string name="log_level_debug">Debug</string>
+    <string name="log_level_verbose">Verbose</string>
+    <string name="log_level_unknown">*Unknown*</string>
+    <string name="log_level_value">Logcat log level \&quot;%1$s\&quot; par set</string>
+    <string name="start_button_start_x11">x11 server start karein</string>
+    <string name="exit_button_exit_app">Exit</string>
+    <string name="x11_server_bridge_config">Wo bridge reinstall karein jo x11 server termux se communicate karne ke liye use karta hai. Installation current graphical interface ko stop karegi aur restart chahiye hoga. Agar koi file save nahi hui, save karke retry karein.</string>
+
+    <!--inpt controller-->
+    <string name="run">Run</string>
+    <string name="edit">Edit</string>
+    <string name="remove">Remove</string>
+    <string name="add">Add</string>
+    <string name="shortcuts">Shortcuts</string>
+    <string name="containers">Containers</string>
+    <string name="input_controls">Input Controls</string>
+    <string name="no_items_to_display">Display karne ke liye koi item nahi</string>
+    <string name="new_container">Naya Container</string>
+    <string name="edit_container">Container edit karein</string>
+    <string name="creating_container">Container create ho raha hai...</string>
+    <string name="removing_container">Container remove ho raha hai...</string>
+    <string name="duplicating_container">Container duplicate ho raha hai...</string>
+    <string name="installing_system_files">System Files install ho rahi hain...</string>
+    <string name="starting_up">Start ho raha hai...</string>
+    <string name="unable_to_install_system_files">System files install nahi ho payi</string>
+    <string name="keyboard">Keyboard</string>
+    <string name="toggle_fullscreen">Fullscreen toggle karein</string>
+    <string name="exit">Exit</string>
+    <string name="no_control_element_selected">Koi control element selected nahi</string>
+    <string name="scale">Scale</string>
+    <string name="shape">Shape</string>
+    <string name="type">Type</string>
+    <string name="binding">Binding</string>
+    <string name="binding_up">Binding Up</string>
+    <string name="binding_right">Binding Right</string>
+    <string name="binding_down">Binding Down</string>
+    <string name="binding_left">Binding Left</string>
+    <string name="overlay_opacity">Overlay Opacity</string>
+    <string name="profile">Profile</string>
+    <string name="select_profile">Profile chunein</string>
+    <string name="profile_name">Profile Name</string>
+    <string name="name">Name</string>
+    <string name="ok">OK</string>
+    <string name="cancel">Cancel</string>
+    <string name="untitled">Untitled</string>
+    <string name="no_profile_selected">Koi profile selected nahi</string>
+    <string name="too_much_key">Bahut zyada key, chaar se zyada nahi</string>
+    <string name="cheat_code">Cheat code</string>
+    <string name="set_cheat_code">Set</string>
+    <string name="no_profile_found">Koi profile nahi mili</string>
+    <string name="do_you_want_to_remove_this_profile">Kya aap ye profile remove karna chahte hain?</string>
+    <string name="do_you_want_to_duplicate_this_profile">Kya aap ye profile duplicate karna chahte hain?</string>
+    <string name="do_you_want_to_duplicate_this_preset">Kya aap ye preset duplicate karna chahte hain?</string>
+    <string name="do_you_want_to_remove_this_container">Kya aap ye container remove karna chahte hain?</string>
+    <string name="do_you_want_to_duplicate_this_container">Kya aap ye container duplicate karna chahte hain?</string>
+    <string name="do_you_want_to_remove_this_shortcut">Kya aap ye shortcut remove karna chahte hain?</string>
+    <string name="do_you_want_to_remove_this_controller">Kya aap ye controller remove karna chahte hain?</string>
+    <string name="do_you_want_to_remove_this_wine_version">Kya aap ye wine version remove karna chahte hain?</string>
+    <string name="do_you_want_to_remove_this_preset">Kya aap ye preset remove karna chahte hain?</string>
+    <string name="do_you_want_to_end_this_process">Kya aap ye process end karna chahte hain?</string>
+    <string name="controls_editor">Controls Editor</string>
+    <string name="enabled">Enabled</string>
+    <string name="disabled">Disabled</string>
+    <string name="container">Container</string>
+    <string name="screen_size">Screen Size</string>
+    <string name="new_environment_variable">Naya Environment Variable</string>
+    <string name="environment_variables">Environment Variables</string>
+    <string name="value">Value</string>
+    <string name="processor_affinity">Processor Affinity</string>
+    <string name="cursor_speed">Cursor Speed</string>
+    <string name="lock_cursor">Cursor Lock karein</string>
+    <string name="toggle_switch">Switch toggle karein</string>
+    <string name="toggle_model">Toggle(not checked)/Long Press(checked)</string>
+    <string name="profile_exported_to">Profile export hui</string>
+    <string name="unable_to_import_profile">Profile import nahi ho payi</string>
+    <string name="wine_configuration">Wine Configuration</string>
+    <string name="registry_keys">Registry Keys</string>
+    <string name="csmt">CSMT (Command Stream Multi-Thread)</string>
+    <string name="gpu_name">GPU Name</string>
+    <string name="offscreen_rendering_mode">Offscreen Rendering Mode</string>
+    <string name="strict_shader_math">Strict Shader Math</string>
+    <string name="video_memory_size">Video Memory Size</string>
+    <string name="show_fps">FPS dikhayein</string>
+    <string name="none">None</string>
+    <string name="custom_text">Custom Text</string>
+    <string name="icon">Icon</string>
+    <string name="import_profile">Profile import karein</string>
+    <string name="export_profile">Profile export karein</string>
+    <string name="touchpad_help">Touchpad Help</string>
+    <string name="touchpad_help_mouse_left_click_title">Mouse Left-Click</string>
+    <string name="touchpad_help_mouse_left_click_description">Ek ungli se short tap</string>
+    <string name="touchpad_help_mouse_right_click_title">Mouse Right-Click</string>
+    <string name="touchpad_help_mouse_right_click_description">Ek ungli se tap karein aur doosri ungli se short tap</string>
+    <string name="touchpad_help_mouse_scroll_wheel_title">Mouse Scroll Wheel</string>
+    <string name="touchpad_help_mouse_scroll_wheel_description">Do ungli tap karein aur move karein</string>
+    <string name="touchpad_help_main_menu_title">Main Menu</string>
+    <string name="touchpad_help_main_menu_description">Chaar ungli tap</string>
+    <string name="duplicate">Duplicate</string>
+    <string name="about">About</string>
+    <string name="credits_and_third_party_apps">Credits aur Third-party apps</string>
+    <string name="external_controllers">External Controllers</string>
+    <string name="graphics_driver">Graphics Driver</string>
+    <string name="audio_driver">Audio Driver</string>
+    <string name="loading">Load ho raha hai...</string>
+    <string name="press_any_button_on_your_controller">Apne controller par koi bhi button dabayein</string>
+    <string name="bindings">bindings</string>
+    <string name="show_touchscreen_controls">Touchscreen Controls dikhayein</string>
+    <string name="dxwrapper">DX Wrapper</string>
+    <string name="mouse_warp_override">Mouse Warp Override</string>
+    <string name="direct3d">Direct3D</string>
+    <string name="directsound">DirectSound</string>
+    <string name="directmusic">DirectMusic</string>
+    <string name="directplay">DirectPlay</string>
+    <string name="directshow">DirectShow</string>
+    <string name="vcrun2010">Visual C++ 2010</string>
+    <string name="settings">Settings</string>
+    <string name="exec_arguments">Exec Arguments</string>
+    <string name="win_components">Win Components</string>
+    <string name="drives">Drives</string>
+    <string name="force_fullscreen">Fullscreen force karein</string>
+    <string name="range">Range</string>
+    <string name="enable">Enable</string>
+    <string name="disable">Disable</string>
+    <string name="force">Force</string>
+    <string name="installed_wine">Installed Wine</string>
+    <string name="install_wine">Wine install karein</string>
+    <string name="arch">Arch</string>
+    <string name="version">Version</string>
+    <string name="unable_to_install_wine">Wine install nahi ho paya</string>
+    <string name="unable_to_remove_this_wine_version">Ye wine version remove nahi ho paya</string>
+    <string name="wine_version">Wine Version</string>
+    <string name="removing_wine">Wine remove ho raha hai...</string>
+    <string name="preparing_installation">Installation prepare ho rahi hai...</string>
+    <string name="finishing_installation">Installation finish ho rahi hai...</string>
+    <string name="storage_info">Storage Info</string>
+    <string name="drive_c">Drive C:</string>
+    <string name="cache">Cache</string>
+    <string name="total">Total</string>
+    <string name="clear_cache">Cache clear karein</string>
+    <string name="estimated_used_space">Estimated Used Space</string>
+    <string name="advanced">Advanced</string>
+    <string name="box86_box64">Box86/Box64</string>
+    <string name="stop_services_on_startup">Startup par services stop karein</string>
+    <string name="system">System</string>
+    <string name="box86_preset">Box86 Preset</string>
+    <string name="box64_preset">Box64 Preset</string>
+    <string name="box86_version">Box86 Version</string>
+    <string name="box64_version">Box64 Version</string>
+    <string name="letter">Letter</string>
+    <string name="target_path">Target Path</string>
+    <string name="xserver">XServer</string>
+    <string name="use_dri3_extension">DRI3 extension use karein</string>
+    <string name="width">Width</string>
+    <string name="height">Height</string>
+    <string name="old">purana</string>
+    <string name="_new">naya</string>
+    <string name="task_manager">Task Manager</string>
+    <string name="process_name">Process Name</string>
+    <string name="pid">PID</string>
+    <string name="memory">Memory</string>
+    <string name="end_process">Process End karein</string>
+    <string name="new_task">Naya Task</string>
+    <string name="processes">Processes</string>
+    <string name="orientation">Orientation</string>
+    <string name="horizontal">Horizontal</string>
+    <string name="vertical">Vertical</string>
+    <string name="open_file">File kholein</string>
+    <string name="download_file">File download karein</string>
+    <string name="do_you_want_to_download_the_selected_profiles">Kya aap selected profiles download karna chahte hain?</string>
+    <string name="downloading_file">File download ho rahi hai...</string>
+    <string name="unable_to_load_profile_list">Profile list load nahi ho payi</string>
+    <string name="copy">Copy</string>
+    <string name="installed_version">Installed Version</string>
+    <string name="unable_to_download_file">File download nahi ho payi</string>
+    <string name="stability">Stability</string>
+    <string name="compatibility">Compatibility</string>
+    <string name="intermediate">Intermediate</string>
+    <string name="performance">Performance</string>
+    <string name="preset">Preset</string>
+    <string name="you_cannot_remove_this_preset">Aap ye preset remove nahi kar sakte</string>
+    <string name="dxwrapper_help_content"><![CDATA[
+        <i><b>WineD3D</b></i> DirectX 1-11 se OpenGL ke liye translation layer hai.<br /><br />
+        <i><b>DXVK</b></i> Direct3D 9-11 se Vulkan ke liye translation layer hai.<br /><br />
+        <i><b>D8VK</b></i> Direct3D 8 se Vulkan ke liye translation layer hai.<br /><br />
+        <i><b>CNC DDraw</b></i> classic games ke saath behtar compatibility ke liye DirectDraw ka implementation hai.
+    ]]></string>
+    <string name="box86_64_env_var_help__dynarec_safeflags"><![CDATA[
+        CALL/RET opcodes par flags ka handling<br /><br />
+        <b>0</b> : CALL/RET ko aise treat karta hai jaise flags kabhi zaroori nahi (faster, unstable)<br />
+        <b>1</b> : Zyada RET ko flags chahiye honge, zyada CALLS ko nahi<br />
+        <b>2</b> : Sabhi CALL/RET ko flags chahiye honge (slower)
+    ]]></string>
+    <string name="box86_64_env_var_help__dynarec_fastnan">x86 ki tarah -NAN ka generation</string>
+    <string name="box86_64_env_var_help__dynarec_fastround">Precise x86 rounding ka generation</string>
+    <string name="box86_64_env_var_help__dynarec_x87double">x86 emulation ke liye Float/Double ka use</string>
+    <string name="box86_64_env_var_help__dynarec_bigblock"><![CDATA[
+        Dynarec BigBlock building<br /><br />
+        <b>0</b> : Block ko jitna bada possible ho banane ki koshish na karein<br />
+        <b>1</b> : Dynarec block ko jitna bada possible ho banayein<br />
+        <b>2</b> : Dynarec block bigger banayein (jab block overlap ho to continue karein, sirf elf memory ke blocks ke liye)<br />
+        <b>3</b> : Dynarec block bigger banayein (jab block overlap ho to continue karein, sabhi types ki memory ke liye)
+    ]]></string>
+    <string name="box86_64_env_var_help__dynarec_strongmem"><![CDATA[
+        Strong Memory model ka simulation<br /><br />
+        <b>0</b> : Kuch special try na karein<br />
+        <b>1</b> : Memory mein likhte waqt kuch Memory Barrier enable karein (kuch MOV opcode par)<br />
+        <b>2</b> : Sab 1 plus MOV use karke memory mein har write par Memory Barrier<br />
+        <b>2</b> : Sab 2 plus memory se read karte waqt aur kuch SSE/SSE2 opcodes par Memory Barrier
+    ]]></string>
+    <string name="box86_64_env_var_help__dynarec_forward">Block building ke waqt max allowed forward value define karta hai</string>
+    <string name="box86_64_env_var_help__dynarec_callret">CALL/RET opcodes ka optimization</string>
+    <string name="box86_64_env_var_help__dynarec_wait">Define karta hai ki Dynarec FillBlock ready hone ka wait karega ya nahi</string>
+    <string name="columns">Columns</string>
+    <string name="directinput_mapper_type">DirectInput Mapper Type</string>
+    <string name="desktop">Desktop</string>
+    <string name="theme">Theme</string>
+    <string name="background">Background</string>
+    <string name="max_device_memory">Max Device Memory</string>
+    <string name="frame_rate">Frame Rate</string>
+    <string name="configuration">Configuration</string>
+    <string name="browse">Browse</string>
+    <string name="magnifier">Magnifier</string>
+    <string name="bring_to_front">Front mein laayein</string>
+    <string name="options">Options</string>
+    <string name="notification_content_text">Settings kholne ke liye tap karein</string>
+
+    <string name="toolbox_button_text2">Start</string>
+    <string name="open_drawer">Navigation drawer kholein</string>
+    <string name="close_drawer">Navigation drawer band karein</string>
+
+    <!-- Add missing strings from the error -->
+    <string name="exit_button_text">Exit</string>
+    <string name="notification_exit">Exit</string>
+    <string name="notification_open_preferences">Preferences kholein</string>
+    <string name="notification_release_pointer_and_keyboard_capture">Capture release karein</string>
+    <string name="notification_restart_activity">Restart</string>
+    <string name="notification_toggle_additional_key_bar">Extra Keys toggle karein</string>
+    <string name="notification_toggle_fullscreen">Fullscreen toggle karein</string>
+    <string name="notification_toggle_soft_keyboard">Keyboard toggle karein</string>
+
+    <!-- New strings for drawer -->
+    <string name="drawer_title">X11 Controls</string>
+    <string name="drawer_subtitle">Termux X11 Desktop</string>
+    <string name="quick_toggles">Quick Toggles</string>
+    <string name="settings_categories">Settings Categories</string>
+    <string name="quick_actions">Quick Actions</string>
+    <string name="fullscreen">Fullscreen</string>
+    <string name="show_extra_keys">Extra Keys dikhayein</string>
+    <string name="keep_screen_on">Screen On rakhein</string>
+    <string name="display_settings">Display Settings</string>
+    <string name="pointer_settings">Pointer Settings</string>
+    <string name="keyboard_settings">Keyboard Settings</string>
+    <string name="other_settings">Other Settings</string>
+    <string name="all_settings">Sab Settings</string>
+    <string name="open_keyboard_btn">Keyboard kholein</string>
+    <string name="input_controls_btn">Input Controls</string>
+    <string name="process_manager_btn">Process Manager</string>
+    <string name="reinstall_x11">X11 reinstall karein</string>
+    <string name="stop_desktop_btn">Desktop stop karein</string>
+    <string name="exit_btn">Exit</string>
+    <string name="gamepad_category">Gamepad (SDL)</string>
+    <string name="gamepad_sdlEnabled_title">Controller ko SDL gamepad par route karein</string>
+    <string name="gamepad_sdlEnabled_summary_on">Controller keys X11 ko sdl gamepad ke roop mein jaati hain. apt reinstall sdl chahiye.</string>
+    <string name="gamepad_sdlEnabled_summary_off">Controller keys pehle ki tarah WinHandler (Wine) par jaati hain.</string>
+
+    <string name="gamepad_forwardX11_title">X11 gamepad state ko wapas Android par forward karein</string>
+    <string name="gamepad_forwardX11_summary">X11-side rumble/effects ko Android vibration drive karne deta hai.</string>
+
+    <string name="gamepad_host_title">Host</string>
+    <string name="gamepad_host_summary">Local X server host. 127.0.0.1 par rakhein jab tak X11 remotely na chalayein.</string>
+
+    <string name="gamepad_port_title">Client port</string>
+    <string name="gamepad_port_summary">Server port client + 1 hai. Default 4600.</string>
+
+    <string name="gamepad_id_title">Gamepad ID</string>
+    <string name="gamepad_id_summary">X11 ko dikhaya gaya virtual gamepad number. Default 1.</string>
+
+    <string name="gamepad_stateHz_title">State pump rate (Hz)</string>
+    <string name="gamepad_stateHz_summary">Controller state X11 par kitni baar per second push hoti hai.</string>
+
+    <string name="gamepad_inputType_title">Input type</string>
+    <string name="gamepad_inputType_summary">X11 LORIE-CONTROLLER extension ko offered handshake format.</string>
+
+    <string name="gamepad_mode_title">Mapped mode</string>
+    <string name="gamepad_mode_summary">Mapped = real controller buttons; Keyboard = extra-keys binds ke through route karein.</string>
+
+    <string name="gamepad_vibrate_title">Vibration</string>
+    <string name="gamepad_vibrate_summary">System rumble events par Android vibrator use karta hai.</string>
+
+    <string name="gamepad_vibrateStrength_title">Vibration strength</string>
+    <string name="gamepad_vibrateStrength_summary">0–255.</string>
+
+    <string name="gamepad_name_title">Gamepad name</string>
+    <string name="gamepad_name_summary">X11 / SDL ko advertised naam.</string>
+</resources>

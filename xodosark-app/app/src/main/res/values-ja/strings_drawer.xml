@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-ja/strings.xml -->
+<resources>
+    <!-- General -->
+    <string name="appscreen_linux_distro_not_installed">Linux ディストロがインストールされていません。</string>
+    <string name="appscreen_container_manager">コンテナマネージャー</string>
+
+    <!-- X11 Scripts -->
+    <string name="appscreen_x11_scripts">X11 スクリプト</string>
+    <string name="appscreen_x11_startup_script">X11 起動スクリプト</string>
+    <string name="appscreen_edit_x11_startup_script">X11 起動スクリプトを編集</string>
+
+    <!-- Install Desktop -->
+    <string name="appscreen_install_desktop">デスクトップをインストール</string>
+    <string name="appscreen_edit_startup_script">起動スクリプトを編集</string>
+    <string name="appscreen_edit_startup_script_package_setup">起動スクリプトのパッケージ設定を編集</string>
+    <string name="appscreen_edit_setup_script_title">セットアップスクリプトを編集：%1$s</string>
+    <string name="appscreen_installation_sequence_sh">インストールシーケンス（.sh）</string>
+
+    <!-- Common actions -->
+    <string name="appscreen_save">保存</string>
+    <string name="appscreen_reset">リセット</string>
+    <string name="appscreen_cancel">キャンセル</string>
+    <string name="appscreen_close">閉じる</string>
+    <string name="appscreen_edit">編集</string>
+    <string name="appscreen_delete">削除</string>
+
+    <!-- Wayland Scripts -->
+    <string name="appscreen_wayland_scripts">Wayland スクリプト</string>
+    <string name="appscreen_wayland_desktop_startup_script">Wayland デスクトップ起動スクリプト</string>
+    <string name="appscreen_edit_wayland_startup_script">Wayland 起動スクリプトを編集</string>
+
+    <!-- Commands -->
+    <string name="appscreen_commands">コマンド</string>
+    <string name="appscreen_saved_commands">保存済みコマンド</string>
+    <string name="appscreen_add_command">コマンドを追加</string>
+    <string name="appscreen_no_saved_commands">保存済みコマンドはありません。</string>
+    <string name="appscreen_edit_command">コマンドを編集</string>
+    <string name="appscreen_title">タイトル</string>
+    <string name="appscreen_shell_command">シェルコマンド</string>
+    <string name="appscreen_delete_command">コマンドを削除しますか？</string>
+    <string name="appscreen_remove_command_title">&quot;%1$s&quot; を削除しますか？</string>
+
+    <!-- DXVK / D3D Components -->
+    <string name="appscreen_d3d_components_dxvk">D3D コンポーネント（DXVK）</string>
+    <string name="appscreen_d3d_components">D3D コンポーネント</string>
+    <string name="appscreen_no_archives_found_in">wincomponents/%1$s/ にアーカイブが見つかりません</string>
+    <string name="appscreen_dxvk_extracting">%1$s を展開中…</string>
+    <string name="appscreen_dxvk_installed">%1$s をインストールしました</string>
+    <string name="appscreen_dxvk_failed">失敗：%1$s</string>
+
+    <!-- Adrenotools -->
+    <string name="appscreen_adrenotools">Adrenotools</string>
+    <string name="appscreen_adrenotools_gpu_drivers">Adrenotools GPU ドライバー</string>
+    <string name="appscreen_add_driver_zip">ドライバー ZIP を追加</string>
+    <string name="appscreen_no_custom_drivers_installed">カスタムドライバーはインストールされていません。</string>
+    <string name="appscreen_delete_driver_title">%1$s を削除しますか？</string>
+    <string name="appscreen_the_zip_and_its_entry_will_be_removed">ZIP とそのエントリが削除されます。</string>
+    <string name="appscreen_active">アクティブ</string>
+    <string name="appscreen_activate">有効化</string>
+
+    <!-- HUD -->
+    <string name="appscreen_dxvk_hud">DXVK HUD</string>
+    <string name="appscreen_mangohud">MangoHud</string>
+
+    <!-- Proot Options -->
+    <string name="appscreen_applied_on_the_next_terminal_spawn_match_proot_d">次回のターミナル起動時に適用されます。proot-distro のログイン動作に一致します。</string>
+    <string name="appscreen_username_blank_root_root">ユーザー名（空白/root = root）</string>
+    <string name="appscreen_hostname">ホスト名</string>
+    <string name="appscreen_kernel_release_blank_default">カーネルリリース（空白 = デフォルト）</string>
+    <string name="appscreen_change_id_override_e_g_0_0_blank_auto">change-id 上書き（例 0:0 — 空白 = 自動）</string>
+    <string name="appscreen_working_directory_blank_home">作業ディレクトリ（空白 = ホーム）</string>
+    <string name="appscreen_shared_tmp_forced">共有 /tmp（強制）</string>
+    <string name="appscreen_custom_binds_one_per_line_src_dst">カスタムバインド（1 行に 1 つ、SRC:DST）</string>
+    <string name="appscreen_custom_env_vars_one_per_line_key_value">カスタム環境変数（1 行に 1 つ、KEY=VALUE）</string>
+</resources>

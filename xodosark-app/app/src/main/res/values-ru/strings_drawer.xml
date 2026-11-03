@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-ru/strings.xml -->
+<resources>
+    <!-- General -->
+    <string name="appscreen_linux_distro_not_installed">Дистрибутив Linux не установлен.</string>
+    <string name="appscreen_container_manager">Менеджер контейнеров</string>
+
+    <!-- X11 Scripts -->
+    <string name="appscreen_x11_scripts">Скрипты X11</string>
+    <string name="appscreen_x11_startup_script">Скрипт запуска X11</string>
+    <string name="appscreen_edit_x11_startup_script">Изменить скрипт запуска X11</string>
+
+    <!-- Install Desktop -->
+    <string name="appscreen_install_desktop">Установить рабочий стол</string>
+    <string name="appscreen_edit_startup_script">Изменить скрипт запуска</string>
+    <string name="appscreen_edit_startup_script_package_setup">Изменить настройку пакета скрипта запуска</string>
+    <string name="appscreen_edit_setup_script_title">Изменить скрипт настройки: %1$s</string>
+    <string name="appscreen_installation_sequence_sh">Последовательность установки (.sh)</string>
+
+    <!-- Common actions -->
+    <string name="appscreen_save">Сохранить</string>
+    <string name="appscreen_reset">Сброс</string>
+    <string name="appscreen_cancel">Отмена</string>
+    <string name="appscreen_close">Закрыть</string>
+    <string name="appscreen_edit">Изменить</string>
+    <string name="appscreen_delete">Удалить</string>
+
+    <!-- Wayland Scripts -->
+    <string name="appscreen_wayland_scripts">Скрипты Wayland</string>
+    <string name="appscreen_wayland_desktop_startup_script">Скрипт запуска рабочего стола Wayland</string>
+    <string name="appscreen_edit_wayland_startup_script">Изменить скрипт запуска Wayland</string>
+
+    <!-- Commands -->
+    <string name="appscreen_commands">Команды</string>
+    <string name="appscreen_saved_commands">Сохранённые команды</string>
+    <string name="appscreen_add_command">Добавить команду</string>
+    <string name="appscreen_no_saved_commands">Нет сохранённых команд.</string>
+    <string name="appscreen_edit_command">Изменить команду</string>
+    <string name="appscreen_title">Название</string>
+    <string name="appscreen_shell_command">Команда shell</string>
+    <string name="appscreen_delete_command">Удалить команду?</string>
+    <string name="appscreen_remove_command_title">Удалить &quot;%1$s&quot;?</string>
+
+    <!-- DXVK / D3D Components -->
+    <string name="appscreen_d3d_components_dxvk">Компоненты D3D (DXVK)</string>
+    <string name="appscreen_d3d_components">Компоненты D3D</string>
+    <string name="appscreen_no_archives_found_in">Архивы не найдены в wincomponents/%1$s/</string>
+    <string name="appscreen_dxvk_extracting">Извлечение %1$s…</string>
+    <string name="appscreen_dxvk_installed">Установлено %1$s</string>
+    <string name="appscreen_dxvk_failed">Ошибка: %1$s</string>
+
+    <!-- Adrenotools -->
+    <string name="appscreen_adrenotools">Adrenotools</string>
+    <string name="appscreen_adrenotools_gpu_drivers">Драйверы GPU Adrenotools</string>
+    <string name="appscreen_add_driver_zip">Добавить ZIP драйвера</string>
+    <string name="appscreen_no_custom_drivers_installed">Пользовательские драйверы не установлены.</string>
+    <string name="appscreen_delete_driver_title">Удалить %1$s?</string>
+    <string name="appscreen_the_zip_and_its_entry_will_be_removed">ZIP и его запись будут удалены.</string>
+    <string name="appscreen_active">Активен</string>
+    <string name="appscreen_activate">Активировать</string>
+
+    <!-- HUD -->
+    <string name="appscreen_dxvk_hud">DXVK HUD</string>
+    <string name="appscreen_mangohud">MangoHud</string>
+
+    <!-- Proot Options -->
+    <string name="appscreen_applied_on_the_next_terminal_spawn_match_proot_d">Применяется при следующем запуске терминала. Соответствует семантике входа proot-distro.</string>
+    <string name="appscreen_username_blank_root_root">Имя пользователя (пусто/root = root)</string>
+    <string name="appscreen_hostname">Имя хоста</string>
+    <string name="appscreen_kernel_release_blank_default">Версия ядра (пусто = по умолчанию)</string>
+    <string name="appscreen_change_id_override_e_g_0_0_blank_auto">переопределение change-id (например, 0:0 — пусто = авто)</string>
+    <string name="appscreen_working_directory_blank_home">Рабочий каталог (пусто = домашний)</string>
+    <string name="appscreen_shared_tmp_forced">Общий /tmp (принудительно)</string>
+    <string name="appscreen_custom_binds_one_per_line_src_dst">Пользовательские привязки (по одной в строке, SRC:DST)</string>
+    <string name="appscreen_custom_env_vars_one_per_line_key_value">Пользовательские переменные среды (по одной в строке, KEY=VALUE)</string>
+</resources>

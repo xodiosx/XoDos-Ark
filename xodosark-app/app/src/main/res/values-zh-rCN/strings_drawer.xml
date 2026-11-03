@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-zh-rCN/strings.xml -->
+<resources>
+    <!-- General -->
+    <string name="appscreen_linux_distro_not_installed">未安装 Linux 发行版。</string>
+    <string name="appscreen_container_manager">容器管理器</string>
+
+    <!-- X11 Scripts -->
+    <string name="appscreen_x11_scripts">X11 脚本</string>
+    <string name="appscreen_x11_startup_script">X11 启动脚本</string>
+    <string name="appscreen_edit_x11_startup_script">编辑 X11 启动脚本</string>
+
+    <!-- Install Desktop -->
+    <string name="appscreen_install_desktop">安装桌面</string>
+    <string name="appscreen_edit_startup_script">编辑启动脚本</string>
+    <string name="appscreen_edit_startup_script_package_setup">编辑启动脚本软件包设置</string>
+    <string name="appscreen_edit_setup_script_title">编辑设置脚本：%1$s</string>
+    <string name="appscreen_installation_sequence_sh">安装序列（.sh）</string>
+
+    <!-- Common actions -->
+    <string name="appscreen_save">保存</string>
+    <string name="appscreen_reset">重置</string>
+    <string name="appscreen_cancel">取消</string>
+    <string name="appscreen_close">关闭</string>
+    <string name="appscreen_edit">编辑</string>
+    <string name="appscreen_delete">删除</string>
+
+    <!-- Wayland Scripts -->
+    <string name="appscreen_wayland_scripts">Wayland 脚本</string>
+    <string name="appscreen_wayland_desktop_startup_script">Wayland 桌面启动脚本</string>
+    <string name="appscreen_edit_wayland_startup_script">编辑 Wayland 启动脚本</string>
+
+    <!-- Commands -->
+    <string name="appscreen_commands">命令</string>
+    <string name="appscreen_saved_commands">已保存命令</string>
+    <string name="appscreen_add_command">添加命令</string>
+    <string name="appscreen_no_saved_commands">没有已保存命令。</string>
+    <string name="appscreen_edit_command">编辑命令</string>
+    <string name="appscreen_title">标题</string>
+    <string name="appscreen_shell_command">Shell 命令</string>
+    <string name="appscreen_delete_command">删除命令？</string>
+    <string name="appscreen_remove_command_title">移除 &quot;%1$s&quot;？</string>
+
+    <!-- DXVK / D3D Components -->
+    <string name="appscreen_d3d_components_dxvk">D3D 组件（DXVK）</string>
+    <string name="appscreen_d3d_components">D3D 组件</string>
+    <string name="appscreen_no_archives_found_in">在 wincomponents/%1$s/ 中未找到归档</string>
+    <string name="appscreen_dxvk_extracting">正在解压 %1$s…</string>
+    <string name="appscreen_dxvk_installed">已安装 %1$s</string>
+    <string name="appscreen_dxvk_failed">失败：%1$s</string>
+
+    <!-- Adrenotools -->
+    <string name="appscreen_adrenotools">Adrenotools</string>
+    <string name="appscreen_adrenotools_gpu_drivers">Adrenotools GPU 驱动</string>
+    <string name="appscreen_add_driver_zip">添加驱动 ZIP</string>
+    <string name="appscreen_no_custom_drivers_installed">未安装自定义驱动。</string>
+    <string name="appscreen_delete_driver_title">删除 %1$s？</string>
+    <string name="appscreen_the_zip_and_its_entry_will_be_removed">ZIP 及其条目将被移除。</string>
+    <string name="appscreen_active">活动</string>
+    <string name="appscreen_activate">激活</string>
+
+    <!-- HUD -->
+    <string name="appscreen_dxvk_hud">DXVK HUD</string>
+    <string name="appscreen_mangohud">MangoHud</string>
+
+    <!-- Proot Options -->
+    <string name="appscreen_applied_on_the_next_terminal_spawn_match_proot_d">在下次终端启动时应用。匹配 proot-distro 登录语义。</string>
+    <string name="appscreen_username_blank_root_root">用户名（空白/root = root）</string>
+    <string name="appscreen_hostname">主机名</string>
+    <string name="appscreen_kernel_release_blank_default">内核版本（空白 = 默认）</string>
+    <string name="appscreen_change_id_override_e_g_0_0_blank_auto">change-id 覆盖（例如 0:0 — 空白 = 自动）</string>
+    <string name="appscreen_working_directory_blank_home">工作目录（空白 = 主目录）</string>
+    <string name="appscreen_shared_tmp_forced">共享 /tmp（强制）</string>
+    <string name="appscreen_custom_binds_one_per_line_src_dst">自定义绑定（每行一个，SRC:DST）</string>
+    <string name="appscreen_custom_env_vars_one_per_line_key_value">自定义环境变量（每行一个，KEY=VALUE）</string>
+</resources>

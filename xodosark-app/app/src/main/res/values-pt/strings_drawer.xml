@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-pt/strings.xml -->
+<resources>
+    <!-- General -->
+    <string name="appscreen_linux_distro_not_installed">Distro Linux não instalada.</string>
+    <string name="appscreen_container_manager">Gerenciador de contêineres</string>
+
+    <!-- X11 Scripts -->
+    <string name="appscreen_x11_scripts">Scripts X11</string>
+    <string name="appscreen_x11_startup_script">Script de inicialização X11</string>
+    <string name="appscreen_edit_x11_startup_script">Editar script de inicialização X11</string>
+
+    <!-- Install Desktop -->
+    <string name="appscreen_install_desktop">Instalar desktop</string>
+    <string name="appscreen_edit_startup_script">Editar script de inicialização</string>
+    <string name="appscreen_edit_startup_script_package_setup">Editar configuração do pacote do script de inicialização</string>
+    <string name="appscreen_edit_setup_script_title">Editar script de configuração: %1$s</string>
+    <string name="appscreen_installation_sequence_sh">Sequência de instalação (.sh)</string>
+
+    <!-- Common actions -->
+    <string name="appscreen_save">Salvar</string>
+    <string name="appscreen_reset">Redefinir</string>
+    <string name="appscreen_cancel">Cancelar</string>
+    <string name="appscreen_close">Fechar</string>
+    <string name="appscreen_edit">Editar</string>
+    <string name="appscreen_delete">Excluir</string>
+
+    <!-- Wayland Scripts -->
+    <string name="appscreen_wayland_scripts">Scripts Wayland</string>
+    <string name="appscreen_wayland_desktop_startup_script">Script de inicialização do desktop Wayland</string>
+    <string name="appscreen_edit_wayland_startup_script">Editar script de inicialização Wayland</string>
+
+    <!-- Commands -->
+    <string name="appscreen_commands">Comandos</string>
+    <string name="appscreen_saved_commands">Comandos salvos</string>
+    <string name="appscreen_add_command">Adicionar comando</string>
+    <string name="appscreen_no_saved_commands">Nenhum comando salvo.</string>
+    <string name="appscreen_edit_command">Editar comando</string>
+    <string name="appscreen_title">Título</string>
+    <string name="appscreen_shell_command">Comando shell</string>
+    <string name="appscreen_delete_command">Excluir comando?</string>
+    <string name="appscreen_remove_command_title">Remover &quot;%1$s&quot;?</string>
+
+    <!-- DXVK / D3D Components -->
+    <string name="appscreen_d3d_components_dxvk">Componentes D3D (DXVK)</string>
+    <string name="appscreen_d3d_components">Componentes D3D</string>
+    <string name="appscreen_no_archives_found_in">Nenhum arquivo encontrado em wincomponents/%1$s/</string>
+    <string name="appscreen_dxvk_extracting">Extraindo %1$s…</string>
+    <string name="appscreen_dxvk_installed">Instalado %1$s</string>
+    <string name="appscreen_dxvk_failed">Falhou: %1$s</string>
+
+    <!-- Adrenotools -->
+    <string name="appscreen_adrenotools">Adrenotools</string>
+    <string name="appscreen_adrenotools_gpu_drivers">Drivers GPU Adrenotools</string>
+    <string name="appscreen_add_driver_zip">Adicionar ZIP do driver</string>
+    <string name="appscreen_no_custom_drivers_installed">Nenhum driver personalizado instalado.</string>
+    <string name="appscreen_delete_driver_title">Excluir %1$s?</string>
+    <string name="appscreen_the_zip_and_its_entry_will_be_removed">O ZIP e sua entrada serão removidos.</string>
+    <string name="appscreen_active">Ativo</string>
+    <string name="appscreen_activate">Ativar</string>
+
+    <!-- HUD -->
+    <string name="appscreen_dxvk_hud">DXVK HUD</string>
+    <string name="appscreen_mangohud">MangoHud</string>
+
+    <!-- Proot Options -->
+    <string name="appscreen_applied_on_the_next_terminal_spawn_match_proot_d">Aplicado na próxima abertura de terminal. Corresponde à semântica de login do proot-distro.</string>
+    <string name="appscreen_username_blank_root_root">Nome de usuário (vazio/root = root)</string>
+    <string name="appscreen_hostname">Hostname</string>
+    <string name="appscreen_kernel_release_blank_default">Versão do kernel (vazio = padrão)</string>
+    <string name="appscreen_change_id_override_e_g_0_0_blank_auto">substituição de change-id (ex.: 0:0 — vazio = auto)</string>
+    <string name="appscreen_working_directory_blank_home">Diretório de trabalho (vazio = home)</string>
+    <string name="appscreen_shared_tmp_forced">/tmp compartilhado (forçado)</string>
+    <string name="appscreen_custom_binds_one_per_line_src_dst">Binds personalizados (um por linha, SRC:DST)</string>
+    <string name="appscreen_custom_env_vars_one_per_line_key_value">Variáveis de ambiente personalizadas (uma por linha, KEY=VALUE)</string>
+</resources>

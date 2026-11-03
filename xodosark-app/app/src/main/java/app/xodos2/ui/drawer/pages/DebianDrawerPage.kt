@@ -219,10 +219,10 @@ fun DebianDrawerPage(
             )
             Spacer(modifier = Modifier.height(16.dp))
             // X11 Scripts expandable
-            DrawerExpandableSection(title = "X11 Scripts", defaultExpanded = false) {
+            DrawerExpandableSection(title = stringResource(R.string.appscreen_x11_scripts), defaultExpanded = false) {
                 if (debianX11ScriptEditorOpen) {
                     DrawerScriptEditor(
-                        title = "X11 startup script",
+                        title = stringResource(R.string.appscreen_x11_startup_script),
                         initialText = AppPrefs.readDebianDesktopStartupScript(prefs),
                         onSave = {
                             AppPrefs.writeDebianDesktopStartupScript(prefs, it)
@@ -255,7 +255,7 @@ ProotOptionsSection(
 
 DxvkSelectorSection(
         category = "d3d",
-        title = "D3D Components (DXVK)",
+        title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
     HudSelectorSection(
@@ -267,7 +267,7 @@ DxvkSelectorSection(
     onExecuteCommand = onExecuteCommand,
     
 )
-                 DrawerExpandableSection(title = "Install Desktop", defaultExpanded = false) {
+                 DrawerExpandableSection(title = stringResource(R.string.appscreen_install_desktop), defaultExpanded = false) {
                 desktopEnvNames.forEach { name ->
                     val prefKey = "custom_install_script_${distroId}_${name.replace(" ", "_")}"
                     Row(
@@ -387,10 +387,10 @@ private fun DebianExtraContent(
     onWaylandScriptEditorOpenChange: (Boolean) -> Unit,
     hasDebianRootfs: Boolean
 ) {
-    DrawerExpandableSection(title = "Wayland scripts", defaultExpanded = false) {
+    DrawerExpandableSection(title = stringResource(R.string.appscreen_wayland_scripts), defaultExpanded = false) {
         if (waylandScriptEditorOpen) {
             DrawerScriptEditor(
-                title = "Wayland desktop startup script",
+                title = stringResource(R.string.appscreen_wayland_desktop_startup_script),
                 initialText = prefs.getString("ddesktop_startup_script", "") ?: "",
                 onSave = {
                     prefs.edit().putString("ddesktop_startup_script", it).apply()

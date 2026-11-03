@@ -1,0 +1,441 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-ar/strings.xml -->
+<!DOCTYPE resources [<!ENTITY TERMUX_PACKAGE_NAME "com.termux"><!ENTITY TERMUX_APP_NAME "XoDos"><!ENTITY TERMUX_X11_APP_NAME "XoDos"><!ENTITY TERMUX_DISPLAY_APP_NAME "Termux:X11">]>
+<resources>
+    <string name="plugin_info">&TERMUX_DISPLAY_APP_NAME; هو تطبيق إضافة لتطبيق &TERMUX_APP_NAME;.
+        \n\nتحقق من GitHub لتطبيق &TERMUX_APP_NAME; %1$s وGitHub لتطبيق &TERMUX_DISPLAY_APP_NAME; %2$s لمزيد من المعلومات.</string>
+    <string name="x11_app_name">&TERMUX_X11_APP_NAME;</string>
+    <!-- TermuxX11Activity -->
+    <string name="msg_storage_permission_not_granted_warning">يجب منح إذن التخزين لتطبيق &TERMUX_DISPLAY_APP_NAME; من أجل...</string>
+    <string name="action_grant_storage_permission">منح إذن التخزين</string>
+
+    <string name="msg_battery_optimization_not_disabled_warning">يجب تعطيل تحسينات بطارية Android لتطبيق &TERMUX_DISPLAY_APP_NAME; حتى…
+        تحقق من https://developer.android.com/about/versions/oreo/background لمزيد من المعلومات و
+        https://developer.android.com/guide/components/foreground-services#background-start-restrictions
+        لمزيد من المعلومات.
+
+        \n\nتحقق أيضًا من https://dontkillmyapp.com للحصول على معلومات حول قتلة التطبيقات الخاصة بالشركة المصنعة.
+        اعتمادًا على الشركة المصنعة، قد تحتاج إلى القيام بأشياء مثل تفعيل AutoStart، تعطيل DuraSpeed،
+        تفعيل `عرض النوافذ المنبثقة أثناء التشغيل في الخلفية` للتطبيق.</string>
+    <string name="action_disable_battery_optimizations">تعطيل تحسينات البطارية</string>
+
+    <string name="msg_display_over_other_apps_permission_not_granted_warning">يجب منح إذن العرض فوق التطبيقات الأخرى لتطبيق &TERMUX_DISPLAY_APP_NAME; لبدء أنشطة المقدمة من الخلفية. تحقق من https://developer.android.com/guide/components/activities/background-starts لمزيد من المعلومات.
+    </string>
+    <string name="action_grant_display_over_other_apps_permission">منح إذن الرسم فوق التطبيقات</string>
+
+    <string name="action_already_granted">تم المنح بالفعل</string>
+    <string name="action_already_disabled">تم التعطيل بالفعل</string>
+    <string name="not_connected">غير متصل</string>
+    <string name="help_button_text">   مساعدة   </string>
+    <string name="preferences_button_text">   التفضيلات   </string>
+    <string name="extra_keys_config_desc">هنا يمكنك تعيين قيمة متغير extra-keys كما في تطبيق Termux (اقرأ <a href="http://wiki.termux.com/wiki/Touch_Keyboard#Extra_Keys_Row">هذا</a>) والمزيد (مثل META).</string>
+    <!--    preference-->
+    <string name="pref_main">التفضيلات</string>
+    <string name="pref_output">الإخراج🖥️</string>
+    <string name="pref_pointer">المؤشر🖱️</string>
+    <string name="pref_kbd">لوحة المفاتيح⌨️</string>
+    <string name="pref_other">أخرى⚙️</string>
+    <string name="pref_version">الإصدار</string>
+    <string name="pref_ekbar">تفضيلات شريط المفاتيح الإضافية</string>
+    <string name="pref_userActions">الاستجابة لإجراءات المستخدم</string>
+
+    <string name="pref_displayResolutionMode">وضع دقة العرض</string>
+    <string name="pref_displayScale">مقياس العرض، %</string>
+    <string name="pref_displayResolutionExact">دقة العرض</string>
+    <string name="pref_displayResolutionCustom">دقة العرض</string>
+    <string name="pref_adjustResolution">ضبط الدقة المحددة لتناسب اتجاه الشاشة</string>
+    <string name="pref_displayStretch">تمديد لتناسب العرض</string>
+    <string name="pref_Reseed">إعادة ضبط الشاشة أثناء فتح لوحة المفاتيح اللينة</string>
+    <string name="pref_Reseed_summary">سيتم ضبط حجم الشاشة أثناء فتح لوحة المفاتيح اللينة.</string>
+    <string name="pref_PIP">وضع PiP</string>
+    <string name="pref_PIP_summary">إظهار التطبيق في وضع صورة داخل صورة عند الضغط على زر الرئيسية أو الأحدث</string>
+    <string name="pref_fullscreen">ملء الشاشة</string>
+    <string name="pref_fullscreen_summary">تبديل الوضع الغامر في شاشة جهازك</string>
+    <string name="pref_forceOrientation">اتجاه الشاشة</string>
+    <string name="pref_hideCutout">إخفاء فتحة الشاشة (إن وجدت)</string>
+    <string name="pref_keepScreenOn">إبقاء الشاشة مضاءة</string>
+
+    <string name="pref_touchMode">وضع الإدخال باللمس</string>
+    <string name="pref_scaleTouchpad">تطبيق عامل مقياس العرض على لوحة اللمس</string>
+    <string name="pref_showStylusClickOverride">إظهار خيارات نقر القلم</string>
+    <string name="pref_showStylusClickOverride_summary">تجاوز لمس القلم، النقر الأيسر أو الأوسط أو الأيمن (القلم فقط)</string>
+    <string name="pref_stylusIsMouse">تفعيل وضع فأرة القلم</string>
+    <string name="pref_stylusIsMouse_summary">اجعل قلمك يعمل كفأرة. عند التفعيل، سيقوم القلم بتحريك المؤشر فقط وإرسال نقرات الفأرة، مع تجاهل الضغط والزاوية والميل.</string>
+    <string name="pref_stylusButtonContactModifierMode">وضع معدّل تلامس زر القلم</string>
+    <string name="pref_stylusButtonContactModifierMode_summary">فعّل هذا الخيار لإرسال أزرار الفأرة اليمنى أو الوسطى فقط عندما يلمس القلم الشاشة أثناء الضغط على الزر.</string>
+    <string name="pref_showMouseHelper">إظهار تراكب مساعد النقر بالفأرة</string>
+    <string name="pref_showMouseHelper_summary">أزرار فأرة على الشاشة قابلة للاستخدام مع لوحة اللمس</string>
+    <string name="pref_pointerCapture">التقاط أجهزة المؤشر الخارجية عندما يكون ممكنًا</string>
+    <string name="pref_pointerCapture_summary">اعتراض جميع أحداث مؤشر الأجهزة. يعود المؤشر إلى Android بعد الضغط على مفتاح Escape.</string>
+    <string name="pref_transformCapturedPointer">تحويل حركات المؤشر الملتقط</string>
+    <string name="pref_capturedPointerSpeedFactor">عامل سرعة المؤشر الملتقط، %</string>
+    <string name="pref_tapToMove">تفعيل النقر للتحريك للوحات اللمس</string>
+
+    <string name="pref_showAdditionalKbd">إظهار لوحة المفاتيح الإضافية</string>
+    <string name="pref_showAdditionalKbd_summary">إظهار لوحة المفاتيح مع مفاتيح إضافية.</string>
+    <string name="pref_showIMEWhileExternalConnected">إظهار IME مع لوحة المفاتيح الخارجية</string>
+    <string name="pref_showIMEWhileExternalConnected_summary">إظهار لوحة المفاتيح البرمجية أثناء توصيل لوحة مفاتيح فعلية.</string>
+    <string name="pref_preferScancodes">تفضيل رموز المسح عندما يكون ممكنًا</string>
+    <string name="pref_preferScancodes_summary">دع خادم X يتعامل مع تخطيط لوحة المفاتيح الفعلية (بإعدادات DE أو setxkbmap).</string>
+    <string name="pref_hardwareKbdScancodesWorkaround">حل بديل لرموز مسح لوحة المفاتيح الفعلية</string>
+    <string name="pref_hardwareKbdScancodesWorkaround_summary">يصلح رموز المسح في بعض الأجهزة. قد يسبب مشاكل مع تخطيطات متعددة.</string>
+    <string name="pref_dexMetaKeyCapture">اعتراض اختصارات النظام</string>
+    <string name="pref_dexMetaKeyCapture_summary">Samsung Dex فقط. يسمح باعتراض &quot;Alt+F4&quot;، &quot;Meta+D&quot;، &quot;Meta+E&quot;، إلخ.</string>
+    <string name="pref_enableAccessibilityService">تفعيل خدمة إمكانية الوصول لاعتراض اختصارات النظام يدويًا.</string>
+    <string name="pref_enableAccessibilityService_summary">فتح إعدادات إمكانية الوصول.</string>
+    <string name="pref_enableAccessibilityServiceAutomatically">تفعيل خدمة إمكانية الوصول لاعتراض اختصارات النظام تلقائيًا.</string>
+    <string name="pref_enableAccessibilityServiceAutomatically_summary">يتطلب إذن WRITE_SECURE_SETTINGS.</string>
+    <string name="pref_pauseKeyInterceptingWithEsc">إيقاف مؤقت لاعتراض المفاتيح بمفتاح Esc</string>
+    <string name="pref_filterOutWinkey">تصفية مفتاح Win (Meta/Mod4) المعترض.</string>
+    <string name="pref_filterOutWinkey_summary">يسمح لك باستخدام اختصارات Dex أثناء الاعتراض. يتطلب خدمة إمكانية الوصول للعمل.</string>
+    <string name="pref_enforceCharBasedInput">فرض الإدخال القائم على الأحرف</string>
+    <string name="pref_enforceCharBasedInput_summary">يُخفي الاقتراحات والكتابة التنبؤية ولغات CJK</string>
+
+    <string name="pref_clipboardEnable">مشاركة الحافظة</string>
+    <string name="pref_requestNotificationPermission">طلب إذن الإشعارات</string>
+    <string name="pref_xrMode">وضع Meta Oculus XR</string>
+    <string name="pref_configureResponseToUserActions">تكوين الاستجابة لإجراءات المستخدم</string>
+    <string name="pref_storeSecondaryDisplayPreferencesSeparately">تخزين تفضيلات الشاشات الثانوية بشكل منفصل</string>
+    <string name="pref_storeSecondaryDisplayPreferencesSeparately_summary">افتح هذه الشاشة على العرض الذي تريد تكوينه</string>
+
+    <string name="pref_adjustHeightForEK">ضبط ارتفاع العرض لشريط المفاتيح الإضافية</string>
+    <string name="pref_adjustHeightForEK_summary">قد يسبب وميض الشاشة أثناء تبديل شريط EK.</string>
+    <string name="pref_useTermuxEKBarBehaviour">إلغاء تنشيط المفاتيح الخاصة في شريط المفاتيح الإضافية بعد كل ضغطة مفتاح</string>
+    <string name="pref_useTermuxEKBarBehaviour_summary">استخدم الضغط المطول لقفل المفاتيح الخاصة</string>
+    <string name="pref_opacityEKBar">عتامة شريط المفاتيح الإضافية، %</string>
+    <string name="pref_extra_keys_config">تكوين المفاتيح الإضافية</string>
+
+    <string name="pref_swipeUpAction">تمرير ثلاثة أصابع لأعلى</string>
+    <string name="pref_swipeDownAction">تمرير ثلاثة أصابع لأسفل</string>
+    <string name="pref_volumeUpAction">رفع مستوى الصوت</string>
+    <string name="pref_volumeDownAction">خفض مستوى الصوت</string>
+    <string name="pref_backButtonAction">زر الرجوع</string>
+    <string name="pref_notificationTapAction">النقر على الإشعار</string>
+    <string name="pref_notificationButton0Action">الزر الأول للإشعار</string>
+    <string name="pref_notificationButton1Action">الزر الثاني للإشعار</string>
+    <string name="pref_mediaKeysAction">مفاتيح الوسائط</string>
+
+    <string name="pref_summary_requiresExactOrCustom">يتطلب أن يكون &quot;وضع دقة العرض&quot; &quot;دقيقًا&quot; أو &quot;مخصصًا&quot;</string>
+    <string name="pref_summary_requiresIntercepting">يتطلب اعتراض اختصارات النظام بوضع Dex أو بخدمة إمكانية الوصول</string>
+    <string name="pref_summary_requiresTrackpadAndNative">يتطلب أن يكون &quot;وضع الإدخال باللمس&quot; &quot;لوحة اللمس&quot; وأن لا يكون &quot;وضع دقة العرض&quot; &quot;أصليًا&quot;</string>
+
+    <string name="touch_sensitivity">حساسية اللمس، x300ms</string>
+    <string name="open_keyboard">فتح لوحة المفاتيح⌨️</string>
+    <string name="select_controller">اختيار وحدة التحكم🎮</string>
+    <string name="select_controller_summary">لاستخدام ميزة الإدخال، قم بتشغيل التفضيلات-&gt;لوحة المفاتيح-&gt;رمز المسح</string>
+    <string name="progress_manager">مدير التقدم📊</string>
+    <string name="install_x11_server_bridge">تثبيت XoDos x11</string>
+    <string name="stop_desktop">إيقاف سطح المكتب🚫</string>
+
+    <string name="add_button">إضافة مفتاح</string>
+    <string name="launch_button_text">تشغيل</string>
+    <string name="enabl_float_ball_menu">تفعيل قائمة الكرة العائمة</string>
+    <string name="enable_global_float_ball_menu">قائمة الكرة العائمة العامة</string>
+    <string name="start_keyboard_x11">اضغط زر الرجوع لفتح لوحة المفاتيح اللينة</string>
+    <string name="stop_keyboard_x11">إيقاف إدخال لوحة المفاتيح اللينة x11</string>
+    <string name="enabl_float_ball_menu_notice">عند تفعيل هذا، سيتم نقل فتح محتوى التطبيق المنزلق وبعض الوظائف الأخرى إلى قائمة الكرة العائمة</string>
+    <string name="open_x11_settings">إظهار إعدادات x11</string>
+    <string name="hide_x11_settings">إخفاء إعدادات x11</string>
+    <string name="enable_touch_screen">شاشة اللمس</string>
+    <string name="command">أمر</string>
+    <string name="title">عنوان</string>
+
+    <!-- Log Level -->
+    <string name="log_level_title">مستوى السجل</string>
+    <string name="log_level_off">إيقاف</string>
+    <string name="log_level_normal">عادي</string>
+    <string name="log_level_debug">تصحيح</string>
+    <string name="log_level_verbose">مفصّل</string>
+    <string name="log_level_unknown">*غير معروف*</string>
+    <string name="log_level_value">تم تعيين مستوى سجل Logcat على \&quot;%1$s\&quot;</string>
+    <string name="start_button_start_x11">بدء خادم x11</string>
+    <string name="exit_button_exit_app">خروج</string>
+    <string name="x11_server_bridge_config">أعد تثبيت الجسر الذي يستخدمه خادم x11 للتواصل مع termux. سيؤدي التثبيت إلى إيقاف تشغيل الواجهة الرسومية الحالية وسيتطلب إعادة التشغيل. إذا لم يتم حفظ أي ملف، احفظه وأعد المحاولة.</string>
+
+    <!--inpt controller-->
+    <string name="run">تشغيل</string>
+    <string name="edit">تحرير</string>
+    <string name="remove">إزالة</string>
+    <string name="add">إضافة</string>
+    <string name="shortcuts">الاختصارات</string>
+    <string name="containers">الحاويات</string>
+    <string name="input_controls">عناصر التحكم بالإدخال</string>
+    <string name="no_items_to_display">لا توجد عناصر لعرضها</string>
+    <string name="new_container">حاوية جديدة</string>
+    <string name="edit_container">تحرير الحاوية</string>
+    <string name="creating_container">جارٍ إنشاء الحاوية...</string>
+    <string name="removing_container">جارٍ إزالة الحاوية...</string>
+    <string name="duplicating_container">جارٍ تكرار الحاوية...</string>
+    <string name="installing_system_files">جارٍ تثبيت ملفات النظام...</string>
+    <string name="starting_up">جارٍ بدء التشغيل...</string>
+    <string name="unable_to_install_system_files">تعذّر تثبيت ملفات النظام</string>
+    <string name="keyboard">لوحة المفاتيح</string>
+    <string name="toggle_fullscreen">تبديل ملء الشاشة</string>
+    <string name="exit">خروج</string>
+    <string name="no_control_element_selected">لم يتم اختيار أي عنصر تحكم</string>
+    <string name="scale">مقياس</string>
+    <string name="shape">شكل</string>
+    <string name="type">نوع</string>
+    <string name="binding">ربط</string>
+    <string name="binding_up">ربط أعلى</string>
+    <string name="binding_right">ربط يمين</string>
+    <string name="binding_down">ربط أسفل</string>
+    <string name="binding_left">ربط يسار</string>
+    <string name="overlay_opacity">عتامة التراكب</string>
+    <string name="profile">ملف تعريف</string>
+    <string name="select_profile">اختر ملف تعريف</string>
+    <string name="profile_name">اسم ملف التعريف</string>
+    <string name="name">الاسم</string>
+    <string name="ok">موافق</string>
+    <string name="cancel">إلغاء</string>
+    <string name="untitled">بدون عنوان</string>
+    <string name="no_profile_selected">لم يتم اختيار ملف تعريف</string>
+    <string name="too_much_key">مفاتيح كثيرة جدًا، لا يزيد عن أربعة مفاتيح</string>
+    <string name="cheat_code">رمز الغش</string>
+    <string name="set_cheat_code">تعيين</string>
+    <string name="no_profile_found">لم يتم العثور على ملف تعريف</string>
+    <string name="do_you_want_to_remove_this_profile">هل تريد إزالة ملف التعريف هذا؟</string>
+    <string name="do_you_want_to_duplicate_this_profile">هل تريد تكرار ملف التعريف هذا؟</string>
+    <string name="do_you_want_to_duplicate_this_preset">هل تريد تكرار هذا الإعداد المسبق؟</string>
+    <string name="do_you_want_to_remove_this_container">هل تريد إزالة هذه الحاوية؟</string>
+    <string name="do_you_want_to_duplicate_this_container">هل تريد تكرار هذه الحاوية؟</string>
+    <string name="do_you_want_to_remove_this_shortcut">هل تريد إزالة هذا الاختصار؟</string>
+    <string name="do_you_want_to_remove_this_controller">هل تريد إزالة وحدة التحكم هذه؟</string>
+    <string name="do_you_want_to_remove_this_wine_version">هل تريد إزالة إصدار wine هذا؟</string>
+    <string name="do_you_want_to_remove_this_preset">هل تريد إزالة هذا الإعداد المسبق؟</string>
+    <string name="do_you_want_to_end_this_process">هل تريد إنهاء هذه العملية؟</string>
+    <string name="controls_editor">محرر عناصر التحكم</string>
+    <string name="enabled">مفعّل</string>
+    <string name="disabled">معطّل</string>
+    <string name="container">حاوية</string>
+    <string name="screen_size">حجم الشاشة</string>
+    <string name="new_environment_variable">متغير بيئة جديد</string>
+    <string name="environment_variables">متغيرات البيئة</string>
+    <string name="value">القيمة</string>
+    <string name="processor_affinity">ألفة المعالج</string>
+    <string name="cursor_speed">سرعة المؤشر</string>
+    <string name="lock_cursor">قفل المؤشر</string>
+    <string name="toggle_switch">تبديل المفتاح</string>
+    <string name="toggle_model">تبديل(غير محدد)/ضغط مطول(محدد)</string>
+    <string name="profile_exported_to">تم تصدير ملف التعريف إلى</string>
+    <string name="unable_to_import_profile">تعذّر استيراد ملف التعريف</string>
+    <string name="wine_configuration">تكوين Wine</string>
+    <string name="registry_keys">مفاتيح التسجيل</string>
+    <string name="csmt">CSMT (Command Stream Multi-Thread)</string>
+    <string name="gpu_name">اسم GPU</string>
+    <string name="offscreen_rendering_mode">وضع العرض خارج الشاشة</string>
+    <string name="strict_shader_math">رياضيات shader الصارمة</string>
+    <string name="video_memory_size">حجم ذاكرة الفيديو</string>
+    <string name="show_fps">إظهار FPS</string>
+    <string name="none">لا شيء</string>
+    <string name="custom_text">نص مخصص</string>
+    <string name="icon">أيقونة</string>
+    <string name="import_profile">استيراد ملف تعريف</string>
+    <string name="export_profile">تصدير ملف تعريف</string>
+    <string name="touchpad_help">مساعدة لوحة اللمس</string>
+    <string name="touchpad_help_mouse_left_click_title">النقر الأيسر للفأرة</string>
+    <string name="touchpad_help_mouse_left_click_description">نقرة قصيرة بإصبع واحد</string>
+    <string name="touchpad_help_mouse_right_click_title">النقر الأيمن للفأرة</string>
+    <string name="touchpad_help_mouse_right_click_description">انقر بإصبع واحد ونقرة قصيرة بإصبع آخر</string>
+    <string name="touchpad_help_mouse_scroll_wheel_title">عجلة تمرير الفأرة</string>
+    <string name="touchpad_help_mouse_scroll_wheel_description">انقر بإصبعين وحرّك</string>
+    <string name="touchpad_help_main_menu_title">القائمة الرئيسية</string>
+    <string name="touchpad_help_main_menu_description">انقر بأربعة أصابع</string>
+    <string name="duplicate">تكرار</string>
+    <string name="about">حول</string>
+    <string name="credits_and_third_party_apps">الاعتمادات والتطبيقات الخارجية</string>
+    <string name="external_controllers">وحدات التحكم الخارجية</string>
+    <string name="graphics_driver">برنامج تشغيل الرسومات</string>
+    <string name="audio_driver">برنامج تشغيل الصوت</string>
+    <string name="loading">جارٍ التحميل...</string>
+    <string name="press_any_button_on_your_controller">اضغط أي زر على وحدة التحكم</string>
+    <string name="bindings">ارتباطات</string>
+    <string name="show_touchscreen_controls">إظهار عناصر التحكم باللمس</string>
+    <string name="dxwrapper">غلاف DX</string>
+    <string name="mouse_warp_override">تجاوز نقل الفأرة</string>
+    <string name="direct3d">Direct3D</string>
+    <string name="directsound">DirectSound</string>
+    <string name="directmusic">DirectMusic</string>
+    <string name="directplay">DirectPlay</string>
+    <string name="directshow">DirectShow</string>
+    <string name="vcrun2010">Visual C++ 2010</string>
+    <string name="settings">الإعدادات</string>
+    <string name="exec_arguments">وسائط التنفيذ</string>
+    <string name="win_components">مكونات Win</string>
+    <string name="drives">الأقراص</string>
+    <string name="force_fullscreen">فرض ملء الشاشة</string>
+    <string name="range">نطاق</string>
+    <string name="enable">تفعيل</string>
+    <string name="disable">تعطيل</string>
+    <string name="force">فرض</string>
+    <string name="installed_wine">Wine المثبت</string>
+    <string name="install_wine">تثبيت Wine</string>
+    <string name="arch">المعمارية</string>
+    <string name="version">الإصدار</string>
+    <string name="unable_to_install_wine">تعذّر تثبيت Wine</string>
+    <string name="unable_to_remove_this_wine_version">تعذّر إزالة إصدار wine هذا</string>
+    <string name="wine_version">إصدار Wine</string>
+    <string name="removing_wine">جارٍ إزالة Wine...</string>
+    <string name="preparing_installation">جارٍ التحضير للتثبيت...</string>
+    <string name="finishing_installation">جارٍ إكمال التثبيت...</string>
+    <string name="storage_info">معلومات التخزين</string>
+    <string name="drive_c">القرص C:</string>
+    <string name="cache">ذاكرة التخزين المؤقت</string>
+    <string name="total">الإجمالي</string>
+    <string name="clear_cache">مسح ذاكرة التخزين المؤقت</string>
+    <string name="estimated_used_space">المساحة المستخدمة التقديرية</string>
+    <string name="advanced">متقدم</string>
+    <string name="box86_box64">Box86/Box64</string>
+    <string name="stop_services_on_startup">إيقاف الخدمات عند بدء التشغيل</string>
+    <string name="system">النظام</string>
+    <string name="box86_preset">إعداد مسبق Box86</string>
+    <string name="box64_preset">إعداد مسبق Box64</string>
+    <string name="box86_version">إصدار Box86</string>
+    <string name="box64_version">إصدار Box64</string>
+    <string name="letter">حرف</string>
+    <string name="target_path">المسار الهدف</string>
+    <string name="xserver">XServer</string>
+    <string name="use_dri3_extension">استخدام امتداد DRI3</string>
+    <string name="width">العرض</string>
+    <string name="height">الارتفاع</string>
+    <string name="old">قديم</string>
+    <string name="_new">جديد</string>
+    <string name="task_manager">مدير المهام</string>
+    <string name="process_name">اسم العملية</string>
+    <string name="pid">PID</string>
+    <string name="memory">الذاكرة</string>
+    <string name="end_process">إنهاء العملية</string>
+    <string name="new_task">مهمة جديدة</string>
+    <string name="processes">العمليات</string>
+    <string name="orientation">الاتجاه</string>
+    <string name="horizontal">أفقي</string>
+    <string name="vertical">عمودي</string>
+    <string name="open_file">فتح ملف</string>
+    <string name="download_file">تنزيل ملف</string>
+    <string name="do_you_want_to_download_the_selected_profiles">هل تريد تنزيل ملفات التعريف المحددة؟</string>
+    <string name="downloading_file">جارٍ تنزيل الملف...</string>
+    <string name="unable_to_load_profile_list">تعذّر تحميل قائمة ملفات التعريف</string>
+    <string name="copy">نسخ</string>
+    <string name="installed_version">الإصدار المثبت</string>
+    <string name="unable_to_download_file">تعذّر تنزيل الملف</string>
+    <string name="stability">الاستقرار</string>
+    <string name="compatibility">التوافق</string>
+    <string name="intermediate">متوسط</string>
+    <string name="performance">الأداء</string>
+    <string name="preset">إعداد مسبق</string>
+    <string name="you_cannot_remove_this_preset">لا يمكنك إزالة هذا الإعداد المسبق</string>
+    <string name="dxwrapper_help_content"><![CDATA[
+        <i><b>WineD3D</b></i> هي طبقة ترجمة لـ DirectX 1-11 إلى OpenGL.<br /><br />
+        <i><b>DXVK</b></i> هي طبقة ترجمة لـ Direct3D 9-11 إلى Vulkan.<br /><br />
+        <i><b>D8VK</b></i> هي طبقة ترجمة لـ Direct3D 8 إلى Vulkan.<br /><br />
+        <i><b>CNC DDraw</b></i> هي تنفيذ لـ DirectDraw لتوافق أفضل مع الألعاب الكلاسيكية.
+    ]]></string>
+    <string name="box86_64_env_var_help__dynarec_safeflags"><![CDATA[
+        التعامل مع العلامات على أكواد CALL/RET<br /><br />
+        <b>0</b> : يعامل CALL/RET كما لو أنها لا تحتاج أبدًا إلى علامات (أسرع، غير مستقر)<br />
+        <b>1</b> : معظم RET ستحتاج إلى علامات، ومعظم CALLS لن تحتاج<br />
+        <b>2</b> : جميع CALL/RET ستحتاج إلى علامات (أبطأ)
+    ]]></string>
+    <string name="box86_64_env_var_help__dynarec_fastnan">توليد -NAN كما في x86</string>
+    <string name="box86_64_env_var_help__dynarec_fastround">توليد تقريب x86 دقيق</string>
+    <string name="box86_64_env_var_help__dynarec_x87double">استخدام Float/Double لمحاكاة x86</string>
+    <string name="box86_64_env_var_help__dynarec_bigblock"><![CDATA[
+        بناء BigBlock في Dynarec<br /><br />
+        <b>0</b> : لا تحاول بناء الكتلة بأكبر حجم ممكن<br />
+        <b>1</b> : ابنِ كتلة Dynarec بأكبر حجم ممكن<br />
+        <b>2</b> : ابنِ كتلة Dynarec أكبر (استمر عندما تتداخل الكتلة، فقط للكتل في ذاكرة elf)<br />
+        <b>3</b> : ابنِ كتلة Dynarec أكبر (استمر عندما تتداخل الكتلة، لجميع أنواع الذاكرة)
+    ]]></string>
+    <string name="box86_64_env_var_help__dynarec_strongmem"><![CDATA[
+        محاكاة نموذج Strong Memory<br /><br />
+        <b>0</b> : لا تحاول أي شيء خاص<br />
+        <b>1</b> : تفعيل بعض Memory Barrier عند الكتابة في الذاكرة (في بعض أكواد MOV)<br />
+        <b>2</b> : كل 1 بالإضافة إلى Memory Barrier في كل كتابة إلى الذاكرة باستخدام MOV<br />
+        <b>2</b> : كل 2 بالإضافة إلى Memory Barrier عند القراءة من الذاكرة وفي بعض أكواد SSE/SSE2
+    ]]></string>
+    <string name="box86_64_env_var_help__dynarec_forward">يحدد الحد الأقصى المسموح به للأمام عند بناء Block</string>
+    <string name="box86_64_env_var_help__dynarec_callret">تحسين أكواد CALL/RET</string>
+    <string name="box86_64_env_var_help__dynarec_wait">يحدد ما إذا كان Dynarec سينتظر حتى يكون FillBlock جاهزًا أم لا</string>
+    <string name="columns">الأعمدة</string>
+    <string name="directinput_mapper_type">نوع مخطط DirectInput</string>
+    <string name="desktop">سطح المكتب</string>
+    <string name="theme">السمة</string>
+    <string name="background">الخلفية</string>
+    <string name="max_device_memory">الحد الأقصى لذاكرة الجهاز</string>
+    <string name="frame_rate">معدل الإطارات</string>
+    <string name="configuration">التكوين</string>
+    <string name="browse">استعراض</string>
+    <string name="magnifier">مكبّر</string>
+    <string name="bring_to_front">إحضار إلى المقدمة</string>
+    <string name="options">الخيارات</string>
+    <string name="notification_content_text">انقر لفتح الإعدادات</string>
+
+    <string name="toolbox_button_text2">بدء</string>
+    <string name="open_drawer">فتح درج التنقل</string>
+    <string name="close_drawer">إغلاق درج التنقل</string>
+
+    <!-- Add missing strings from the error -->
+    <string name="exit_button_text">خروج</string>
+    <string name="notification_exit">خروج</string>
+    <string name="notification_open_preferences">فتح التفضيلات</string>
+    <string name="notification_release_pointer_and_keyboard_capture">تحرير الالتقاط</string>
+    <string name="notification_restart_activity">إعادة التشغيل</string>
+    <string name="notification_toggle_additional_key_bar">تبديل المفاتيح الإضافية</string>
+    <string name="notification_toggle_fullscreen">تبديل ملء الشاشة</string>
+    <string name="notification_toggle_soft_keyboard">تبديل لوحة المفاتيح</string>
+
+    <!-- New strings for drawer -->
+    <string name="drawer_title">عناصر تحكم X11</string>
+    <string name="drawer_subtitle">سطح مكتب Termux X11</string>
+    <string name="quick_toggles">تبديلات سريعة</string>
+    <string name="settings_categories">فئات الإعدادات</string>
+    <string name="quick_actions">إجراءات سريعة</string>
+    <string name="fullscreen">ملء الشاشة</string>
+    <string name="show_extra_keys">إظهار المفاتيح الإضافية</string>
+    <string name="keep_screen_on">إبقاء الشاشة مضاءة</string>
+    <string name="display_settings">إعدادات العرض</string>
+    <string name="pointer_settings">إعدادات المؤشر</string>
+    <string name="keyboard_settings">إعدادات لوحة المفاتيح</string>
+    <string name="other_settings">إعدادات أخرى</string>
+    <string name="all_settings">جميع الإعدادات</string>
+    <string name="open_keyboard_btn">فتح لوحة المفاتيح</string>
+    <string name="input_controls_btn">عناصر التحكم بالإدخال</string>
+    <string name="process_manager_btn">مدير العمليات</string>
+    <string name="reinstall_x11">إعادة تثبيت X11</string>
+    <string name="stop_desktop_btn">إيقاف سطح المكتب</string>
+    <string name="exit_btn">خروج</string>
+    <string name="gamepad_category">لوحة الألعاب (SDL)</string>
+    <string name="gamepad_sdlEnabled_title">توجيه وحدة التحكم إلى gamepad SDL</string>
+    <string name="gamepad_sdlEnabled_summary_on">تذهب مفاتيح وحدة التحكم إلى X11 كـ gamepad sdl. يتطلب إعادة تثبيت sdl بواسطة apt.</string>
+    <string name="gamepad_sdlEnabled_summary_off">تذهب مفاتيح وحدة التحكم إلى WinHandler (Wine) كما كان من قبل.</string>
+
+    <string name="gamepad_forwardX11_title">إعادة إرسال حالة gamepad X11 إلى Android</string>
+    <string name="gamepad_forwardX11_summary">يسمح للاهتزاز/التأثيرات من جانب X11 بقيادة اهتزاز Android.</string>
+
+    <string name="gamepad_host_title">المضيف</string>
+    <string name="gamepad_host_summary">مضيف خادم X المحلي. اتركه على 127.0.0.1 ما لم تشغّل X11 عن بُعد.</string>
+
+    <string name="gamepad_port_title">منفذ العميل</string>
+    <string name="gamepad_port_summary">منفذ الخادم هو منفذ العميل + 1. الافتراضي 4600.</string>
+
+    <string name="gamepad_id_title">معرّف gamepad</string>
+    <string name="gamepad_id_summary">رقم gamepad الافتراضي المعروض لـ X11. الافتراضي 1.</string>
+
+    <string name="gamepad_stateHz_title">معدل ضخ الحالة (Hz)</string>
+    <string name="gamepad_stateHz_summary">كم مرة في الثانية يتم دفع حالة وحدة التحكم إلى X11.</string>
+
+    <string name="gamepad_inputType_title">نوع الإدخال</string>
+    <string name="gamepad_inputType_summary">تنسيق المصافحة المقدمة لامتداد X11 LORIE-CONTROLLER.</string>
+
+    <string name="gamepad_mode_title">الوضع المعيّن</string>
+    <string name="gamepad_mode_summary">معيّن = أزرار وحدة التحكم الفعلية؛ لوحة المفاتيح = التوجيه عبر ارتباطات المفاتيح الإضافية.</string>
+
+    <string name="gamepad_vibrate_title">الاهتزاز</string>
+    <string name="gamepad_vibrate_summary">يستخدم النظام هزاز Android في أحداث الاهتزاز.</string>
+
+    <string name="gamepad_vibrateStrength_title">قوة الاهتزاز</string>
+    <string name="gamepad_vibrateStrength_summary">0–255.</string>
+
+    <string name="gamepad_name_title">اسم gamepad</string>
+    <string name="gamepad_name_summary">الاسم المُعلن لـ X11 / SDL.</string>
+</resources>

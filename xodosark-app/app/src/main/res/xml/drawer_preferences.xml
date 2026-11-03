@@ -4,65 +4,68 @@
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <!-- Original Termux X11 Settings -->
-    <PreferenceCategory android:title="Settings">
+    <PreferenceCategory android:title="@string/settings">
         <Preference
             android:key="full_settings"
             android:title="@string/notification_open_preferences"
             android:icon="@android:drawable/ic_menu_preferences"
-            android:summary="Open x11 settings interface" />
+            android:summary="@string/open_x11_settings" />
     </PreferenceCategory>
 
     <!-- Quick Actions -->
-    <PreferenceCategory android:title="Quick Actions">
+    <PreferenceCategory android:title="@string/quick_actions">
         <Preference
             android:key="open_keyboard"
             android:title="@string/open_keyboard_btn"
             android:icon="@android:drawable/ic_menu_set_as"
-            android:summary="Toggle software keyboard" />
+            android:summary="@string/notification_toggle_soft_keyboard" />
             
-          <SwitchPreferenceCompat
-    android:key="gamepadSdlEnabled"
-    android:title="Route controller to SDL gamepad"
-    android:summary="When off, controller keys go to WinHandler (Wine) as before"
-    android:defaultValue="false"/>
+        <SwitchPreferenceCompat
+            android:key="gamepadSdlEnabled"
+            android:title="@string/gamepad_sdlEnabled_title"
+            android:summary="@string/gamepad_sdlEnabled_summary_on"
+            android:defaultValue="false"/>
 
-<SwitchPreferenceCompat
-    android:key="gamepadForwardX11"
-    android:title="Forward X11 input back to Android"
-    android:defaultValue="true"
-    android:dependency="gamepadSdlEnabled"/>
+        <SwitchPreferenceCompat
+            android:key="gamepadForwardX11"
+            android:title="@string/gamepad_forwardX11_title"
+            android:summary="@string/gamepad_forwardX11_summary"
+            android:defaultValue="true"
+            android:dependency="gamepadSdlEnabled"/>
 
-<EditTextPreference
-    android:key="gamepadHost"
-    android:title="Host"
-    android:defaultValue="127.0.0.1"
-    android:dependency="gamepadSdlEnabled"/>
+        <EditTextPreference
+            android:key="gamepadHost"
+            android:title="@string/gamepad_host_title"
+            android:summary="@string/gamepad_host_summary"
+            android:defaultValue="127.0.0.1"
+            android:dependency="gamepadSdlEnabled"/>
 
-<EditTextPreference
-    android:key="gamepadPortRumble"
-    android:title="Client port (server = port + 1)"
-    android:defaultValue="4600"
-    android:dependency="gamepadSdlEnabled"/>
+        <EditTextPreference
+            android:key="gamepadPortRumble"
+            android:title="@string/gamepad_port_title"
+            android:summary="@string/gamepad_port_summary"
+            android:defaultValue="4600"
+            android:dependency="gamepadSdlEnabled"/>
 
         <Preference
             android:key="select_controller"
             android:title="@string/select_controller"
             android:icon="@drawable/icon_menu_game_pad_open_shape"
             android:summary="@string/select_controller_summary" />
-            <Preference
-    android:key="open_progress_manager"
-    android:title="@string/task_manager"
-    android:icon="@drawable/icon_menu_show_task_manager"
-    android:summary="Managing tasks and processes" />
+
+        <Preference
+            android:key="open_progress_manager"
+            android:title="@string/task_manager"
+            android:icon="@drawable/icon_menu_show_task_manager"
+            android:summary="@string/processes" />
             
         <SwitchPreferenceCompat
-    android:key="hud_enabled"
-    android:title="Enable HUD"
-    android:summary="Show FPS, CPU, memory overlay"
-    android:defaultValue="false"
-    app:iconSpaceReserved="false" />
+            android:key="hud_enabled"
+            android:title="@string/enable"
+            android:summary="@string/show_fps"
+            android:defaultValue="false"
+            app:iconSpaceReserved="false" />
 
-            
         <Preference
             android:key="start_debug"
             android:title="@string/log_level_debug"
@@ -71,7 +74,7 @@
     </PreferenceCategory>
 
     <!-- Info & Actions -->
-    <PreferenceCategory android:title="Information">
+    <PreferenceCategory android:title="@string/about">
         <Preference
             android:key="help"
             android:title="@string/help_button_text"
