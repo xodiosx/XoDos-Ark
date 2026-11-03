@@ -100,6 +100,7 @@ import app.xodos2.ui.shell.TerminalBackgroundX11
 import app.xodos2.ui.glassDialogStyle
 import androidx.compose.ui.res.stringResource
 import app.xodos2.R
+import app.xodos2.ui.util.FitText
 
 private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")
 private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
@@ -2115,7 +2116,15 @@ if (showPanvkDriverDialog) {
                         showPanvkDriverDialog = false
                     }
                 }) {
-                    Text(stringResource(R.string.appscreen_download_install), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
+                    FitText(
+        text = stringResource(R.string.appscreen_download_install),
+        color = Color(0xFFC3B6F9),
+        fontWeight = FontWeight.Bold,
+        style = MaterialTheme.typography.bodyMedium,
+        maxFontSize = 14.sp,
+        minFontSize = 9.sp,
+        modifier = Modifier.padding(horizontal = 4.dp),
+    )
                 }
             }
         },
@@ -2277,7 +2286,14 @@ if (showTurnipDriverDialog) {
                             )
                         )
                     ) {
-                        Text(label, fontWeight = FontWeight.SemiBold)
+                        FitText(
+        text = label,
+        fontWeight = FontWeight.SemiBold,
+        style = MaterialTheme.typography.bodyMedium,
+        maxFontSize = 14.sp,
+        minFontSize = 10.sp,
+        modifier = Modifier.padding(horizontal = 8.dp),
+    )
                     }
                 }
             }
@@ -2614,22 +2630,39 @@ if (showNativeContainerPrompt != null) {
             Text(stringResource(R.string.appscreen_use_native_body, containerId), color = Color.White.copy(alpha = 0.85f))
         },
         confirmButton = {
-            GlassButton(onClick = {
-                markContainerAsNativeTerminal(containerId)
-                showNativeContainerPrompt = null
-                Toast.makeText(context, context.getString(R.string.appscreen_native_terminal_set_toast, containerId), Toast.LENGTH_SHORT).show()
-            }) {
-                Text(stringResource(R.string.appscreen_yes_use_as_native), color = Color(0xFFC3B6F9), fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            GlassButton(onClick = {
-                showNativeContainerPrompt = null
-                proceedToDistroSelection(containerId)
-            }) {
-                Text(stringResource(R.string.appscreen_no_install_a_distro), color = Color.White.copy(alpha = 0.8f))
-            }
-        }
+    GlassButton(onClick = {
+        markContainerAsNativeTerminal(containerId)
+        showNativeContainerPrompt = null
+        Toast.makeText(context, context.getString(R.string.appscreen_native_terminal_set_toast, containerId), Toast.LENGTH_SHORT).show()
+    }) {
+        FitText(
+            text = stringResource(R.string.appscreen_yes_use_as_native),
+            color = Color(0xFFC3B6F9),
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyMedium,
+            maxFontSize = 14.sp,
+            minFontSize = 9.sp,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+    }
+},
+dismissButton = {
+    GlassButton(onClick = {
+        showNativeContainerPrompt = null
+        proceedToDistroSelection(containerId)
+    }) {
+        FitText(
+            text = stringResource(R.string.appscreen_no_install_a_distro),
+            color = Color.White.copy(alpha = 0.8f),
+            style = MaterialTheme.typography.bodyMedium,
+            maxFontSize = 14.sp,
+            minFontSize = 9.sp,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
+    }
+}
+        
+        
     )
 }
 // ── Clean cache confirmation dialog ───────────────────────────────
@@ -2841,12 +2874,14 @@ if (showDistroSelection) {
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = label,
-                                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (isActive) Color.White else Color(0xFF9F92EC),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
+                                FitText(
+    text = label,
+    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+    color = if (isActive) Color.White else Color(0xFF9F92EC),
+    style = MaterialTheme.typography.bodyMedium,
+    maxFontSize = 14.sp,
+    minFontSize = 9.sp,
+)
                             }
                         }
                     }
@@ -3248,11 +3283,15 @@ if (showDistroSelection) {
                             )
                         )
                     ) {
-                        Text(
+                        FitText(
                             text = stringResource(R.string.appscreen_continue_without_installing),
                             fontWeight = FontWeight.SemiBold,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxFontSize = 14.sp,
+        minFontSize = 10.sp,
+        modifier = Modifier.padding(horizontal = 8.dp),
+    )
+                        
                     }
                 }
             }
