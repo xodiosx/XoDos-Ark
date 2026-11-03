@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- res/values-de/strings.xml -->
+<resources>
+    <!-- ============================================================
+         
+         ============================================================ -->
+
+    <!-- X11 -->
+    <string name="appscreen_x11_scripts">X11-Skripte</string>
+    <string name="appscreen_x11_startup_script">X11-Startskript</string>
+
+    <!-- Desktop installation -->
+    <string name="appscreen_install_desktop">Desktop installieren</string>
+
+    <!-- Wayland -->
+    <string name="appscreen_wayland_scripts">Wayland-Skripte</string>
+    <string name="appscreen_wayland_desktop_startup_script">Wayland-Desktop-Startskript</string>
+
+    <!-- D3D / DXVK components -->
+    <string name="appscreen_d3d_components_dxvk">D3D-Komponenten (DXVK)</string>
+    <string name="appscreen_d3d_components">D3D-Komponenten</string>
+    <string name="appscreen_dxvk_extracting">%1$s wird extrahiert…</string>
+    <string name="appscreen_dxvk_installed">%1$s installiert</string>
+    <string name="appscreen_dxvk_failed">Fehlgeschlagen: %1$s</string>
+</resources>
