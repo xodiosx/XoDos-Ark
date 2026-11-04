@@ -8,7 +8,7 @@ on:
         required: true
         default: '1.0.0'
       mega_url:
-        description: 'MEGA download link (direct link to file or folder)'
+        description: 'MEGA link(s) — up to 6, separated by spaces'
         required: true
 
 permissions:
@@ -30,7 +30,6 @@ jobs:
           sudo apt update
           sudo apt install -y megatools
 
-      # Check if a release for this tag already exists
       - name: Check if release exists
         id: check_release
         env:
@@ -42,7 +41,6 @@ jobs:
             echo "exists=false" >> $GITHUB_OUTPUT
           fi
 
-      # Only create and push the Git tag if the release does NOT exist
       - name: Create Git Tag (if new release)
         if: steps.check_release.outputs.exists == 'false'
         run: |
@@ -51,17 +49,35 @@ jobs:
           git tag "v${{ inputs.version_tag }}"
           git push origin "v${{ inputs.version_tag }}"
 
-      # Download files from MEGA using the provided URL
+      # ✅ Download all links (space separated)
       - name: Download files from MEGA
+        env:
+          MEGA_URLS: ${{ inputs.mega_url }}
         run: |
           mkdir -p mega-files
           cd mega-files
-          megatools dl "${{ inputs.mega_url }}"
+
+          # Split on whitespace into an array
+          read -r -a LINKS <<< "$MEGA_URLS"
+
+          if [ "${#LINKS[@]}" -eq 0 ]; then
+            echo "No MEGA links provided"; exit 1
+          fi
+
+          if [ "${#LINKS[@]}" -gt 6 ]; then
+            echo "Too many links (${#LINKS[@]}). Max is 6."; exit 1
+          fi
+
+          i=0
+          for link in "${LINKS[@]}"; do
+            i=$((i+1))
+            echo "── [${i}/${#LINKS[@]}] Downloading: $link"
+            megatools dl --no-progress "$link" || echo "⚠️ Failed: $link"
+          done
 
       - name: Show downloaded files
-        run: ls -lh mega-files/
+        run: ls -lhR mega-files/
 
-      # 🆕 New release → create with body, tag, and all files
       - name: Create new release
         if: steps.check_release.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
@@ -72,20 +88,19 @@ jobs:
             🧩 **Native Apps for XoDos**
 
             ### ✅ What's New
-            - Added files from MEGA
+            - Added files from cloud
 
             ---
-            **👥 Credits**  
-            python: @xodiosx • Logos: @sabamdarif  
+            
             **💬 Support**  
             Telegram: [t.me/xodemulatorr](https://t.me/xodemulatorr)  
             Discord: [discord.gg/d2ChVhPfnF](https://discord.gg/d2ChVhPfnF)
           files: |
             mega-files/*
+            mega-files/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # ♻️ Existing release → only add files, keep body and tag unchanged
       - name: Add files to existing release
         if: steps.check_release.outputs.exists == 'true'
         uses: softprops/action-gh-release@v2
@@ -93,5 +108,6 @@ jobs:
           tag_name: "v${{ inputs.version_tag }}"
           files: |
             mega-files/*
+            mega-files/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
