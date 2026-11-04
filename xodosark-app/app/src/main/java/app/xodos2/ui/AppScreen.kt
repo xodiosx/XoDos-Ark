@@ -115,7 +115,7 @@ private val WINE_NATIVE_DEPENDENCIES = listOf(
     "fontconfig", "freetype", "glib", "zlib",  "hangover-libwow64fex", "hangover-libarm64ecfex", "hangover-wowbox64", "7zip", "zstd", "gnutls",
     "openssl", "openal-soft", "gstreamer", "virglrenderer-venus",
     "angle-android", "pulseaudio", "libsndfile", "alsa-lib", "libevdev",
-    "mesa-vulkan-icd-freedreno", "vulkan-loader-generic",
+    "mesa-vulkan-icd-freedreno", "vulkan-loader-generic", "sdl2",
     "vulkan-wrapper", "mali-vulkan-panvk", "mesa-vulkan-icd-virtio-dri3"
 )
 
@@ -1807,9 +1807,26 @@ fun checkAndPromptTurnipDrivers() {
     }
 }
 
+    /**
+ * If Adrenotools has a *custom* driver active (not "system") AND the desktop
+ * Vulkan mode is "WRAPPER", re-source the drv file in the active terminal so
+ * the Adrenotools environment wins over the drawer's graphics env.
+ */
+fun applyAdrenotoolsDrvIfNeeded() {
+    val adrenotoolsActive = AdrenotoolsDriverManager.activeName(context) != null
+    if (!adrenotoolsActive || desktopVulkanMode != "WRAPPER") return
+
+    val sessionId = terminalSessionState.activeSessionId
+    if (NativeBridge.isSessionAlive(sessionId)) {
+        NativeBridge.writeInput(
+            sessionId,
+            "source ${AdrenotoolsDriverManager.DRV_PATH_IN_CONTAINER}\n".toByteArray()
+        )
+    }
+    AppLogger.log("Adrenotools drv re-sourced (WRAPPER + custom driver active)")
+}
     
-    
-fun setDesktopVulkanMode(mode: String) {
+    fun setDesktopVulkanMode(mode: String) {
     val prev = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode)
     var next = GraphicsModeController.sanitize(
         GraphicsModeController.Modes(vulkan = mode, openGL = desktopOpenGLMode),
@@ -1819,6 +1836,13 @@ fun setDesktopVulkanMode(mode: String) {
 
     // force OpenGL to LLVMPIPE when Venus is active
     if (next.vulkan == "VENUS") {
+        next = next.copy(openGL = "LLVMPIPE")
+    }
+
+    // ── NEW: Adrenotools + WRAPPER ⇒ force LLVMPIPE if VIRGL was selected ──
+    if (next.vulkan == "WRAPPER" && next.openGL == "VIRGL" &&
+        AdrenotoolsDriverManager.activeName(context) != null
+    ) {
         next = next.copy(openGL = "LLVMPIPE")
     }
 
@@ -1832,33 +1856,48 @@ fun setDesktopVulkanMode(mode: String) {
     DisplayOrchestrator.updateContainersSystemEnvironment(context, prefs)
     injectGraphicsEnvToAllTerminals()
 
+    // ── NEW: re-apply adrenotools env if active + WRAPPER selected ──
+    applyAdrenotoolsDrvIfNeeded()
+
     if (next.vulkan == "TURNIP") {
         checkAndPromptTurnipDrivers()
     }
     if (next.vulkan == "PANVK") {
-    checkAndPromptPanvkDrivers()
-}
+        checkAndPromptPanvkDrivers()
+    }
 
     AppLogger.log("Vulkan mode set to $mode (OpenGL forced to LLVMPIPE if Venus)")
 }
+    
+fun setDesktopOpenGLMode(mode: String) {
+    // ── NEW: if Adrenotools is active + WRAPPER, disallow VIRGL → use LLVMPIPE ──
+    val effectiveMode =
+        if (mode == "VIRGL" &&
+            AdrenotoolsDriverManager.activeName(context) != null &&
+            desktopVulkanMode == "WRAPPER"
+        ) "LLVMPIPE" else mode
 
-    fun setDesktopOpenGLMode(mode: String) {
-        val prev = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode)
-        val next = GraphicsModeController.sanitize(
-            GraphicsModeController.Modes(vulkan = desktopVulkanMode, openGL = mode),
-            allowedVulkan = VULKAN_MODES,
-            allowedOpenGL = OPENGL_MODES,
-        )
-        if (GraphicsModeController.applyAndMaybeToggleVirglHost(prefs, prev, next)) {
-            rendererSessionResetEpoch++
-        }
-        desktopVulkanMode = next.vulkan
-        desktopOpenGLMode = next.openGL
-        DisplayOrchestrator.updateContainersSystemEnvironment(context, prefs)
-        injectGraphicsEnvToAllTerminals()  
-        AppLogger.log("OpenGL mode set to $mode")
+    val prev = GraphicsModeController.Modes(desktopVulkanMode, desktopOpenGLMode)
+    val next = GraphicsModeController.sanitize(
+        GraphicsModeController.Modes(vulkan = desktopVulkanMode, openGL = effectiveMode),
+        allowedVulkan = VULKAN_MODES,
+        allowedOpenGL = OPENGL_MODES,
+    )
+    if (GraphicsModeController.applyAndMaybeToggleVirglHost(prefs, prev, next)) {
+        rendererSessionResetEpoch++
     }
+    desktopVulkanMode = next.vulkan
+    desktopOpenGLMode = next.openGL
+    DisplayOrchestrator.updateContainersSystemEnvironment(context, prefs)
+    injectGraphicsEnvToAllTerminals()
 
+    // ── NEW: re-apply adrenotools env after every OpenGL change if condition holds ──
+    applyAdrenotoolsDrvIfNeeded()
+
+    AppLogger.log(
+        "OpenGL mode set to $mode (effective ${next.openGL})"
+    )
+}
 
     // ----- persistence helpers (unchanged) -----
     fun persistMouseMode(mode: Int) { mouseMode = mode; AppPrefs.writeInt(prefs, "mouse_mode", mode) }
