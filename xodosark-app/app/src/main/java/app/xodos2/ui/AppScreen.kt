@@ -1210,7 +1210,7 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
 }
 */
 @Composable
-private fun WineDownloadOption(title: String, hint: String, onClick: () -> Unit) {
+ fun WineDownloadOption(title: String, hint: String, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
