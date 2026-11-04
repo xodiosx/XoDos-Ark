@@ -310,7 +310,11 @@ var removingNativeEnvInProgress by remember { mutableStateOf(false) }
 var pendingContainerForBackup by remember { mutableStateOf<Int?>(null) }
 var backupInProgress by remember { mutableStateOf(false) }
 var backupProgress by remember { mutableStateOf(0 to "") }  // (pct, msg)
-
+// ── Wine download dialog state ──
+var showWineDownloadDialog by remember { mutableStateOf(false) }
+var wineDownloadInProgress by remember { mutableStateOf(false) }
+var wineDownloadProgress by remember { mutableStateOf(0 to "") }
+var wineDownloadJob by remember { mutableStateOf<Job?>(null) }
 // --- Bootstrap package installation ---
 var bootstrapUri by remember { mutableStateOf<Uri?>(null) }
 var bootstrapInProgress by remember { mutableStateOf(false) }
@@ -1137,7 +1141,7 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
     }
 }
 
-fun downloadBootstrapArchive() {
+/*fun downloadBootstrapArchive() {
     bootstrapDownloadJob?.cancel()
     bootstrapDownloadJob = scope.launch {
         bootstrapDownloadInProgress = true
@@ -1201,6 +1205,154 @@ fun downloadBootstrapArchive() {
             withContext(Dispatchers.Main) {
                 bootstrapDownloadInProgress = false
             }
+        }
+    }
+}
+*/
+@Composable
+private fun WineDownloadOption(title: String, hint: String, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp)
+    ) {
+        Text(
+            title,
+            color = Color(0xFFC3B6F9),
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyLarge
+        )
+        Text(
+            hint,
+            color = Color.White.copy(alpha = 0.55f),
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+fun downloadAndInstallWine(url: String, fileName: String) {
+    wineDownloadJob?.cancel()
+    wineDownloadJob = scope.launch {
+        wineDownloadInProgress = true
+        wineDownloadProgress = 0 to context.getString(R.string.appscreen_starting_download)
+
+        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!downloadsDir.exists()) downloadsDir.mkdirs()
+        val outputFile = File(downloadsDir, fileName)
+        val tmpFile    = File(downloadsDir, "$fileName.tmp")
+
+        try {
+            // ── 1. Download to /sdcard/Download ──
+            withContext(Dispatchers.IO) {
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 15_000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "XoDosArk/1.0")
+                conn.connect()
+                val totalSize = conn.contentLengthLong
+                tmpFile.delete()
+                conn.inputStream.use { input ->
+                    tmpFile.outputStream().use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        var copied = 0L
+                        var read: Int
+                        while (input.read(buf).also { read = it } != -1) {
+                            coroutineContext.ensureActive()
+                            output.write(buf, 0, read)
+                            copied += read
+                            if (totalSize > 0) {
+                                val pct = (copied * 100 / totalSize).toInt()
+                                withContext(Dispatchers.Main) {
+                                    wineDownloadProgress = pct to context.getString(R.string.appscreen_downloading_percent, pct)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename downloaded file")
+
+            // ── 2. Install: rm -rf usr/opt/winece, then extract like bootstrap ──
+            withContext(Dispatchers.Main) {
+                wineDownloadProgress = 100 to context.getString(R.string.appscreen_extracting)
+            }
+
+            val dataDir   = context.filesDir
+            val usrDir    = File(dataDir, "usr")
+            val cacheDir  = context.cacheDir
+            val xzBinary  = File(usrDir, "bin/xz").absolutePath
+            val pvBinary  = File(usrDir, "bin/pv").absolutePath
+            val tarBinary = File(usrDir, "bin/tar").absolutePath
+            val libDir    = File(usrDir, "lib").absolutePath
+            val wineceDir = File(usrDir, "opt/winece").absolutePath
+
+            for (p in listOf(xzBinary, pvBinary, tarBinary)) {
+                if (!File(p).exists()) throw Exception("Missing binary: $p")
+                File(p).setExecutable(true)
+            }
+
+            val env = mapOf(
+                "PATH"            to "${File(usrDir, "bin").absolutePath}:/system/bin:/sbin:/bin",
+                "LD_LIBRARY_PATH" to "$libDir:/system/lib64:/lib",
+                "TMPDIR"          to cacheDir.absolutePath
+            )
+
+            // Rough uncompressed size estimate for pv progress
+            val totalSize = outputFile.length() * 3
+
+            val shellCmd =
+                "rm -rf $wineceDir && " +
+                "$xzBinary -dc ${outputFile.absolutePath} | " +
+                "$pvBinary -n -s $totalSize | " +
+                "$tarBinary -xf - -C ${dataDir.absolutePath}"
+
+            withContext(Dispatchers.IO) {
+                val process = ProcessBuilder("/system/bin/sh", "-c", shellCmd)
+                    .directory(cacheDir)
+                    .apply { environment().putAll(env) }
+                    .redirectErrorStream(false)
+                    .start()
+
+                val progressJob = launch {
+                    process.errorStream.bufferedReader().use { reader ->
+                        var line = reader.readLine()
+                        while (line != null) {
+                            val pct = line.toIntOrNull()
+                            if (pct != null && pct in 0..100) {
+                                withContext(Dispatchers.Main) {
+                                    wineDownloadProgress = pct to context.getString(R.string.appscreen_extracting_percent, pct)
+                                }
+                            }
+                            line = reader.readLine()
+                        }
+                    }
+                }
+                val exitCode = process.waitFor()
+                progressJob.join()
+
+                withContext(Dispatchers.Main) {
+                    if (exitCode == 0) {
+                        wineDownloadProgress = 100 to context.getString(R.string.appscreen_installed)
+                        Toast.makeText(context, context.getString(R.string.appscreen_package_installed), Toast.LENGTH_SHORT).show()
+                        installWineDependenciesInNativeSession()
+                        showWineDownloadDialog = false
+                    } else {
+                        wineDownloadProgress = -1 to context.getString(R.string.appscreen_extraction_failed_exit, exitCode, "")
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            tmpFile.delete()
+            throw e
+        } catch (e: Exception) {
+            tmpFile.delete()
+            withContext(Dispatchers.Main) {
+                wineDownloadProgress = -1 to context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
+            }
+        } finally {
+            withContext(Dispatchers.Main) { wineDownloadInProgress = false }
         }
     }
 }
@@ -2007,10 +2159,91 @@ if (bootstrapError != null) {
     )
 }
 
+if (showWineDownloadDialog) {
+    val busy = wineDownloadInProgress
+    AlertDialog(
+        onDismissRequest = { if (!busy) showWineDownloadDialog = false },
+        containerColor = Color.Transparent,
+        modifier = Modifier.glassDialogStyle(),
+        title = {
+            Text(
+                stringResource(R.string.appscreen_download_wine_250mb),
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        },
+        text = {
+            Column {
+                if (!busy) {
+                    WineDownloadOption(
+                        title = stringResource(R.string.appscreen_wine_components),
+                        hint  = stringResource(R.string.appscreen_wine_components_hint),
+                        onClick = {
+                            downloadAndInstallWine(
+                                "https://github.com/xodiosx/XoDos-Ark/releases/download/vwine10.6/wcomp.tar.xz",
+                                "wcomp.tar.xz"
+                            )
+                        }
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    WineDownloadOption(
+                        title = stringResource(R.string.appscreen_wine_bionic),
+                        hint  = stringResource(R.string.appscreen_wine_bionic_hint),
+                        onClick = {
+                            downloadAndInstallWine(
+                                "https://github.com/xodiosx/XoDos-Ark/releases/download/vwine10.6/xfex-bio.tar.xz",
+                                "xfex-bio.tar.xz"
+                            )
+                        }
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    WineDownloadOption(
+                        title = stringResource(R.string.appscreen_wine_bionic_ntsync),
+                        hint  = stringResource(R.string.appscreen_wine_bionic_ntsync_hint),
+                        onClick = {
+                            downloadAndInstallWine(
+                                "https://github.com/xodiosx/XoDos-Ark/releases/download/vwine10.6/xfex-ntsync.tar.xz",
+                                "xfex-ntsync.tar.xz"
+                            )
+                        }
+                    )
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (wineDownloadProgress.first >= 0) {
+                            LinearProgressIndicator(
+                                progress = { wineDownloadProgress.first / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Color(0xFFC3B6F9),
+                                trackColor = Color.White.copy(alpha = 0.1f)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                wineDownloadProgress.second,
+                                color = Color.White.copy(alpha = 0.85f),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        } else {
+                            Text(wineDownloadProgress.second, color = Color(0xFFFF6B6B))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!busy) {
+                GlassButton(onClick = { showWineDownloadDialog = false }) {
+                    Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
+                }
+            }
+        }
+    )
+}
 
+/*
 if (bootstrapDownloadInProgress) {
     AlertDialog(
-        onDismissRequest = { /* cannot dismiss while downloading */ },
+        onDismissRequest = { // cannot dismiss while downloading 
+         },
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
         title = { Text(stringResource(R.string.appscreen_downloading_wine_250mb), fontWeight = FontWeight.Bold, color = Color.White) },
@@ -2049,6 +2282,7 @@ if (bootstrapDownloadInProgress) {
         
     )
 }
+*/
 
 if (fullDesktopDownloadInProgress) {
     AlertDialog(
@@ -2525,7 +2759,7 @@ if (showContainerManager) {
                     Button(
                         onClick = {
                             showContainerManager = false
-                            downloadBootstrapArchive()
+                            showWineDownloadDialog = true
                         },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                         colors = ButtonDefaults.buttonColors(
@@ -3419,7 +3653,8 @@ if (showDistroSelection) {
                              showSlotPicker || 
                              showTurnipDriverDialog || 
                              showExitDialog ||
-                             bootstrapDownloadInProgress
+                             showWineDownloadDialog ||
+                             wineDownloadInProgress
 
     AppDrawer(
         drawerState = drawerState,
