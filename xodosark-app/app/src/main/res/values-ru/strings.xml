@@ -235,4 +235,16 @@
     <string name="appscreen_error_with_message">Ошибка: %1$s</string>
     <string name="appscreen_invalid_url">Недопустимый URL. Должен быть http(s) и заканчиваться на .tar.xz или .tar.gz</string>
     <string name="appscreen_failed_to_fetch_url">Не удалось получить URL: %1$s</string>
+    
+    
+    
+    <string name="appscreen_wine_components">Компоненты Wine 🧩</string>
+<string name="appscreen_wine_components_hint">Плагины Wine — DirectX / DXVK / vcrun и т. д.</string>
+<string name="appscreen_wine_bionic">Wine 🍷 bionic 10.6</string>
+<string name="appscreen_wine_bionic_hint">Нативный эмулятор Wine для запуска игр Windows</string>
+<string name="appscreen_wine_bionic_ntsync">Wine 🍷 bionic NTSYNC</string>
+<string name="appscreen_wine_bionic_ntsync_hint">Нативный эмулятор Wine с включённым NTSYNC</string>
+<string name="appscreen_wine_custom_url_hint">Поддерживаемые файлы URL .tar.xz .7z</string>
+<string name="appscreen_wine_custom_url_invalid">Недопустимый URL — должен заканчиваться на .tar.xz, .tar.gz, .7z или .zip</string>
+<string name="appscreen_wine_custom_download">Скачать компонент</string>
 </resources>

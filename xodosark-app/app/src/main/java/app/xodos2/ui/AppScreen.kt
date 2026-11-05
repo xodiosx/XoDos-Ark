@@ -2161,6 +2161,76 @@ if (bootstrapError != null) {
     )
 }
 
+fun downloadCustomWinComponent(url: String) {
+    wineDownloadJob?.cancel()
+    wineDownloadJob = scope.launch {
+        wineDownloadInProgress = true
+        wineDownloadProgress = 0 to context.getString(R.string.appscreen_starting_download)
+
+        val fileName = url.substringAfterLast('/').substringBefore('?').substringBefore('#')
+        if (fileName.isBlank()) {
+            wineDownloadProgress = -1 to context.getString(R.string.appscreen_invalid_url)
+            wineDownloadInProgress = false
+            return@launch
+        }
+
+        val targetDir = File(context.filesDir, "usr/wincomponents/d3d")
+        targetDir.mkdirs()
+        val outputFile = File(targetDir, fileName)
+        val tmpFile = File(targetDir, "$fileName.tmp")
+
+        try {
+            withContext(Dispatchers.IO) {
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 15_000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "XoDosArk/1.0")
+                conn.connect()
+                val totalSize = conn.contentLengthLong
+                tmpFile.delete()
+                conn.inputStream.use { input ->
+                    tmpFile.outputStream().use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        var copied = 0L
+                        var read: Int
+                        while (input.read(buf).also { read = it } != -1) {
+                            coroutineContext.ensureActive()
+                            output.write(buf, 0, read)
+                            copied += read
+                            if (totalSize > 0) {
+                                val pct = (copied * 100 / totalSize).toInt()
+                                withContext(Dispatchers.Main) {
+                                    wineDownloadProgress = pct to
+                                        context.getString(R.string.appscreen_downloading_percent, pct)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename file")
+
+            withContext(Dispatchers.Main) {
+                wineDownloadProgress = 100 to fileName
+                Toast.makeText(context, fileName, Toast.LENGTH_SHORT).show()
+                wineCustomUrl = ""
+                wineDownloadInProgress = false
+            }
+        } catch (e: CancellationException) {
+            tmpFile.delete()
+            throw e
+        } catch (e: Exception) {
+            tmpFile.delete()
+            withContext(Dispatchers.Main) {
+                wineDownloadProgress = -1 to
+                    context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
+                wineDownloadInProgress = false
+            }
+        }
+    }
+}
 
 if (showWineDownloadDialog) {
     val busy = wineDownloadInProgress
@@ -2317,76 +2387,7 @@ if (showWineDownloadDialog) {
     )
 }
 
-fun downloadCustomWinComponent(url: String) {
-    wineDownloadJob?.cancel()
-    wineDownloadJob = scope.launch {
-        wineDownloadInProgress = true
-        wineDownloadProgress = 0 to context.getString(R.string.appscreen_starting_download)
 
-        val fileName = url.substringAfterLast('/').substringBefore('?').substringBefore('#')
-        if (fileName.isBlank()) {
-            wineDownloadProgress = -1 to context.getString(R.string.appscreen_invalid_url)
-            wineDownloadInProgress = false
-            return@launch
-        }
-
-        val targetDir = File(context.filesDir, "usr/wincomponents/d3d")
-        targetDir.mkdirs()
-        val outputFile = File(targetDir, fileName)
-        val tmpFile = File(targetDir, "$fileName.tmp")
-
-        try {
-            withContext(Dispatchers.IO) {
-                val conn = URL(url).openConnection() as HttpURLConnection
-                conn.connectTimeout = 15_000
-                conn.readTimeout = 15_000
-                conn.instanceFollowRedirects = true
-                conn.setRequestProperty("User-Agent", "XoDosArk/1.0")
-                conn.connect()
-                val totalSize = conn.contentLengthLong
-                tmpFile.delete()
-                conn.inputStream.use { input ->
-                    tmpFile.outputStream().use { output ->
-                        val buf = ByteArray(64 * 1024)
-                        var copied = 0L
-                        var read: Int
-                        while (input.read(buf).also { read = it } != -1) {
-                            coroutineContext.ensureActive()      // ← real cancellation
-                            output.write(buf, 0, read)
-                            copied += read
-                            if (totalSize > 0) {
-                                val pct = (copied * 100 / totalSize).toInt()
-                                withContext(Dispatchers.Main) {
-                                    wineDownloadProgress = pct to
-                                        context.getString(R.string.appscreen_downloading_percent, pct)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename file")
-
-            withContext(Dispatchers.Main) {
-                wineDownloadProgress = 100 to fileName
-                Toast.makeText(context, fileName, Toast.LENGTH_SHORT).show()
-                wineCustomUrl = ""
-                wineDownloadInProgress = false
-            }
-        } catch (e: CancellationException) {
-            tmpFile.delete()
-            throw e
-        } catch (e: Exception) {
-            tmpFile.delete()
-            withContext(Dispatchers.Main) {
-                wineDownloadProgress = -1 to
-                    context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
-                wineDownloadInProgress = false
-            }
-        }
-    }
-}
 /*
 if (bootstrapDownloadInProgress) {
     AlertDialog(

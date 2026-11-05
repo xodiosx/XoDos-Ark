@@ -235,4 +235,16 @@
     <string name="appscreen_error_with_message">Error: %1$s</string>
     <string name="appscreen_invalid_url">Invalid URL. Ye http(s) hona chahiye aur .tar.xz ya .tar.gz par khatam hona chahiye</string>
     <string name="appscreen_failed_to_fetch_url">URL fetch fail: %1$s</string>
+    
+    
+    
+    <string name="appscreen_wine_components">Wine 🧩 components</string>
+<string name="appscreen_wine_components_hint">Wine plugins — DirectX / DXVK / vcrun etc.</string>
+<string name="appscreen_wine_bionic">Wine 🍷 bionic 10.6</string>
+<string name="appscreen_wine_bionic_hint">Windows games chalane ke liye Wine native emulator</string>
+<string name="appscreen_wine_bionic_ntsync">Wine 🍷 bionic NTSYNC</string>
+<string name="appscreen_wine_bionic_ntsync_hint">NTSYNC enabled ke saath Wine native emulator</string>
+<string name="appscreen_wine_custom_url_hint">Supported Files URL .tar.xz .7z</string>
+<string name="appscreen_wine_custom_url_invalid">Invalid URL — .tar.xz, .tar.gz, .7z ya .zip par khatam hona chahiye</string>
+<string name="appscreen_wine_custom_download">Component download karein</string>
 </resources>

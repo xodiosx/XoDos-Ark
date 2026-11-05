@@ -235,4 +235,15 @@
     <string name="appscreen_error_with_message">错误：%1$s</string>
     <string name="appscreen_invalid_url">无效 URL。必须为 http(s) 并以 .tar.xz 或 .tar.gz 结尾</string>
     <string name="appscreen_failed_to_fetch_url">无法获取 URL：%1$s</string>
+    
+    
+    <string name="appscreen_wine_components">Wine 🧩 组件</string>
+<string name="appscreen_wine_components_hint">Wine 插件 — DirectX / DXVK / vcrun 等</string>
+<string name="appscreen_wine_bionic">Wine 🍷 bionic 10.6</string>
+<string name="appscreen_wine_bionic_hint">用于运行 Windows 游戏的 Wine 原生模拟器</string>
+<string name="appscreen_wine_bionic_ntsync">Wine 🍷 bionic NTSYNC</string>
+<string name="appscreen_wine_bionic_ntsync_hint">启用 NTSYNC 的 Wine 原生模拟器</string>
+<string name="appscreen_wine_custom_url_hint">支持的文件 URL .tar.xz .7z</string>
+<string name="appscreen_wine_custom_url_invalid">无效 URL — 必须以 .tar.xz、.tar.gz、.7z 或 .zip 结尾</string>
+<string name="appscreen_wine_custom_download">下载组件</string>
 </resources>

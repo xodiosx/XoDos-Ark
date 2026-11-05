@@ -242,12 +242,16 @@
     <string name="appscreen_failed_to_fetch_url">Failed to fetch URL: %1$s</string>
     
     
+    
+    
     <string name="appscreen_wine_components">Wine 🧩 components</string>
 <string name="appscreen_wine_components_hint">Wine plugins — DirectX / DXVK / vcrun etc.</string>
 <string name="appscreen_wine_bionic">Wine 🍷 bionic 10.6</string>
 <string name="appscreen_wine_bionic_hint">Wine native emulator to run Windows games</string>
 <string name="appscreen_wine_bionic_ntsync">Wine 🍷 bionic NTSYNC</string>
 <string name="appscreen_wine_bionic_ntsync_hint">Wine native emulator with NTSYNC enabled</string>
-    
+    <string name="appscreen_wine_custom_url_hint">supported Files URL .tar.xz .7z</string>
+<string name="appscreen_wine_custom_url_invalid">Invalid URL — must end in .tar.xz, .tar.gz, .7z or .zip</string>
+<string name="appscreen_wine_custom_download">Download component</string>
     
 </resources>

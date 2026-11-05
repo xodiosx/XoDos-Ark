@@ -235,4 +235,16 @@
     <string name="appscreen_error_with_message">エラー：%1$s</string>
     <string name="appscreen_invalid_url">無効な URL です。http(s) で、.tar.xz または .tar.gz で終わる必要があります</string>
     <string name="appscreen_failed_to_fetch_url">URL の取得に失敗しました：%1$s</string>
+    
+    
+    
+    <string name="appscreen_wine_components">Wine 🧩 コンポーネント</string>
+<string name="appscreen_wine_components_hint">Wine プラグイン — DirectX / DXVK / vcrun など</string>
+<string name="appscreen_wine_bionic">Wine 🍷 bionic 10.6</string>
+<string name="appscreen_wine_bionic_hint">Windows ゲームを実行するための Wine ネイティブエミュレーター</string>
+<string name="appscreen_wine_bionic_ntsync">Wine 🍷 bionic NTSYNC</string>
+<string name="appscreen_wine_bionic_ntsync_hint">NTSYNC を有効にした Wine ネイティブエミュレーター</string>
+<string name="appscreen_wine_custom_url_hint">対応ファイル URL .tar.xz .7z</string>
+<string name="appscreen_wine_custom_url_invalid">無効な URL — .tar.xz、.tar.gz、.7z、または .zip で終わる必要があります</string>
+<string name="appscreen_wine_custom_download">コンポーネントをダウンロード</string>
 </resources>

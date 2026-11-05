@@ -235,4 +235,15 @@
     <string name="appscreen_error_with_message">خطأ: %1$s</string>
     <string name="appscreen_invalid_url">URL غير صالح. يجب أن يكون http(s) وينتهي بـ .tar.xz أو .tar.gz</string>
     <string name="appscreen_failed_to_fetch_url">فشل جلب URL: %1$s</string>
+    
+    
+    <string name="appscreen_wine_components">مكونات Wine 🧩</string>
+<string name="appscreen_wine_components_hint">إضافات Wine — DirectX / DXVK / vcrun إلخ.</string>
+<string name="appscreen_wine_bionic">Wine 🍷 bionic 10.6</string>
+<string name="appscreen_wine_bionic_hint">محاكي Wine الأصلي لتشغيل ألعاب Windows</string>
+<string name="appscreen_wine_bionic_ntsync">Wine 🍷 bionic NTSYNC</string>
+<string name="appscreen_wine_bionic_ntsync_hint">محاكي Wine الأصلي مع تفعيل NTSYNC</string>
+<string name="appscreen_wine_custom_url_hint">الملفات المدعومة URL .tar.xz .7z</string>
+<string name="appscreen_wine_custom_url_invalid">URL غير صالح — يجب أن ينتهي بـ .tar.xz أو .tar.gz أو .7z أو .zip</string>
+<string name="appscreen_wine_custom_download">تنزيل المكوّن</string>
 </resources>

@@ -235,4 +235,16 @@
     <string name="appscreen_error_with_message">Erro: %1$s</string>
     <string name="appscreen_invalid_url">URL inválida. Deve ser http(s) e terminar em .tar.xz ou .tar.gz</string>
     <string name="appscreen_failed_to_fetch_url">Falha ao buscar URL: %1$s</string>
+    
+    
+    
+    <string name="appscreen_wine_components">Componentes do Wine 🧩</string>
+<string name="appscreen_wine_components_hint">Plugins do Wine — DirectX / DXVK / vcrun etc.</string>
+<string name="appscreen_wine_bionic">Wine 🍷 bionic 10.6</string>
+<string name="appscreen_wine_bionic_hint">Emulador nativo do Wine para executar jogos de Windows</string>
+<string name="appscreen_wine_bionic_ntsync">Wine 🍷 bionic NTSYNC</string>
+<string name="appscreen_wine_bionic_ntsync_hint">Emulador nativo do Wine com NTSYNC ativado</string>
+<string name="appscreen_wine_custom_url_hint">Arquivos suportados URL .tar.xz .7z</string>
+<string name="appscreen_wine_custom_url_invalid">URL inválida — deve terminar em .tar.xz, .tar.gz, .7z ou .zip</string>
+<string name="appscreen_wine_custom_download">Baixar componente</string>
 </resources>
