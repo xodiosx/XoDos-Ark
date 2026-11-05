@@ -3,6 +3,7 @@ package app.xodos2.ui.drawer.pages
 import app.xodos2.ui.drawer.pages.AdrenotoolsDrawerButton
 import app.xodos2.ui.drawer.pages.DxvkSelectorSection
 import app.xodos2.ui.drawer.pages.HudSelectorSection
+
 import android.content.SharedPreferences
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -321,6 +322,7 @@ DxvkSelectorSection(
         title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
+    EnvSelectorSection()
     
     HudSelectorSection(
         title = "HUD"

@@ -255,4 +255,21 @@
 <string name="appscreen_wine_custom_download">Download component</string>
 <string name="appscreen_wine_custom_pick_file">Select from device</string>
     
+    
+    <!-- Environment Variables section (EnvSelectorSection) -->
+<string name="app_envsel_title">Environment Variables</string>
+<string name="app_envsel_custom_header">Custom Variables (env2)</string>
+<string name="app_envsel_no_custom">No custom variables yet.</string>
+<string name="app_envsel_add_custom">+ Add custom variable</string>
+<string name="app_envsel_add_dialog_title">Add Custom Variable</string>
+<string name="app_envsel_label_name">Variable name</string>
+<string name="app_envsel_label_value">Value</string>
+<string name="app_envsel_invalid_name">Invalid name (A-Z, 0-9, _)</string>
+<string name="app_envsel_add">Add</string>
+<string name="app_envsel_cancel">Cancel</string>
+<string name="app_envsel_set">Set</string>
+<string name="app_envsel_unset">(unset)</string>
+<string name="app_envsel_delete">Delete</string>
+<string name="app_envsel_updated">Updated %1$s</string>
+<string name="app_envsel_update_failed">Failed: %1$s</string>
 </resources>
