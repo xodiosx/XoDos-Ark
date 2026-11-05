@@ -7,41 +7,27 @@ import java.io.File
  * Reads / edits $PREFIX/opt/env (dropdown values, in place) and
  * $PREFIX/opt/env2 (custom vars, append / delete).
  *
- * If `env` is missing or empty, the full default file is written
- * automatically — same content as the reference bash script, plus a
- * `[ -f "$PREFIX/opt/drv" ] && . "$PREFIX/opt/drv"` line at the top
- * so the driver config is sourced first.
+ * `xfex` is (re)written from `assets/xfex.sh` every time `env` or `env2`
+ * is touched, so the launcher always matches the current file layout.
  */
 object EnvManager {
 
+    /** Path inside `assets/` for the xfex launcher script. */
+    private const val XFEX_ASSET = "xfex.sh"
+
     // ───────────── Known dropdown options ─────────────
     val KNOWN_OPTIONS: Map<String, List<String>> = mapOf(
-        // ── Wine ──
         "WINE_DISABLE_KERNEL_WRITEWATCH" to listOf("0", "1"),
         "WINEESYNC"                      to listOf("0", "1"),
         "WINEESYNC_TERMUX"               to listOf("0", "1"),
         "WINEFSYNC"                      to listOf("0", "1"),
-        "WINEDEBUG"                      to listOf(
-            "-all", "+loaddll", "+relay", "+d3d", "+d3d12,+vkd3d"
-        ),
-
-        // ── VKD3D ──
+        "WINEDEBUG"                      to listOf("-all", "+loaddll", "+relay", "+d3d", "+d3d12,+vkd3d"),
         "VKD3D_FEATURE_LEVEL"            to listOf("11_0", "12_0", "12_1"),
-        "VKD3D_DEBUG"                    to listOf(
-            "", "none", "err", "warn", "fixme", "trace"
-        ),
-
-        // ── DXVK ──
+        "VKD3D_DEBUG"                    to listOf("", "none", "err", "warn", "fixme", "trace"),
         "DXVK_ASYNC"                     to listOf("0", "1"),
-        "DXVK_HUD"                       to listOf(
-            "", "none", "fps", "fps,version,devinfo", "full"
-        ),
-
-        // ── DLLs ──
+        "DXVK_HUD"                       to listOf("", "none", "fps", "fps,version,devinfo", "full"),
         "HODLL"                          to listOf("libwow64fex.dll"),
         "HODLL64"                        to listOf("libarm64ecfex.dll"),
-
-        // ── FEX ──
         "FEX_TSOENABLED"                 to listOf("0", "1"),
         "FEX_HALFBARRIERTSOENABLED"      to listOf("0", "1"),
         "FEX_VECTORTSOENABLED"           to listOf("0", "1"),
@@ -55,8 +41,6 @@ object EnvManager {
         "FEX_VOLATILEMETADATA"           to listOf("0", "1"),
         "FEX_MONOHACKS"                  to listOf("0", "1"),
         "FEX_SMC_CHECKS"                 to listOf("none", "all"),
-
-        // ── Mesa / OpenGL — full FC + COMPAT list ──
         "MESA_GL_VERSION_OVERRIDE" to listOf(
             "",
             "3.0FC", "3.0COMPAT",
@@ -77,9 +61,7 @@ object EnvManager {
         ),
         "GALLIUM_DRIVER"                 to listOf("zink", "virpipe", "llvmpipe"),
         "MESA_LOADER_DRIVER_OVERRIDE"    to listOf("zink", "virpipe", "llvmpipe"),
-        "MESA_VK_WSI_PRESENT_MODE"       to listOf(
-            "immediate", "mailbox", "fifo", "relaxed"
-        ),
+        "MESA_VK_WSI_PRESENT_MODE"       to listOf("immediate", "mailbox", "fifo", "relaxed"),
         "MESA_VK_WSI_DEBUG"              to listOf("blit", "noblit"),
         "ZINK_DEBUG"                     to listOf("compact", "sync", "noreorder"),
         "ZINK_DESCRIPTORS"               to listOf("lazy", "eager"),
@@ -89,24 +71,12 @@ object EnvManager {
         "MESA_DEBUG"                     to listOf("0", "1"),
         "mesa_glthread"                  to listOf("true", "false"),
         "USE_HEAP"                       to listOf("0", "1"),
-
-        // ── Turnip ──
-        "TU_DEBUG"                       to listOf(
-            "", "noconform", "gmem", "sysmem", "forcebin", "layout"
-        ),
-
-        // ── Cores ──
+        "TU_DEBUG"                       to listOf("", "noconform", "gmem", "sysmem", "forcebin", "layout"),
         "PRIMARY_CORES"                  to listOf("0-1", "0-3", "0-5", "0-7", "0-8"),
         "SECONDARY_CORES"                to listOf("0-1", "0-3", "0-5", "0-7"),
-
-        // ── Misc ──
         "adrenotool"                     to listOf("0", "1"),
     )
 
-    /**
-     * OpenGL value → matching GLSL version. Used to keep
-     * MESA_GL_VERSION_OVERRIDE and MESA_GLSL_VERSION_OVERRIDE in sync.
-     */
     val GLSL_PAIRS: Map<String, String> = mapOf(
         "3.0FC" to "130", "3.0COMPAT" to "130",
         "3.1FC" to "140", "3.1COMPAT" to "140",
@@ -125,9 +95,26 @@ object EnvManager {
 
     fun envFile(context: Context): File  = File(context.filesDir, "usr/opt/env")
     fun env2File(context: Context): File = File(context.filesDir, "usr/opt/env2")
+    fun xfexFile(context: Context): File = File(context.filesDir, "usr/bin/xfex")
 
-    // ───────────── Default content (written when env is missing/empty) ─────────────
-    // NOTE: every shell `$` is escaped as `\$` inside Kotlin regular strings.
+    // ───────────── xfex writer (from assets) ─────────────
+    private fun refreshXfex(context: Context) {
+        try {
+            val out = xfexFile(context)
+            out.parentFile?.mkdirs()
+            context.assets.open(XFEX_ASSET).use { input ->
+                out.outputStream().use { output -> input.copyTo(output) }
+            }
+            out.setReadable(true, false)
+            out.setWritable(true, false)
+            out.setExecutable(true, false)
+        } catch (_: Exception) {
+            // If the asset is missing (shouldn't happen in a normal build),
+            // leave the existing xfex untouched rather than deleting it.
+        }
+    }
+
+    // ───────────── Default env content ─────────────
     private val DEFAULT_ENV_LINES: List<String> = listOf(
         "#!/data/data/app.xodos2/files/usr/bin/bash",
         "# =====================================================================",
@@ -222,19 +209,17 @@ object EnvManager {
         "# ---------- PATH ----------",
         "export PATH=\"\$PATH:\$PREFIX/opt/winece/arm64-v8a/bin/\"",
     )
-
     private val DEFAULT_ENV_CONTENT = DEFAULT_ENV_LINES.joinToString("\n") + "\n"
 
-    // ───────────── Ensure file exists with defaults ─────────────
     private fun ensureEnvFile(context: Context) {
         val f = envFile(context)
         if (f.isFile && f.length() > 0) {
-            // Consider it valid only if it has at least one export line
             val hasExport = f.readLines().any { it.trimStart().startsWith("export ") }
             if (hasExport) return
         }
         f.parentFile?.mkdirs()
         f.writeText(DEFAULT_ENV_CONTENT)
+        refreshXfex(context)
     }
 
     // ───────────── Parsing helpers ─────────────
@@ -257,6 +242,7 @@ object EnvManager {
     // ───────────── Public API ─────────────
     fun readEnv(context: Context): List<EnvVar> {
         ensureEnvFile(context)
+        refreshXfex(context)
         return readFile(envFile(context))
     }
 
@@ -275,7 +261,6 @@ object EnvManager {
         return out
     }
 
-    /** Replace only the value on an existing export/unset line. */
     fun updateVar(context: Context, name: String, newValue: String): Boolean {
         ensureEnvFile(context)
         val f = envFile(context)
@@ -287,13 +272,13 @@ object EnvManager {
             ) {
                 lines[i] = "export $name=$formatted"
                 f.writeText(lines.joinToString("\n") + "\n")
+                refreshXfex(context)
                 return true
             }
         }
         return false
     }
 
-    /** Add or replace a custom variable in env2. */
     fun setEnv2Var(context: Context, name: String, value: String): Boolean {
         val f = env2File(context)
         val lines = if (f.isFile) f.readLines().toMutableList() else mutableListOf()
@@ -307,10 +292,10 @@ object EnvManager {
         if (!found) lines.add("export $name=$formatted")
         f.parentFile?.mkdirs()
         f.writeText(lines.joinToString("\n") + "\n")
+        refreshXfex(context)
         return true
     }
 
-    /** Remove a variable from env2. */
     fun removeEnv2Var(context: Context, name: String): Boolean {
         val f = env2File(context)
         if (!f.isFile) return false
@@ -318,6 +303,7 @@ object EnvManager {
             RE_EXPORT.matchEntire(it)?.groupValues?.get(1) == name
         }
         f.writeText(if (kept.isEmpty()) "" else kept.joinToString("\n") + "\n")
+        refreshXfex(context)
         return true
     }
 }
