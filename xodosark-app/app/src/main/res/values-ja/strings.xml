@@ -248,4 +248,25 @@
 <string name="appscreen_wine_custom_url_invalid">無効な URL — .tar.xz、.tar.gz、.7z、または .zip で終わる必要があります</string>
 <string name="appscreen_wine_custom_download">コンポーネントをダウンロード</string>
 <string name="appscreen_wine_custom_pick_file">デバイスから選択</string>
+<string name="app_envsel_title">環境変数</string>
+<string name="app_envsel_custom_header">カスタム変数 (env2)</string>
+<string name="app_envsel_no_custom">カスタム変数はまだありません。</string>
+<string name="app_envsel_add_custom">+ カスタム変数を追加</string>
+<string name="app_envsel_add_dialog_title">カスタム変数を追加</string>
+<string name="app_envsel_label_name">変数名</string>
+<string name="app_envsel_label_value">値</string>
+<string name="app_envsel_invalid_name">無効な名前（A-Z、0-9、_）</string>
+<string name="app_envsel_add">追加</string>
+<string name="app_envsel_cancel">キャンセル</string>
+<string name="app_envsel_set">設定</string>
+<string name="app_envsel_unset">(未設定)</string>
+<string name="app_envsel_delete">削除</string>
+<string name="app_envsel_updated">%1$s を更新しました</string>
+<string name="app_envsel_update_failed">失敗：%1$s</string>
+<string name="app_themesel_title">Wine テーマ</string>
+<string name="app_themesel_current">テーマ：</string>
+<string name="app_themesel_default">デフォルト（テーマなし）</string>
+<string name="app_themesel_no_themes">usr/xod/colors/ に .reg ファイルがありません</string>
+<string name="app_themesel_updated">テーマ：%1$s</string>
+<string name="app_themesel_cleared">テーマ：デフォルト</string>
 </resources>

@@ -247,4 +247,25 @@
 <string name="appscreen_wine_custom_url_invalid">URL غير صالح — يجب أن ينتهي بـ .tar.xz أو .tar.gz أو .7z أو .zip</string>
 <string name="appscreen_wine_custom_download">تنزيل المكوّن</string>
 <string name="appscreen_wine_custom_pick_file">اختيار من الجهاز</string>
+<string name="app_envsel_title">متغيرات البيئة</string>
+<string name="app_envsel_custom_header">متغيرات مخصصة (env2)</string>
+<string name="app_envsel_no_custom">لا توجد متغيرات مخصصة بعد.</string>
+<string name="app_envsel_add_custom">+ إضافة متغير مخصص</string>
+<string name="app_envsel_add_dialog_title">إضافة متغير مخصص</string>
+<string name="app_envsel_label_name">اسم المتغير</string>
+<string name="app_envsel_label_value">القيمة</string>
+<string name="app_envsel_invalid_name">اسم غير صالح (A-Z، 0-9، _)</string>
+<string name="app_envsel_add">إضافة</string>
+<string name="app_envsel_cancel">إلغاء</string>
+<string name="app_envsel_set">تعيين</string>
+<string name="app_envsel_unset">(غير معيّن)</string>
+<string name="app_envsel_delete">حذف</string>
+<string name="app_envsel_updated">تم تحديث %1$s</string>
+<string name="app_envsel_update_failed">فشل: %1$s</string>
+<string name="app_themesel_title">سمة Wine</string>
+<string name="app_themesel_current">السمة:</string>
+<string name="app_themesel_default">الافتراضي (بدون سمة)</string>
+<string name="app_themesel_no_themes">لا توجد ملفات .reg في usr/xod/colors/</string>
+<string name="app_themesel_updated">السمة: %1$s</string>
+<string name="app_themesel_cleared">السمة: الافتراضي</string>
 </resources>

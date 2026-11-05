@@ -248,4 +248,25 @@
 <string name="appscreen_wine_custom_url_invalid">URL invalide — doit se terminer par .tar.xz, .tar.gz, .7z ou .zip</string>
 <string name="appscreen_wine_custom_download">Télécharger le composant</string>
 <string name="appscreen_wine_custom_pick_file">Sélectionner depuis l\'appareil</string>
+<string name="app_envsel_title">Variables d\'environnement</string>
+<string name="app_envsel_custom_header">Variables personnalisées (env2)</string>
+<string name="app_envsel_no_custom">Aucune variable personnalisée pour l\'instant.</string>
+<string name="app_envsel_add_custom">+ Ajouter une variable personnalisée</string>
+<string name="app_envsel_add_dialog_title">Ajouter une variable personnalisée</string>
+<string name="app_envsel_label_name">Nom de la variable</string>
+<string name="app_envsel_label_value">Valeur</string>
+<string name="app_envsel_invalid_name">Nom invalide (A-Z, 0-9, _)</string>
+<string name="app_envsel_add">Ajouter</string>
+<string name="app_envsel_cancel">Annuler</string>
+<string name="app_envsel_set">Définir</string>
+<string name="app_envsel_unset">(non défini)</string>
+<string name="app_envsel_delete">Supprimer</string>
+<string name="app_envsel_updated">Mis à jour %1$s</string>
+<string name="app_envsel_update_failed">Échec : %1$s</string>
+<string name="app_themesel_title">Thème Wine</string>
+<string name="app_themesel_current">Thème :</string>
+<string name="app_themesel_default">Par défaut (aucun thème)</string>
+<string name="app_themesel_no_themes">Aucun fichier .reg dans usr/xod/colors/</string>
+<string name="app_themesel_updated">Thème : %1$s</string>
+<string name="app_themesel_cleared">Thème : Par défaut</string>
 </resources>

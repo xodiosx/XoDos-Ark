@@ -247,4 +247,26 @@
 <string name="appscreen_wine_custom_url_invalid">无效 URL — 必须以 .tar.xz、.tar.gz、.7z 或 .zip 结尾</string>
 <string name="appscreen_wine_custom_download">下载组件</string>
 <string name="appscreen_wine_custom_pick_file">从设备选择</string>
+
+<string name="app_envsel_title">环境变量</string>
+<string name="app_envsel_custom_header">自定义变量 (env2)</string>
+<string name="app_envsel_no_custom">暂无自定义变量。</string>
+<string name="app_envsel_add_custom">+ 添加自定义变量</string>
+<string name="app_envsel_add_dialog_title">添加自定义变量</string>
+<string name="app_envsel_label_name">变量名</string>
+<string name="app_envsel_label_value">值</string>
+<string name="app_envsel_invalid_name">无效名称（A-Z、0-9、_）</string>
+<string name="app_envsel_add">添加</string>
+<string name="app_envsel_cancel">取消</string>
+<string name="app_envsel_set">设置</string>
+<string name="app_envsel_unset">（未设置）</string>
+<string name="app_envsel_delete">删除</string>
+<string name="app_envsel_updated">已更新 %1$s</string>
+<string name="app_envsel_update_failed">失败：%1$s</string>
+<string name="app_themesel_title">Wine 主题</string>
+<string name="app_themesel_current">主题：</string>
+<string name="app_themesel_default">默认（无主题）</string>
+<string name="app_themesel_no_themes">usr/xod/colors/ 中没有 .reg 文件</string>
+<string name="app_themesel_updated">主题：%1$s</string>
+<string name="app_themesel_cleared">主题：默认</string>
 </resources>

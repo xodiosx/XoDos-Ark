@@ -246,4 +246,25 @@
 <string name="appscreen_wine_custom_url_invalid">Ungültige URL — muss auf .tar.xz, .tar.gz, .7z oder .zip enden</string>
 <string name="appscreen_wine_custom_download">Komponente herunterladen</string>
 <string name="appscreen_wine_custom_pick_file">Vom Gerät auswählen</string>
+<string name="app_envsel_title">Umgebungsvariablen</string>
+<string name="app_envsel_custom_header">Benutzerdefinierte Variablen (env2)</string>
+<string name="app_envsel_no_custom">Noch keine benutzerdefinierten Variablen.</string>
+<string name="app_envsel_add_custom">+ Benutzerdefinierte Variable hinzufügen</string>
+<string name="app_envsel_add_dialog_title">Benutzerdefinierte Variable hinzufügen</string>
+<string name="app_envsel_label_name">Variablenname</string>
+<string name="app_envsel_label_value">Wert</string>
+<string name="app_envsel_invalid_name">Ungültiger Name (A-Z, 0-9, _)</string>
+<string name="app_envsel_add">Hinzufügen</string>
+<string name="app_envsel_cancel">Abbrechen</string>
+<string name="app_envsel_set">Setzen</string>
+<string name="app_envsel_unset">(nicht gesetzt)</string>
+<string name="app_envsel_delete">Löschen</string>
+<string name="app_envsel_updated">Aktualisiert %1$s</string>
+<string name="app_envsel_update_failed">Fehlgeschlagen: %1$s</string>
+<string name="app_themesel_title">Wine-Design</string>
+<string name="app_themesel_current">Design:</string>
+<string name="app_themesel_default">Standard (kein Design)</string>
+<string name="app_themesel_no_themes">Keine .reg-Dateien in usr/xod/colors/</string>
+<string name="app_themesel_updated">Design: %1$s</string>
+<string name="app_themesel_cleared">Design: Standard</string>
 </resources>

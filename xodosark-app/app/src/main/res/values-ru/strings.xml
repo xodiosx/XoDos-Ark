@@ -248,4 +248,26 @@
 <string name="appscreen_wine_custom_url_invalid">Недопустимый URL — должен заканчиваться на .tar.xz, .tar.gz, .7z или .zip</string>
 <string name="appscreen_wine_custom_download">Скачать компонент</string>
 <string name="appscreen_wine_custom_pick_file">Выбрать с устройства</string>
+
+<string name="app_envsel_title">Переменные среды</string>
+<string name="app_envsel_custom_header">Пользовательские переменные (env2)</string>
+<string name="app_envsel_no_custom">Пока нет пользовательских переменных.</string>
+<string name="app_envsel_add_custom">+ Добавить пользовательскую переменную</string>
+<string name="app_envsel_add_dialog_title">Добавить пользовательскую переменную</string>
+<string name="app_envsel_label_name">Имя переменной</string>
+<string name="app_envsel_label_value">Значение</string>
+<string name="app_envsel_invalid_name">Недопустимое имя (A-Z, 0-9, _)</string>
+<string name="app_envsel_add">Добавить</string>
+<string name="app_envsel_cancel">Отмена</string>
+<string name="app_envsel_set">Задать</string>
+<string name="app_envsel_unset">(не задано)</string>
+<string name="app_envsel_delete">Удалить</string>
+<string name="app_envsel_updated">Обновлено %1$s</string>
+<string name="app_envsel_update_failed">Ошибка: %1$s</string>
+<string name="app_themesel_title">Тема Wine</string>
+<string name="app_themesel_current">Тема:</string>
+<string name="app_themesel_default">По умолчанию (без темы)</string>
+<string name="app_themesel_no_themes">Нет файлов .reg в usr/xod/colors/</string>
+<string name="app_themesel_updated">Тема: %1$s</string>
+<string name="app_themesel_cleared">Тема: По умолчанию</string>
 </resources>

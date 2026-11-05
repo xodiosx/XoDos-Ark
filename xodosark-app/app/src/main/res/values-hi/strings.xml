@@ -249,4 +249,25 @@
 <string name="appscreen_wine_custom_download">Component download karein</string>
 
 <string name="appscreen_wine_custom_pick_file">Device se chunein</string>
+<string name="app_envsel_title">Environment Variables</string>
+<string name="app_envsel_custom_header">Custom Variables (env2)</string>
+<string name="app_envsel_no_custom">Abhi koi custom variable nahi hai.</string>
+<string name="app_envsel_add_custom">+ Custom variable add karein</string>
+<string name="app_envsel_add_dialog_title">Custom Variable add karein</string>
+<string name="app_envsel_label_name">Variable name</string>
+<string name="app_envsel_label_value">Value</string>
+<string name="app_envsel_invalid_name">Invalid name (A-Z, 0-9, _)</string>
+<string name="app_envsel_add">Add</string>
+<string name="app_envsel_cancel">Cancel</string>
+<string name="app_envsel_set">Set</string>
+<string name="app_envsel_unset">(unset)</string>
+<string name="app_envsel_delete">Delete</string>
+<string name="app_envsel_updated">%1$s update ho gaya</string>
+<string name="app_envsel_update_failed">Fail: %1$s</string>
+<string name="app_themesel_title">Wine Theme</string>
+<string name="app_themesel_current">Theme:</string>
+<string name="app_themesel_default">Default (koi theme nahi)</string>
+<string name="app_themesel_no_themes">usr/xod/colors/ mein koi .reg files nahi</string>
+<string name="app_themesel_updated">Theme: %1$s</string>
+<string name="app_themesel_cleared">Theme: Default</string>
 </resources>
