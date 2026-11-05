@@ -257,6 +257,7 @@ DesktopLaunchersSection(
     )
     
     EnvSelectorSection()
+    ThemeSelectorSection()
     
     HudSelectorSection(
         title = "HUD"

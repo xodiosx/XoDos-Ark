@@ -260,7 +260,7 @@ DxvkSelectorSection(
         enabled = true
     )
     EnvSelectorSection()
-    
+    ThemeSelectorSection()
     HudSelectorSection(
         title = "HUD"
     )

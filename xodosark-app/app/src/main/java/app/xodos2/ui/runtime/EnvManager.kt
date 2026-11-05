@@ -8,12 +8,35 @@ import java.io.File
  * $PREFIX/opt/env2 (custom vars, append / delete).
  *
  * `xfex` is (re)written from `assets/xfex.sh` every time `env` or `env2`
- * is touched, so the launcher always matches the current file layout.
+ * is touched, and the currently-selected Wine theme (`usr/xod/colors/*.reg`)
+ * is injected right after the `EXE_NAME=$(basename "$PROGRAM")` line.
  */
 object EnvManager {
 
-    /** Path inside `assets/` for the xfex launcher script. */
-    private const val XFEX_ASSET = "xfex.sh"
+    private const val XFEX_ASSET   = "xfex.sh"
+    private const val THEME_PREFS  = "wine_theme"
+    private const val THEME_KEY    = "selected"
+
+    /**
+     * Whitelist of `.reg` files to expose in the Wine Theme dropdown.
+     *
+     * • If NON-empty → only files whose name is in this set are shown
+     *   (and only if they actually exist in `usr/xod/colors/`).
+     * • If EMPTY       → every `.reg` file is shown (old behaviour).
+     *
+     * Edit this list to control which themes the user can pick.
+     * The first entry is commonly the "dark" default; keep them in
+     * the order you want them to appear.
+     */
+    val THEME_WHITELIST: List<String> = listOf(
+        "dark.reg",
+        "light.reg",
+        "ubuntu.reg",
+        "mint.reg",
+        "win10.reg",
+        "win11.reg",
+        "macos.reg",
+    )
 
     // ───────────── Known dropdown options ─────────────
     val KNOWN_OPTIONS: Map<String, List<String>> = mapOf(
@@ -97,21 +120,102 @@ object EnvManager {
     fun env2File(context: Context): File = File(context.filesDir, "usr/opt/env2")
     fun xfexFile(context: Context): File = File(context.filesDir, "usr/bin/xfex")
 
-    // ───────────── xfex writer (from assets) ─────────────
-    private fun refreshXfex(context: Context) {
+    // ───────────── Theme storage / discovery ─────────────
+    fun colorsDir(context: Context): File = File(context.filesDir, "usr/xod/colors")
+
+    /**
+     * Names of `.reg` files inside `usr/xod/colors/`.
+     *
+     * If [THEME_WHITELIST] is non-empty → returns only those names, in the
+     * order given in the whitelist, and only if the file actually exists.
+     * If [THEME_WHITELIST] is empty     → returns every `.reg` file sorted.
+     */
+    fun listThemes(context: Context): List<String> {
+        val dir = colorsDir(context)
+        if (!dir.isDirectory) {
+            dir.mkdirs()
+            return emptyList()
+        }
+        val onDisk: Set<String> = dir.listFiles()
+            ?.filter { it.isFile && it.name.endsWith(".reg", ignoreCase = true) }
+            ?.map { it.name }
+            ?.toSet()
+            ?: emptySet()
+
+        return if (THEME_WHITELIST.isNotEmpty()) {
+            THEME_WHITELIST.filter { it in onDisk }
+        } else {
+            onDisk.sorted()
+        }
+    }
+
+    fun selectedTheme(context: Context): String? =
+        context.getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE)
+            .getString(THEME_KEY, null)
+
+    fun setSelectedTheme(context: Context, themeFileName: String?) {
+        context.getSharedPreferences(THEME_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .apply {
+                if (themeFileName.isNullOrBlank()) remove(THEME_KEY)
+                else putString(THEME_KEY, themeFileName)
+            }
+            .apply()
+        refreshXfex(context)
+    }
+
+    // ───────────── xfex writer (assets + theme injection) ─────────────
+    fun refreshXfex(context: Context) {
         try {
             val out = xfexFile(context)
             out.parentFile?.mkdirs()
-            context.assets.open(XFEX_ASSET).use { input ->
-                out.outputStream().use { output -> input.copyTo(output) }
+
+            val raw = context.assets.open(XFEX_ASSET)
+                .use { it.readBytes().toString(Charsets.UTF_8) }
+
+            val theme = selectedTheme(context)
+            val finalContent = if (!theme.isNullOrBlank()) {
+                injectThemeCommand(raw, theme)
+            } else {
+                raw
             }
+
+            out.writeText(finalContent)
             out.setReadable(true, false)
             out.setWritable(true, false)
             out.setExecutable(true, false)
         } catch (_: Exception) {
-            // If the asset is missing (shouldn't happen in a normal build),
-            // leave the existing xfex untouched rather than deleting it.
+            // If the asset is missing, leave the existing xfex untouched.
         }
+    }
+
+    /**
+     * Injects `$PREFIX/opt/winece/arm64-v8a/bin/wine regedit $PREFIX/xod/colors/<name>.reg`
+     * immediately after `EXE_NAME=$(basename "$PROGRAM")`.
+     *
+     * • If a theme regedit line is already present, only its `.reg` filename
+     *   is replaced (any manual edits around it survive).
+     * • If not, the full command is inserted right after the EXE_NAME line.
+     */
+    private fun injectThemeCommand(content: String, themeFileName: String): String {
+        val themeCmd    = "\$PREFIX/opt/winece/arm64-v8a/bin/wine regedit \$PREFIX/xod/colors/$themeFileName"
+        val themeMarker = "regedit \$PREFIX/xod/colors/"
+
+        val lines = content.lines().toMutableList()
+        val existingIdx = lines.indexOfFirst { it.contains(themeMarker) }
+
+        if (existingIdx >= 0) {
+            lines[existingIdx] = themeCmd
+        } else {
+            val markerLine = "EXE_NAME=\$(basename \"\$PROGRAM\")"
+            val markerIdx = lines.indexOfFirst { it.trim() == markerLine }
+            if (markerIdx >= 0) {
+                lines.add(markerIdx + 1, themeCmd)
+            } else {
+                lines.add(themeCmd)   // fallback: append at end
+            }
+        }
+        return lines.joinToString("\n")
     }
 
     // ───────────── Default env content ─────────────

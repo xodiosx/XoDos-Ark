@@ -272,4 +272,11 @@
 <string name="app_envsel_delete">Delete</string>
 <string name="app_envsel_updated">Updated %1$s</string>
 <string name="app_envsel_update_failed">Failed: %1$s</string>
+<!-- Wine Theme section -->
+<string name="app_themesel_title">Wine Theme</string>
+<string name="app_themesel_current">Theme:</string>
+<string name="app_themesel_default">Default (no theme)</string>
+<string name="app_themesel_no_themes">No .reg files in usr/xod/colors/</string>
+<string name="app_themesel_updated">Theme: %1$s</string>
+<string name="app_themesel_cleared">Theme: Default</string>
 </resources>
