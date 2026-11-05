@@ -1,8 +1,22 @@
 package app.xodos2.ui.drawer.pages
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -62,15 +76,20 @@ fun ThemeSelectorSection(
                         enabled = enabled,
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                     ) {
+                        val label = selected
+                            ?: stringResource(R.string.app_themesel_default)
                         Text(
-                            text = selected ?: stringResource(R.string.app_themesel_default),
+                            text = label,
                             style = MaterialTheme.typography.bodySmall,
                             color = Color(0xFFC3B6F9),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.app_themesel_default)) },
                             onClick = {
@@ -96,9 +115,10 @@ fun ThemeSelectorSection(
             }
         }
 
-        status?.let {
+        val st = status
+        if (st != null) {
             Text(
-                text = it,
+                text = st,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)

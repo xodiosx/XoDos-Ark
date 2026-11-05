@@ -3,31 +3,12 @@ package app.xodos2.ui.runtime
 import android.content.Context
 import java.io.File
 
-/**
- * Reads / edits $PREFIX/opt/env (dropdown values, in place) and
- * $PREFIX/opt/env2 (custom vars, append / delete).
- *
- * `xfex` is (re)written from `assets/xfex.sh` every time `env` or `env2`
- * is touched, and the currently-selected Wine theme (`usr/xod/colors/*.reg`)
- * is injected right after the `EXE_NAME=$(basename "$PROGRAM")` line.
- */
 object EnvManager {
 
-    private const val XFEX_ASSET   = "xfex.sh"
-    private const val THEME_PREFS  = "wine_theme"
-    private const val THEME_KEY    = "selected"
+    private const val XFEX_ASSET  = "xfex.sh"
+    private const val THEME_PREFS = "wine_theme"
+    private const val THEME_KEY   = "selected"
 
-    /**
-     * Whitelist of `.reg` files to expose in the Wine Theme dropdown.
-     *
-     * • If NON-empty → only files whose name is in this set are shown
-     *   (and only if they actually exist in `usr/xod/colors/`).
-     * • If EMPTY       → every `.reg` file is shown (old behaviour).
-     *
-     * Edit this list to control which themes the user can pick.
-     * The first entry is commonly the "dark" default; keep them in
-     * the order you want them to appear.
-     */
     val THEME_WHITELIST: List<String> = listOf(
         "dark.reg",
         "light.reg",
@@ -38,7 +19,6 @@ object EnvManager {
         "macos.reg",
     )
 
-    // ───────────── Known dropdown options ─────────────
     val KNOWN_OPTIONS: Map<String, List<String>> = mapOf(
         "WINE_DISABLE_KERNEL_WRITEWATCH" to listOf("0", "1"),
         "WINEESYNC"                      to listOf("0", "1"),
@@ -119,24 +99,15 @@ object EnvManager {
     fun envFile(context: Context): File  = File(context.filesDir, "usr/opt/env")
     fun env2File(context: Context): File = File(context.filesDir, "usr/opt/env2")
     fun xfexFile(context: Context): File = File(context.filesDir, "usr/bin/xfex")
-
-    // ───────────── Theme storage / discovery ─────────────
     fun colorsDir(context: Context): File = File(context.filesDir, "usr/xod/colors")
 
-    /**
-     * Names of `.reg` files inside `usr/xod/colors/`.
-     *
-     * If [THEME_WHITELIST] is non-empty → returns only those names, in the
-     * order given in the whitelist, and only if the file actually exists.
-     * If [THEME_WHITELIST] is empty     → returns every `.reg` file sorted.
-     */
     fun listThemes(context: Context): List<String> {
         val dir = colorsDir(context)
         if (!dir.isDirectory) {
             dir.mkdirs()
             return emptyList()
         }
-        val onDisk: Set<String> = dir.listFiles()
+        val onDisk = dir.listFiles()
             ?.filter { it.isFile && it.name.endsWith(".reg", ignoreCase = true) }
             ?.map { it.name }
             ?.toSet()
@@ -164,14 +135,14 @@ object EnvManager {
         refreshXfex(context)
     }
 
-    // ───────────── xfex writer (assets + theme injection) ─────────────
     fun refreshXfex(context: Context) {
         try {
             val out = xfexFile(context)
             out.parentFile?.mkdirs()
 
             val raw = context.assets.open(XFEX_ASSET)
-                .use { it.readBytes().toString(Charsets.UTF_8) }
+                .bufferedReader()
+                .use { it.readText() }
 
             val theme = selectedTheme(context)
             val finalContent = if (!theme.isNullOrBlank()) {
@@ -184,19 +155,11 @@ object EnvManager {
             out.setReadable(true, false)
             out.setWritable(true, false)
             out.setExecutable(true, false)
-        } catch (_: Exception) {
-            // If the asset is missing, leave the existing xfex untouched.
+        } catch (e: Exception) {
+            // asset missing or IO error - leave existing xfex alone
         }
     }
 
-    /**
-     * Injects `$PREFIX/opt/winece/arm64-v8a/bin/wine regedit $PREFIX/xod/colors/<name>.reg`
-     * immediately after `EXE_NAME=$(basename "$PROGRAM")`.
-     *
-     * • If a theme regedit line is already present, only its `.reg` filename
-     *   is replaced (any manual edits around it survive).
-     * • If not, the full command is inserted right after the EXE_NAME line.
-     */
     private fun injectThemeCommand(content: String, themeFileName: String): String {
         val themeCmd    = "\$PREFIX/opt/winece/arm64-v8a/bin/wine regedit \$PREFIX/xod/colors/$themeFileName"
         val themeMarker = "regedit \$PREFIX/xod/colors/"
@@ -212,23 +175,21 @@ object EnvManager {
             if (markerIdx >= 0) {
                 lines.add(markerIdx + 1, themeCmd)
             } else {
-                lines.add(themeCmd)   // fallback: append at end
+                lines.add(themeCmd)
             }
         }
         return lines.joinToString("\n")
     }
 
-    // ───────────── Default env content ─────────────
     private val DEFAULT_ENV_LINES: List<String> = listOf(
         "#!/data/data/app.xodos2/files/usr/bin/bash",
         "# =====================================================================",
         "#  /data/data/app.xodos2/files/usr/opt/env",
         "#  All environment variables used by the xfex Wine launcher.",
         "#  SOURCED by xfex BEFORE Wine starts.",
-        "#  Only put export / unset statements here  –  no logic.",
         "# =====================================================================",
         "",
-        "# ---------- Base path (needed before sourcing drv) ----------",
+        "# ---------- Base path ----------",
         "export PREFIX=/data/data/app.xodos2/files/usr",
         "",
         "# ---------- Source driver config at the beginning ----------",
@@ -313,11 +274,12 @@ object EnvManager {
         "# ---------- PATH ----------",
         "export PATH=\"\$PATH:\$PREFIX/opt/winece/arm64-v8a/bin/\"",
     )
+
     private val DEFAULT_ENV_CONTENT = DEFAULT_ENV_LINES.joinToString("\n") + "\n"
 
     private fun ensureEnvFile(context: Context) {
         val f = envFile(context)
-        if (f.isFile && f.length() > 0) {
+        if (f.isFile && f.length() > 0L) {
             val hasExport = f.readLines().any { it.trimStart().startsWith("export ") }
             if (hasExport) return
         }
@@ -326,14 +288,14 @@ object EnvManager {
         refreshXfex(context)
     }
 
-    // ───────────── Parsing helpers ─────────────
-    private val RE_EXPORT = Regex("""^\s*export\s+([A-Za-z_][A-Za-z0-9_]*)=(.*)$""")
-    private val RE_UNSET  = Regex("""^\s*unset\s+([A-Za-z_][A-Za-z0-9_]*)\s*$""")
+    private val RE_EXPORT = Regex("^\\s*export\\s+([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
+    private val RE_UNSET  = Regex("^\\s*unset\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*$")
 
     private fun stripQuotes(s: String): String {
         if (s.length >= 2) {
-            val f = s.first(); val l = s.last()
-            if ((f == '"' && l == '"') || (f == '\'' && l == '\'')) {
+            val first = s.first()
+            val last  = s.last()
+            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
                 return s.substring(1, s.length - 1)
             }
         }
@@ -343,7 +305,6 @@ object EnvManager {
     private fun formatValue(v: String): String =
         if (v.isEmpty() || v.any { it.isWhitespace() }) "\"$v\"" else v
 
-    // ───────────── Public API ─────────────
     fun readEnv(context: Context): List<EnvVar> {
         ensureEnvFile(context)
         refreshXfex(context)
@@ -355,11 +316,15 @@ object EnvManager {
     private fun readFile(f: File): List<EnvVar> {
         if (!f.isFile) return emptyList()
         val out = mutableListOf<EnvVar>()
-        f.readLines().forEach { line ->
-            RE_EXPORT.matchEntire(line)?.let { m ->
-                out.add(EnvVar(m.groupValues[1], stripQuotes(m.groupValues[2])))
-            } ?: RE_UNSET.matchEntire(line)?.let { m ->
-                out.add(EnvVar(m.groupValues[1], "", isUnset = true))
+        for (line in f.readLines()) {
+            val mExport = RE_EXPORT.matchEntire(line)
+            if (mExport != null) {
+                out.add(EnvVar(mExport.groupValues[1], stripQuotes(mExport.groupValues[2])))
+                continue
+            }
+            val mUnset = RE_UNSET.matchEntire(line)
+            if (mUnset != null) {
+                out.add(EnvVar(mUnset.groupValues[1], "", isUnset = true))
             }
         }
         return out
@@ -371,9 +336,9 @@ object EnvManager {
         val lines = f.readLines().toMutableList()
         val formatted = formatValue(newValue)
         for (i in lines.indices) {
-            if (RE_EXPORT.matchEntire(lines[i])?.groupValues?.get(1) == name ||
-                RE_UNSET.matchEntire(lines[i])?.groupValues?.get(1) == name
-            ) {
+            val exportName = RE_EXPORT.matchEntire(lines[i])?.groupValues?.get(1)
+            val unsetName  = RE_UNSET.matchEntire(lines[i])?.groupValues?.get(1)
+            if (exportName == name || unsetName == name) {
                 lines[i] = "export $name=$formatted"
                 f.writeText(lines.joinToString("\n") + "\n")
                 refreshXfex(context)
@@ -390,7 +355,9 @@ object EnvManager {
         var found = false
         for (i in lines.indices) {
             if (RE_EXPORT.matchEntire(lines[i])?.groupValues?.get(1) == name) {
-                lines[i] = "export $name=$formatted"; found = true; break
+                lines[i] = "export $name=$formatted"
+                found = true
+                break
             }
         }
         if (!found) lines.add("export $name=$formatted")
@@ -403,8 +370,8 @@ object EnvManager {
     fun removeEnv2Var(context: Context, name: String): Boolean {
         val f = env2File(context)
         if (!f.isFile) return false
-        val kept = f.readLines().filterNot {
-            RE_EXPORT.matchEntire(it)?.groupValues?.get(1) == name
+        val kept = f.readLines().filter { line ->
+            RE_EXPORT.matchEntire(line)?.groupValues?.get(1) != name
         }
         f.writeText(if (kept.isEmpty()) "" else kept.joinToString("\n") + "\n")
         refreshXfex(context)

@@ -4,6 +4,7 @@ import app.xodos2.ui.drawer.pages.AdrenotoolsDrawerButton
 import app.xodos2.ui.drawer.pages.DxvkSelectorSection
 import app.xodos2.ui.drawer.pages.HudSelectorSection
 import app.xodos2.ui.drawer.pages.EnvSelectorSection
+import app.xodos2.ui.drawer.pages.ThemeSelectorSection
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
