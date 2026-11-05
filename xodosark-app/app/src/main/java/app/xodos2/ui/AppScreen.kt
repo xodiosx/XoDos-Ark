@@ -315,6 +315,8 @@ var showWineDownloadDialog by remember { mutableStateOf(false) }
 var wineDownloadInProgress by remember { mutableStateOf(false) }
 var wineDownloadProgress by remember { mutableStateOf(0 to "") }
 var wineDownloadJob by remember { mutableStateOf<Job?>(null) }
+var wineCustomUrl by remember { mutableStateOf("") }
+var wineCustomUrlError by remember { mutableStateOf("") }
 // --- Bootstrap package installation ---
 var bootstrapUri by remember { mutableStateOf<Uri?>(null) }
 var bootstrapInProgress by remember { mutableStateOf(false) }
@@ -2159,6 +2161,7 @@ if (bootstrapError != null) {
     )
 }
 
+
 if (showWineDownloadDialog) {
     val busy = wineDownloadInProgress
     AlertDialog(
@@ -2207,6 +2210,69 @@ if (showWineDownloadDialog) {
                             )
                         }
                     )
+
+                    Spacer(Modifier.height(20.dp))
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
+                    Spacer(Modifier.height(16.dp))
+
+                    // ── Custom component URL ──
+                    OutlinedTextField(
+                        value = wineCustomUrl,
+                        onValueChange = {
+                            wineCustomUrl = it
+                            wineCustomUrlError = ""
+                        },
+                        placeholder = {
+                            Text(
+                                stringResource(R.string.appscreen_wine_custom_url_hint),
+                                color = Color.White.copy(alpha = 0.35f),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        },
+                        isError = wineCustomUrlError.isNotEmpty(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFC3B6F9),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            cursorColor = Color(0xFFC3B6F9)
+                        )
+                    )
+                    if (wineCustomUrlError.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            wineCustomUrlError,
+                            color = Color(0xFFFF6B6B),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    GlassButton(
+                        onClick = {
+                            val url = wineCustomUrl.trim()
+                            val pattern = Regex(
+                                "^https?://.*\\.(tar\\.xz|tar\\.gz|tgz|7z|zip|tar)$",
+                                RegexOption.IGNORE_CASE
+                            )
+                            if (!pattern.matches(url)) {
+                                wineCustomUrlError = context.getString(R.string.appscreen_wine_custom_url_invalid)
+                            } else {
+                                wineCustomUrlError = ""
+                                downloadCustomWinComponent(url)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            stringResource(R.string.appscreen_wine_custom_download),
+                            color = Color(0xFFC3B6F9),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         if (wineDownloadProgress.first >= 0) {
@@ -2229,16 +2295,98 @@ if (showWineDownloadDialog) {
                 }
             }
         },
+        // ── Cancel button that actually cancels the running download ──
         confirmButton = {
-            if (!busy) {
-                GlassButton(onClick = { showWineDownloadDialog = false }) {
-                    Text(stringResource(R.string.appscreen_cancel), color = Color.White.copy(alpha = 0.8f))
+            GlassButton(onClick = {
+                if (busy) {
+                    wineDownloadJob?.cancel()
+                    wineDownloadJob = null
+                    wineDownloadInProgress = false
+                    wineDownloadProgress = 0 to ""
+                } else {
+                    showWineDownloadDialog = false
                 }
+            }) {
+                Text(
+                    stringResource(R.string.appscreen_cancel),
+                    color = if (busy) Color(0xFFFF6B6B) else Color.White.copy(alpha = 0.8f),
+                    fontWeight = if (busy) FontWeight.Bold else FontWeight.Normal
+                )
             }
         }
     )
 }
 
+fun downloadCustomWinComponent(url: String) {
+    wineDownloadJob?.cancel()
+    wineDownloadJob = scope.launch {
+        wineDownloadInProgress = true
+        wineDownloadProgress = 0 to context.getString(R.string.appscreen_starting_download)
+
+        val fileName = url.substringAfterLast('/').substringBefore('?').substringBefore('#')
+        if (fileName.isBlank()) {
+            wineDownloadProgress = -1 to context.getString(R.string.appscreen_invalid_url)
+            wineDownloadInProgress = false
+            return@launch
+        }
+
+        val targetDir = File(context.filesDir, "usr/wincomponents/d3d")
+        targetDir.mkdirs()
+        val outputFile = File(targetDir, fileName)
+        val tmpFile = File(targetDir, "$fileName.tmp")
+
+        try {
+            withContext(Dispatchers.IO) {
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 15_000
+                conn.readTimeout = 15_000
+                conn.instanceFollowRedirects = true
+                conn.setRequestProperty("User-Agent", "XoDosArk/1.0")
+                conn.connect()
+                val totalSize = conn.contentLengthLong
+                tmpFile.delete()
+                conn.inputStream.use { input ->
+                    tmpFile.outputStream().use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        var copied = 0L
+                        var read: Int
+                        while (input.read(buf).also { read = it } != -1) {
+                            coroutineContext.ensureActive()      // ← real cancellation
+                            output.write(buf, 0, read)
+                            copied += read
+                            if (totalSize > 0) {
+                                val pct = (copied * 100 / totalSize).toInt()
+                                withContext(Dispatchers.Main) {
+                                    wineDownloadProgress = pct to
+                                        context.getString(R.string.appscreen_downloading_percent, pct)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename file")
+
+            withContext(Dispatchers.Main) {
+                wineDownloadProgress = 100 to fileName
+                Toast.makeText(context, fileName, Toast.LENGTH_SHORT).show()
+                wineCustomUrl = ""
+                wineDownloadInProgress = false
+            }
+        } catch (e: CancellationException) {
+            tmpFile.delete()
+            throw e
+        } catch (e: Exception) {
+            tmpFile.delete()
+            withContext(Dispatchers.Main) {
+                wineDownloadProgress = -1 to
+                    context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
+                wineDownloadInProgress = false
+            }
+        }
+    }
+}
 /*
 if (bootstrapDownloadInProgress) {
     AlertDialog(
