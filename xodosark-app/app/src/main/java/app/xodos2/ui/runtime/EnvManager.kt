@@ -269,7 +269,7 @@ object EnvManager {
         "export PULSE_SERVER=tcp:127.0.0.1",
         "",
         "# ---------- Driver switch (0 = off, 1 = use adrenotools) ----------",
-        "export adrenotool=\"0\"",
+       
         "",
         "# ---------- PATH ----------",
         "export PATH=\"\$PATH:\$PREFIX/opt/winece/arm64-v8a/bin/\"",
