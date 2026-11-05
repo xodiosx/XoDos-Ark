@@ -21,8 +21,16 @@ object EnvManager {
         "VKD3D_DEBUG"                    to listOf("", "none", "err", "warn", "fixme", "trace"),
         "DXVK_ASYNC"                     to listOf("0", "1"),
         "DXVK_HUD"                       to listOf("", "none", "fps", "fps,version,devinfo", "full"),
-        "HODLL"                          to listOf("libwow64fex.dll"),
-        "HODLL64"                        to listOf("libarm64ecfex.dll"),
+        "HODLL"                          to listOf(
+    "libwow64fex.dll",
+    "libarm64ecfex.dll",
+    "wowbox64.dll",
+),
+"HODLL64"                        to listOf(
+    "libwow64fex.dll",
+    "libarm64ecfex.dll",
+    "wowbox64.dll",
+),
         "FEX_TSOENABLED"                 to listOf("0", "1"),
         "FEX_HALFBARRIERTSOENABLED"      to listOf("0", "1"),
         "FEX_VECTORTSOENABLED"           to listOf("0", "1"),
