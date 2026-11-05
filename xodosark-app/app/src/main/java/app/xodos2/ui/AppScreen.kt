@@ -426,7 +426,47 @@ val pickBootstrapFile = rememberLauncherForActivityResult(
     }
 }
 
-
+// Pick a component file from Android storage and copy it to usr/wincomponents/d3d/
+val pickWineComponent = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.OpenDocument()
+) { uri: Uri? ->
+    if (uri == null) return@rememberLauncherForActivityResult
+    scope.launch {
+        wineDownloadInProgress = true
+        wineDownloadProgress = 0 to context.getString(R.string.appscreen_copying_archive)
+        try {
+            val fileName = withContext(Dispatchers.IO) {
+                var name = "component.bin"
+                context.contentResolver.query(uri, null, null, null, null)?.use { c ->
+                    if (c.moveToFirst()) {
+                        val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (idx >= 0) name = c.getString(idx) ?: name
+                    }
+                }
+                val targetDir = File(context.filesDir, "usr/wincomponents/d3d")
+                targetDir.mkdirs()
+                val outputFile = File(targetDir, name)
+                val tmpFile = File(targetDir, "$name.tmp")
+                tmpFile.delete()
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    tmpFile.outputStream().use { output -> input.copyTo(output) }
+                } ?: throw Exception("Cannot open input stream")
+                if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename file")
+                name
+            }
+            withContext(Dispatchers.Main) {
+                wineDownloadProgress = 100 to fileName
+                Toast.makeText(context, fileName, Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                wineDownloadProgress = -1 to context.getString(R.string.appscreen_error_with_message, e.message ?: "")
+            }
+        } finally {
+            withContext(Dispatchers.Main) { wineDownloadInProgress = false }
+        }
+    }
+}
     // ----- distro selection state -----
     var availableDistros by remember { mutableStateOf<List<DistroDescriptor>>(emptyList()) }
     var distroFetchState by remember { mutableStateOf(DistroFetchState.LOADING) }
@@ -1219,16 +1259,20 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
             .clickable(onClick = onClick)
             .padding(vertical = 8.dp, horizontal = 4.dp)
     ) {
-        Text(
-            title,
+        FitText(
+            text = title,
             color = Color(0xFFC3B6F9),
             fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.bodyLarge
+            style = MaterialTheme.typography.bodyLarge,
+            maxFontSize = 16.sp,
+            minFontSize = 11.sp,
         )
-        Text(
-            hint,
+        FitText(
+            text = hint,
             color = Color.White.copy(alpha = 0.55f),
-            style = MaterialTheme.typography.bodySmall
+            style = MaterialTheme.typography.bodySmall,
+            maxFontSize = 12.sp,
+            minFontSize = 9.sp,
         )
     }
 }
@@ -2239,15 +2283,19 @@ if (showWineDownloadDialog) {
         containerColor = Color.Transparent,
         modifier = Modifier.glassDialogStyle(),
         title = {
-            Text(
-                stringResource(R.string.appscreen_download_wine_250mb),
+            FitText(
+                text = stringResource(R.string.appscreen_download_wine_250mb),
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = Color.White,
+                style = MaterialTheme.typography.titleLarge,
+                maxFontSize = 20.sp,
+                minFontSize = 13.sp,
             )
         },
         text = {
-            Column {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 if (!busy) {
+                    // ── 3 preset download rows ──
                     WineDownloadOption(
                         title = stringResource(R.string.appscreen_wine_components),
                         hint  = stringResource(R.string.appscreen_wine_components_hint),
@@ -2285,7 +2333,7 @@ if (showWineDownloadDialog) {
                     HorizontalDivider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
                     Spacer(Modifier.height(16.dp))
 
-                    // ── Custom component URL ──
+                    // ── Custom URL input ──
                     OutlinedTextField(
                         value = wineCustomUrl,
                         onValueChange = {
@@ -2293,10 +2341,12 @@ if (showWineDownloadDialog) {
                             wineCustomUrlError = ""
                         },
                         placeholder = {
-                            Text(
-                                stringResource(R.string.appscreen_wine_custom_url_hint),
+                            FitText(
+                                text = stringResource(R.string.appscreen_wine_custom_url_hint),
                                 color = Color.White.copy(alpha = 0.35f),
-                                style = MaterialTheme.typography.bodySmall
+                                style = MaterialTheme.typography.bodySmall,
+                                maxFontSize = 12.sp,
+                                minFontSize = 8.sp,
                             )
                         },
                         isError = wineCustomUrlError.isNotEmpty(),
@@ -2314,13 +2364,18 @@ if (showWineDownloadDialog) {
                     )
                     if (wineCustomUrlError.isNotEmpty()) {
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            wineCustomUrlError,
+                        FitText(
+                            text = wineCustomUrlError,
                             color = Color(0xFFFF6B6B),
-                            style = MaterialTheme.typography.bodySmall
+                            style = MaterialTheme.typography.bodySmall,
+                            maxFontSize = 12.sp,
+                            minFontSize = 9.sp,
                         )
                     }
+
                     Spacer(Modifier.height(8.dp))
+
+                    // ── Download from URL ──
                     GlassButton(
                         onClick = {
                             val url = wineCustomUrl.trim()
@@ -2337,14 +2392,49 @@ if (showWineDownloadDialog) {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            stringResource(R.string.appscreen_wine_custom_download),
+                        FitText(
+                            text = stringResource(R.string.appscreen_wine_custom_download),
                             color = Color(0xFFC3B6F9),
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxFontSize = 14.sp,
+                            minFontSize = 9.sp,
+                        )
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // ── Pick from device ──
+                    GlassButton(
+                        onClick = {
+                            pickWineComponent.launch(
+                                arrayOf(
+                                    "application/x-xz",
+                                    "application/x-tar",
+                                    "application/gzip",
+                                    "application/x-7z-compressed",
+                                    "application/zip",
+                                    "*/*"
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        FitText(
+                            text = stringResource(R.string.appscreen_wine_custom_pick_file),
+                            color = Color(0xFFC3B6F9),
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxFontSize = 14.sp,
+                            minFontSize = 9.sp,
                         )
                     }
                 } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // ── Progress view ──
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
                         if (wineDownloadProgress.first >= 0) {
                             LinearProgressIndicator(
                                 progress = { wineDownloadProgress.first / 100f },
@@ -2353,19 +2443,26 @@ if (showWineDownloadDialog) {
                                 trackColor = Color.White.copy(alpha = 0.1f)
                             )
                             Spacer(Modifier.height(8.dp))
-                            Text(
-                                wineDownloadProgress.second,
+                            FitText(
+                                text = wineDownloadProgress.second,
                                 color = Color.White.copy(alpha = 0.85f),
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxFontSize = 14.sp,
+                                minFontSize = 9.sp,
                             )
                         } else {
-                            Text(wineDownloadProgress.second, color = Color(0xFFFF6B6B))
+                            FitText(
+                                text = wineDownloadProgress.second,
+                                color = Color(0xFFFF6B6B),
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxFontSize = 14.sp,
+                                minFontSize = 9.sp,
+                            )
                         }
                     }
                 }
             }
         },
-        // ── Cancel button that actually cancels the running download ──
         confirmButton = {
             GlassButton(onClick = {
                 if (busy) {
@@ -2377,16 +2474,18 @@ if (showWineDownloadDialog) {
                     showWineDownloadDialog = false
                 }
             }) {
-                Text(
-                    stringResource(R.string.appscreen_cancel),
+                FitText(
+                    text = stringResource(R.string.appscreen_cancel),
                     color = if (busy) Color(0xFFFF6B6B) else Color.White.copy(alpha = 0.8f),
-                    fontWeight = if (busy) FontWeight.Bold else FontWeight.Normal
+                    fontWeight = if (busy) FontWeight.Bold else FontWeight.Normal,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxFontSize = 14.sp,
+                    minFontSize = 9.sp,
                 )
             }
         }
     )
 }
-
 
 /*
 if (bootstrapDownloadInProgress) {

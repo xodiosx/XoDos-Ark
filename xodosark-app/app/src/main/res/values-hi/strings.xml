@@ -247,4 +247,6 @@
 <string name="appscreen_wine_custom_url_hint">Supported Files URL .tar.xz .7z</string>
 <string name="appscreen_wine_custom_url_invalid">Invalid URL — .tar.xz, .tar.gz, .7z ya .zip par khatam hona chahiye</string>
 <string name="appscreen_wine_custom_download">Component download karein</string>
+
+<string name="appscreen_wine_custom_pick_file">Device se chunein</string>
 </resources>

@@ -253,5 +253,6 @@
     <string name="appscreen_wine_custom_url_hint">supported Files URL .tar.xz .7z</string>
 <string name="appscreen_wine_custom_url_invalid">Invalid URL — must end in .tar.xz, .tar.gz, .7z or .zip</string>
 <string name="appscreen_wine_custom_download">Download component</string>
+<string name="appscreen_wine_custom_pick_file">Select from device</string>
     
 </resources>

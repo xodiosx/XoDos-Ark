@@ -246,4 +246,5 @@
 <string name="appscreen_wine_custom_url_hint">支持的文件 URL .tar.xz .7z</string>
 <string name="appscreen_wine_custom_url_invalid">无效 URL — 必须以 .tar.xz、.tar.gz、.7z 或 .zip 结尾</string>
 <string name="appscreen_wine_custom_download">下载组件</string>
+<string name="appscreen_wine_custom_pick_file">从设备选择</string>
 </resources>

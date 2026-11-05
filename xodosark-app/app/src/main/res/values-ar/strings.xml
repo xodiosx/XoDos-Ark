@@ -246,4 +246,5 @@
 <string name="appscreen_wine_custom_url_hint">الملفات المدعومة URL .tar.xz .7z</string>
 <string name="appscreen_wine_custom_url_invalid">URL غير صالح — يجب أن ينتهي بـ .tar.xz أو .tar.gz أو .7z أو .zip</string>
 <string name="appscreen_wine_custom_download">تنزيل المكوّن</string>
+<string name="appscreen_wine_custom_pick_file">اختيار من الجهاز</string>
 </resources>

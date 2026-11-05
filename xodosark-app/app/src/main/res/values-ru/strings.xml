@@ -247,4 +247,5 @@
 <string name="appscreen_wine_custom_url_hint">Поддерживаемые файлы URL .tar.xz .7z</string>
 <string name="appscreen_wine_custom_url_invalid">Недопустимый URL — должен заканчиваться на .tar.xz, .tar.gz, .7z или .zip</string>
 <string name="appscreen_wine_custom_download">Скачать компонент</string>
+<string name="appscreen_wine_custom_pick_file">Выбрать с устройства</string>
 </resources>

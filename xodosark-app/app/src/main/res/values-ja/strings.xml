@@ -247,4 +247,5 @@
 <string name="appscreen_wine_custom_url_hint">対応ファイル URL .tar.xz .7z</string>
 <string name="appscreen_wine_custom_url_invalid">無効な URL — .tar.xz、.tar.gz、.7z、または .zip で終わる必要があります</string>
 <string name="appscreen_wine_custom_download">コンポーネントをダウンロード</string>
+<string name="appscreen_wine_custom_pick_file">デバイスから選択</string>
 </resources>
