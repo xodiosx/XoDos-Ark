@@ -257,9 +257,8 @@ private fun EnvVarRow(
                 onValueChange = { textValue = it },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.width(150.dp).heightIn(min = 40.dp),
-                enabled = enabled,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                modifier = Modifier.width(160.dp),
+                enabled = enabled
             )
             Spacer(Modifier.width(4.dp))
             TextButton(
