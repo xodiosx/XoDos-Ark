@@ -9,15 +9,7 @@ object EnvManager {
     private const val THEME_PREFS = "wine_theme"
     private const val THEME_KEY   = "selected"
 
-    val THEME_WHITELIST: List<String> = listOf(
-        "dark.reg",
-        "light.reg",
-        "ubuntu.reg",
-        "mint.reg",
-        "win10.reg",
-        "win11.reg",
-        "macos.reg",
-    )
+  val THEME_WHITELIST: List<String> = emptyList()
 
     val KNOWN_OPTIONS: Map<String, List<String>> = mapOf(
         "WINE_DISABLE_KERNEL_WRITEWATCH" to listOf("0", "1"),
