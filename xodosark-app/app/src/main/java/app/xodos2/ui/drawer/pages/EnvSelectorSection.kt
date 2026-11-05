@@ -42,13 +42,21 @@ fun EnvSelectorSection(
 
     DrawerExpandableSection(title = sectionTitle, defaultExpanded = false) {
 
-        // ────────────── Existing variables from env ──────────────
+        // ────────── Env variables (dropdowns / text fields) ──────────
         envVars.forEach { envVar ->
             EnvVarRow(
                 envVar  = envVar,
                 enabled = enabled,
                 onSave  = { newVal ->
                     val ok = EnvManager.updateVar(context, envVar.name, newVal)
+
+                    // Auto-pair OpenGL version → GLSL version
+                    if (envVar.name == "MESA_GL_VERSION_OVERRIDE") {
+                        EnvManager.GLSL_PAIRS[newVal]?.let { glsl ->
+                            EnvManager.updateVar(context, "MESA_GLSL_VERSION_OVERRIDE", glsl)
+                        }
+                    }
+
                     status = if (ok)
                         context.getString(R.string.app_envsel_updated, envVar.name)
                     else
@@ -63,7 +71,7 @@ fun EnvSelectorSection(
             color = Color.White.copy(alpha = 0.1f)
         )
 
-        // ────────────── Custom vars from env2 ──────────────
+        // ────────── Custom variables from env2 ──────────
         Text(
             text = stringResource(R.string.app_envsel_custom_header),
             style = MaterialTheme.typography.bodyMedium,
@@ -130,7 +138,7 @@ fun EnvSelectorSection(
         }
     }
 
-    // ────────────── Add custom var dialog ──────────────
+    // ────────── Add custom var dialog ──────────
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false },
@@ -212,7 +220,7 @@ private fun EnvVarRow(
         Spacer(Modifier.width(6.dp))
 
         if (options != null) {
-            // Dropdown
+            // ── Dropdown ──
             Box {
                 TextButton(
                     onClick = { expanded = true },
@@ -230,14 +238,20 @@ private fun EnvVarRow(
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     options.forEach { opt ->
                         DropdownMenuItem(
-                            text = { Text(opt) },
+                            text = {
+                                Text(
+                                    if (opt.isEmpty())
+                                        stringResource(R.string.app_envsel_unset)
+                                    else opt
+                                )
+                            },
                             onClick = { expanded = false; onSave(opt) }
                         )
                     }
                 }
             }
         } else {
-            // Free-text field
+            // ── Free-text field + Set ──
             OutlinedTextField(
                 value = textValue,
                 onValueChange = { textValue = it },
