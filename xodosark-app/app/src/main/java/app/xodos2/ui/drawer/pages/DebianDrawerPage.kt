@@ -248,7 +248,7 @@ fun DebianDrawerPage(
             }
             
             DesktopLaunchersSection(
-        containerId = 3,                     
+        containerId = 2,                     
         prefs = prefs,
         onExecuteCommand = onExecuteCommand
     )
