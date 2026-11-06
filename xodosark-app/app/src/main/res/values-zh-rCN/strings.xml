@@ -269,4 +269,5 @@
 <string name="app_themesel_no_themes">usr/xod/colors/ 中没有 .reg 文件</string>
 <string name="app_themesel_updated">主题：%1$s</string>
 <string name="app_themesel_cleared">主题：默认</string>
+<string name="app_envsel_run_wine">运行 Wine 桌面</string>
 </resources>

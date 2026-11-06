@@ -161,7 +161,7 @@ object EnvManager {
     }
 
     private fun injectThemeCommand(content: String, themeFileName: String): String {
-        val themeCmd    = "\$PREFIX/opt/winece/arm64-v8a/bin/wine regedit \$PREFIX/xod/colors/$themeFileName && sleep 2 &"
+        val themeCmd    = "\$PREFIX/opt/winece/arm64-v8a/bin/wine regedit \$PREFIX/xod/colors/$themeFileName "
         val themeMarker = "regedit \$PREFIX/xod/colors/"
 
         val lines = content.lines().toMutableList()

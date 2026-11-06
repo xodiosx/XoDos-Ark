@@ -267,4 +267,5 @@
 <string name="app_themesel_no_themes">Keine .reg-Dateien in usr/xod/colors/</string>
 <string name="app_themesel_updated">Design: %1$s</string>
 <string name="app_themesel_cleared">Design: Standard</string>
+<string name="app_envsel_run_wine">Wine-Desktop starten</string>
 </resources>

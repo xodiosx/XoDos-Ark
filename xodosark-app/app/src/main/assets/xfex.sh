@@ -9,7 +9,13 @@
 
 # -------- LOAD ALL ENVIRONMENT VARIABLES --------
 . /data/data/app.xodos2/files/usr/opt/env
+PREFIX=/data/user/0/app.xodos2/files/usr
+WINE_BIN="$PREFIX/opt/winece/arm64-v8a/bin"
 
+for file in "$WINE_BIN"/*; do
+    [ -f "$file" ] && [ -x "$file" ] || continue
+    ln -sf "$file" "$PREFIX/bin/$(basename "$file")"
+done
 #pkill -f wine
 pkill -f ib.exe
 pkill -f zenity
@@ -103,6 +109,16 @@ cd /data/data/app.xodos2/files/usr/opt/apps
 
 echo $VK_ICD_FILENAMES
 export WINEPREFIX=$HOME/.wine
+CFG="$PREFIX/opt/drv"
+
+if grep -q 'virtio' "$CFG"; then
+    echo "Venus server enabled,,,"
+    #unset MESA_GLTHREAD
+    export VN_DEBUG=vtest
+    export VK_ICD_FILENAMES=/data/data/app.xodos2/files/usr/share/vulkan/icd.d/virtio_icd.aarch64.json
+else
+    rm -rf "${PREFIX}/opt/virgl/virgl-enabled"
+fi
 
 if [ ! -e $PREFIX/opt/virgl/virgl-enabled ]; then
 	unset MESA_GL_VERSION_OVERRIDE
@@ -129,7 +145,7 @@ else
 	echo " useing android wrapper driver if it's not supported please install pkg install mesa and Install wineD3D10"
 	export MESA_EXTENSION_OVERRIDE='-GL_EXT_texture_sRGB_decode GL_EXT_polygon_offset_clamp'
 fi
-
+. $PREFIX/opt/drv 
 . $PREFIX/opt/env
 
 if [ ! -e $WINEPREFIX/.update-timestamp ]; then
@@ -145,7 +161,7 @@ if [ ! -e $WINEPREFIX/.update-timestamp ]; then
 		mv $WINE_PATH/lib64/wine/x86_64-windows/shell32-bak.dll $WINE_PATH/lib64/wine/x86_64-windows/shell32.dll &>/dev/null
 		mv $WINE_PATH/lib64/wine/i386-windows/shell32-bak.dll $WINE_PATH/lib64/wine/i386-windows/shell32.dll &>/dev/null
 	fi
-	unset $DISPLAY
+	#unset $DISPLAY
 	taskset -c $PRIMARY_CORES \
 	  $PREFIX/opt/winece/arm64-v8a/bin/wine wineboot -u >${LOG_PATH}_wineboot.txt 2>&1
 
@@ -170,7 +186,22 @@ $PREFIX/opt/winece/arm64-v8a/bin/wineserver -k
 	done
 
 	echo "Installing Start Menu shortcuts"
-	cp -r $PREFIX/opt/prefix/start/* "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu"
+	#cp -r $PREFIX/opt/prefix/start/* "$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu"
+	WINE_APP="$PREFIX/opt/apps/"
+WINE_XOD="$PREFIX/xod/"
+START_MENU="$WINEPREFIX/drive_c/ProgramData/Microsoft/Windows/Start Menu/apps"
+
+mkdir -p "$START_MENU"
+
+for DIR in "$WINE_APP" "$WINE_XOD"; do
+    [ -d "$DIR" ] || continue
+
+    find "$DIR" -type f \( -iname "*.exe" -o -iname "*.bat" \) -print0 |
+    while IFS= read -r -d '' file; do
+        name="$(basename "$file")"
+        ln -sf "$file" "$START_MENU/$name"
+    done
+done
 	rm -rf "$WINEPREFIX/dosdevices/z:"
 	ln -sf /data/data/app.xodos2/files "$WINEPREFIX/dosdevices/z:"
 	ln -sf /sdcard/Download "$WINEPREFIX/dosdevices/d:"
@@ -351,12 +382,14 @@ export VKD3D_FEATURE_LEVEL=12_0
 # =====================================================================
 EXE_DIR=$(dirname "$PROGRAM")
 EXE_NAME=$(basename "$PROGRAM")
+$PREFIX/opt/winece/arm64-v8a/bin/wine regedit $PREFIX/xod/colors/BreezeDark.reg 
 
 EXE_PATH="$@"
 if [ -z "$PROGRAM" ]; then
   echo "Usage: run \"$1\" /path/to/program.exe"
   echo "Usage: or from desktop right click and choose open with wine "
   cd $PREFIX/opt/apps/
+  taskset -c $PRIMARY_CORES $PREFIX/opt/winece/arm64-v8a/bin/wine explorer /desktop=shell,$RESOLUTION $PREFIX/opt/apps/winhandler.exe &
 else
   echo "loading..$PROGRAM"
   echo $EXE_DIR

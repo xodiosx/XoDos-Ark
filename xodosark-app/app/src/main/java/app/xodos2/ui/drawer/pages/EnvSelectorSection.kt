@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -40,7 +41,8 @@ import app.xodos2.ui.runtime.EnvManager
 @Composable
 fun EnvSelectorSection(
     title: String? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    onExecuteCommand: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val sectionTitle = title ?: stringResource(R.string.app_envsel_title)
@@ -156,6 +158,17 @@ fun EnvSelectorSection(
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
             )
+        }
+
+        // ─── Run Wine Desktop ───
+        Button(
+            onClick = { onExecuteCommand("xfex\n") },
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 8.dp)
+        ) {
+            Text(stringResource(R.string.app_envsel_run_wine))
         }
     }
 

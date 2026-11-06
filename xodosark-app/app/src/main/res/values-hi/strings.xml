@@ -270,4 +270,5 @@
 <string name="app_themesel_no_themes">usr/xod/colors/ mein koi .reg files nahi</string>
 <string name="app_themesel_updated">Theme: %1$s</string>
 <string name="app_themesel_cleared">Theme: Default</string>
+<string name="app_envsel_run_wine">Wine Desktop chalayein</string>
 </resources>

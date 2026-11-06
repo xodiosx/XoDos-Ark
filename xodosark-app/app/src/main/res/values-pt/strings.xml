@@ -269,4 +269,5 @@
 <string name="app_themesel_no_themes">Nenhum arquivo .reg em usr/xod/colors/</string>
 <string name="app_themesel_updated">Tema: %1$s</string>
 <string name="app_themesel_cleared">Tema: Padrão</string>
+<string name="app_envsel_run_wine">Executar área de trabalho do Wine</string>
 </resources>

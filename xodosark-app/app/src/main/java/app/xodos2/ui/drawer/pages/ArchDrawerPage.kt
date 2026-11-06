@@ -325,7 +325,7 @@ DxvkSelectorSection(
     )
     EnvSelectorSection()
     ThemeSelectorSection()
-    
+  EnvSelectorSection(onExecuteCommand = onExecuteCommand)
     HudSelectorSection(
         title = "HUD"
     )

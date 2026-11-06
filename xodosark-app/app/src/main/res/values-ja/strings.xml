@@ -269,4 +269,5 @@
 <string name="app_themesel_no_themes">usr/xod/colors/ に .reg ファイルがありません</string>
 <string name="app_themesel_updated">テーマ：%1$s</string>
 <string name="app_themesel_cleared">テーマ：デフォルト</string>
+<string name="app_envsel_run_wine">Wine デスクトップを起動</string>
 </resources>

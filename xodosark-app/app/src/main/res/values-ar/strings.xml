@@ -268,4 +268,5 @@
 <string name="app_themesel_no_themes">لا توجد ملفات .reg في usr/xod/colors/</string>
 <string name="app_themesel_updated">السمة: %1$s</string>
 <string name="app_themesel_cleared">السمة: الافتراضي</string>
+<string name="app_envsel_run_wine">تشغيل سطح مكتب Wine</string>
 </resources>
