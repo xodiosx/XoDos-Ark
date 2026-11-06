@@ -10,7 +10,7 @@
 # -------- LOAD ALL ENVIRONMENT VARIABLES --------
 . /data/data/app.xodos2/files/usr/opt/env
 PREFIX=/data/user/0/app.xodos2/files/usr
-rm -f PREFIX/tmp/ntsync_userspace.v10*
+rm -f $PREFIX/tmp/ntsync_userspace.v10*
 
 WINE_BIN="$PREFIX/opt/winece/arm64-v8a/bin"
 
