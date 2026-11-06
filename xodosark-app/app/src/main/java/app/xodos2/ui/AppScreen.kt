@@ -1251,31 +1251,6 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
     }
 }
 */
-@Composable
- fun WineDownloadOption(title: String, hint: String, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp, horizontal = 4.dp)
-    ) {
-        FitText(
-            text = title,
-            color = Color(0xFFC3B6F9),
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.bodyLarge,
-            maxFontSize = 16.sp,
-            minFontSize = 11.sp,
-        )
-        FitText(
-            text = hint,
-            color = Color.White.copy(alpha = 0.55f),
-            style = MaterialTheme.typography.bodySmall,
-            maxFontSize = 12.sp,
-            minFontSize = 9.sp,
-        )
-    }
-}
 
 fun downloadAndInstallWine(url: String, fileName: String) {
     wineDownloadJob?.cancel()
@@ -1289,38 +1264,46 @@ fun downloadAndInstallWine(url: String, fileName: String) {
         val tmpFile    = File(downloadsDir, "$fileName.tmp")
 
         try {
-            // ── 1. Download to /sdcard/Download ──
-            withContext(Dispatchers.IO) {
-                val conn = URL(url).openConnection() as HttpURLConnection
-                conn.connectTimeout = 15_000
-                conn.readTimeout = 15_000
-                conn.instanceFollowRedirects = true
-                conn.setRequestProperty("User-Agent", "XoDosArk/1.0")
-                conn.connect()
-                val totalSize = conn.contentLengthLong
-                tmpFile.delete()
-                conn.inputStream.use { input ->
-                    tmpFile.outputStream().use { output ->
-                        val buf = ByteArray(64 * 1024)
-                        var copied = 0L
-                        var read: Int
-                        while (input.read(buf).also { read = it } != -1) {
-                            coroutineContext.ensureActive()
-                            output.write(buf, 0, read)
-                            copied += read
-                            if (totalSize > 0) {
-                                val pct = (copied * 100 / totalSize).toInt()
-                                withContext(Dispatchers.Main) {
-                                    wineDownloadProgress = pct to context.getString(R.string.appscreen_downloading_percent, pct)
+            // ── 1. Download ONLY if not already present ──
+            val alreadyDownloaded = outputFile.exists() && outputFile.length() > 0
+            if (alreadyDownloaded) {
+                withContext(Dispatchers.Main) {
+                    wineDownloadProgress = 100 to context.getString(R.string.appscreen_installed)
+                }
+            } else {
+                withContext(Dispatchers.IO) {
+                    val conn = URL(url).openConnection() as HttpURLConnection
+                    conn.connectTimeout = 15_000
+                    conn.readTimeout = 15_000
+                    conn.instanceFollowRedirects = true
+                    conn.setRequestProperty("User-Agent", "XoDosArk/1.0")
+                    conn.connect()
+                    val totalSize = conn.contentLengthLong
+                    tmpFile.delete()
+                    conn.inputStream.use { input ->
+                        tmpFile.outputStream().use { output ->
+                            val buf = ByteArray(64 * 1024)
+                            var copied = 0L
+                            var read: Int
+                            while (input.read(buf).also { read = it } != -1) {
+                                coroutineContext.ensureActive()
+                                output.write(buf, 0, read)
+                                copied += read
+                                if (totalSize > 0) {
+                                    val pct = (copied * 100 / totalSize).toInt()
+                                    withContext(Dispatchers.Main) {
+                                        wineDownloadProgress = pct to
+                                            context.getString(R.string.appscreen_downloading_percent, pct)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename downloaded file")
             }
-            if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename downloaded file")
 
-            // ── 2. Install: rm -rf usr/opt/winece, then extract like bootstrap ──
+            // ── 2. Always: remove winece + extract fresh ──
             withContext(Dispatchers.Main) {
                 wineDownloadProgress = 100 to context.getString(R.string.appscreen_extracting)
             }
@@ -1345,7 +1328,6 @@ fun downloadAndInstallWine(url: String, fileName: String) {
                 "TMPDIR"          to cacheDir.absolutePath
             )
 
-            // Rough uncompressed size estimate for pv progress
             val totalSize = outputFile.length() * 3
 
             val shellCmd =
@@ -1368,7 +1350,8 @@ fun downloadAndInstallWine(url: String, fileName: String) {
                             val pct = line.toIntOrNull()
                             if (pct != null && pct in 0..100) {
                                 withContext(Dispatchers.Main) {
-                                    wineDownloadProgress = pct to context.getString(R.string.appscreen_extracting_percent, pct)
+                                    wineDownloadProgress = pct to
+                                        context.getString(R.string.appscreen_extracting_percent, pct)
                                 }
                             }
                             line = reader.readLine()
@@ -1385,7 +1368,8 @@ fun downloadAndInstallWine(url: String, fileName: String) {
                         installWineDependenciesInNativeSession()
                         showWineDownloadDialog = false
                     } else {
-                        wineDownloadProgress = -1 to context.getString(R.string.appscreen_extraction_failed_exit, exitCode, "")
+                        wineDownloadProgress = -1 to
+                            context.getString(R.string.appscreen_extraction_failed_exit, exitCode, "")
                     }
                 }
             }
@@ -1395,7 +1379,8 @@ fun downloadAndInstallWine(url: String, fileName: String) {
         } catch (e: Exception) {
             tmpFile.delete()
             withContext(Dispatchers.Main) {
-                wineDownloadProgress = -1 to context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
+                wineDownloadProgress = -1 to
+                    context.getString(R.string.appscreen_download_failed_with_message, e.message ?: "")
             }
         } finally {
             withContext(Dispatchers.Main) { wineDownloadInProgress = false }
