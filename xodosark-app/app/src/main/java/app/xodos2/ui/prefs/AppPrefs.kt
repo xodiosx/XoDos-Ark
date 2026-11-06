@@ -7,6 +7,9 @@ object AppPrefs {
     private const val PREF_DEBIAN_DESKTOP_SCRIPT = "debian_desktop_startup_script"
     private const val PREF_LEGACY_CONTAINER_SCRIPT = "container_startup_script"
 
+    /** One-shot flag: forces X11 default for installs that still had Wayland. */
+    private const val PREF_MIGRATED_TO_X11_DEFAULT = "migrated_to_x11_default_v1"
+
     /** Stored pref: Arch + Wayland session. */
     const val LAUNCHER_PREF_WAYLAND = "Desktop"
 
@@ -52,25 +55,44 @@ object AppPrefs {
         editor.apply()
     }
 
-    fun readLauncherDefault(prefs: SharedPreferences): String =
-        migrateLauncherPref(prefs.getString(PREF_LAUNCHER_DEFAULT, LAUNCHER_PREF_WAYLAND))
+    /**
+     * Reads the launcher default.
+     *
+     * One-time migration: installs that still have the old Wayland default
+     * are flipped to X11 exactly once. After the flag is set, the user's
+     * choice from the drawer is respected forever.
+     */
+    fun readLauncherDefault(prefs: SharedPreferences): String {
+        if (!prefs.getBoolean(PREF_MIGRATED_TO_X11_DEFAULT, false)) {
+            prefs.edit()
+                .putString(PREF_LAUNCHER_DEFAULT, LAUNCHER_PREF_X11)
+                .putBoolean(PREF_MIGRATED_TO_X11_DEFAULT, true)
+                .apply()
+        }
+        return migrateLauncherPref(
+            prefs.getString(PREF_LAUNCHER_DEFAULT, LAUNCHER_PREF_X11)
+        )
+    }
 
     fun writeLauncherDefault(prefs: SharedPreferences, value: String) {
-        prefs.edit().putString(PREF_LAUNCHER_DEFAULT, migrateLauncherPref(value)).apply()
+        prefs.edit()
+            .putString(PREF_LAUNCHER_DEFAULT, migrateLauncherPref(value))
+            .putBoolean(PREF_MIGRATED_TO_X11_DEFAULT, true)   // user made an explicit choice
+            .apply()
     }
 
     fun migrateLauncherPref(raw: String?): String = when (raw) {
-        null, "" -> LAUNCHER_PREF_WAYLAND
+        null, "" -> LAUNCHER_PREF_X11
         "Container", "Debian desktop" -> LAUNCHER_PREF_X11
         LAUNCHER_PREF_WAYLAND, LAUNCHER_PREF_TERMINAL, LAUNCHER_PREF_X11 -> raw
-        else -> LAUNCHER_PREF_WAYLAND
+        else -> LAUNCHER_PREF_X11
     }
 
     fun launcherPrefToMenuLabel(pref: String): String = when (migrateLauncherPref(pref)) {
         LAUNCHER_PREF_WAYLAND -> LAUNCHER_MENU_WAYLAND
         LAUNCHER_PREF_TERMINAL -> LAUNCHER_MENU_TERMINAL
         LAUNCHER_PREF_X11 -> LAUNCHER_MENU_X11
-        else -> LAUNCHER_MENU_WAYLAND
+        else -> LAUNCHER_MENU_X11
     }
 
     fun menuLabelToLauncherPref(label: String): String = when (label) {
