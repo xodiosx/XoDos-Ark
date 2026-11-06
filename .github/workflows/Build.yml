@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version_tag:
-        description: 'Version tag (e.g. 0.4.2)'
+        description: 'Version tag (e.g. 0.6.2)'
         required: false
-        default: '0.6.0'
+        default: '0.6.5'
 
 permissions:
   contents: write
