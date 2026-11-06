@@ -115,8 +115,8 @@ private val WINE_NATIVE_DEPENDENCIES = listOf(
     "fontconfig", "freetype", "glib", "zlib",  "hangover-libwow64fex", "hangover-libarm64ecfex", "hangover-wowbox64", "7zip", "zstd", "gnutls",
     "openssl", "openal-soft", "gstreamer", "virglrenderer-venus",
     "angle-android", "pulseaudio", "libsndfile", "alsa-lib", "libevdev",
-    "mesa-vulkan-icd-freedreno", "vulkan-loader-generic", "sdl2",
-    "vulkan-wrapper", "mali-vulkan-panvk", "mesa-vulkan-icd-virtio-dri3"
+    "mesa-vulkan-icd-freedreno", "vulkan-loader-generic", "sdl2", "libntsync-android",
+    "vulkan-wrapper", "malig57-vulkan-panvcake", "mesa-vulkan-icd-virtio-dri3"
 )
 
 private const val X11_MODE_LABEL_NATIVE = "Native"

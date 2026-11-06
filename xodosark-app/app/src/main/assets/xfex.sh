@@ -10,6 +10,8 @@
 # -------- LOAD ALL ENVIRONMENT VARIABLES --------
 . /data/data/app.xodos2/files/usr/opt/env
 PREFIX=/data/user/0/app.xodos2/files/usr
+rm -f PREFIX/tmp/ntsync_userspace.v10*
+
 WINE_BIN="$PREFIX/opt/winece/arm64-v8a/bin"
 
 for file in "$WINE_BIN"/*; do
@@ -155,11 +157,8 @@ if [ ! -e $WINEPREFIX/.update-timestamp ]; then
 	unset WINEESYNC
 	unset WINEESYNC_TERMUX
 	unset BOX64_DYNAREC_CALLRET
-	if [ -e $WINE_PATH/lib3/wine/i386-windows/shell32-bak.dll ] || [ -e $WINE_PATH/lib644/wine/x86_64-windows/shell32-bak.dll ]; then
-		mv $WINE_PATH/lib/wine/i386-windows/shell32-bak.dll $WINE_PATH/lib/wine/i386-windows/shell32.dll &>/dev/null
-		mv $WINE_PATH/lib/wine/x86_64-windows/shell32-bak.dll $WINE_PATH/lib/wine/x86_64-windows/shell32.dll &>/dev/null
-		mv $WINE_PATH/lib64/wine/x86_64-windows/shell32-bak.dll $WINE_PATH/lib64/wine/x86_64-windows/shell32.dll &>/dev/null
-		mv $WINE_PATH/lib64/wine/i386-windows/shell32-bak.dll $WINE_PATH/lib64/wine/i386-windows/shell32.dll &>/dev/null
+	if [ -e $PREFIX/opt/hangover-wine/lib/wine/aarch64-windows/*.dll ]; then
+		cp -a $PREFIX/opt/hangover-wine/lib/wine/aarch64-windows/* $PREFIX/opt/winece/arm64-v8a/lib/wine/aarch64-windows/ &>/dev/null
 	fi
 	#unset $DISPLAY
 	taskset -c $PRIMARY_CORES \
