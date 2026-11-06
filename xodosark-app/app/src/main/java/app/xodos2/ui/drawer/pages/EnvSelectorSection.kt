@@ -43,6 +43,7 @@ fun EnvSelectorSection(
     title: String? = null,
     enabled: Boolean = true,
     onExecuteCommand: (String) -> Unit = {}
+    onRunWineDesktop: () -> Unit = {} 
 ) {
     val context = LocalContext.current
     val sectionTitle = title ?: stringResource(R.string.app_envsel_title)
@@ -162,7 +163,7 @@ fun EnvSelectorSection(
 
         // ─── Run Wine Desktop ───
         Button(
-            onClick = { onExecuteCommand("xfex\n") },
+            oonClick = onRunWineDesktop,
             enabled = enabled,
             modifier = Modifier
                 .fillMaxWidth()

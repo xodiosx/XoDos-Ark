@@ -73,7 +73,8 @@ fun DebianDrawerPage(
     onContainerManagerClick: () -> Unit,
     onRequestKeyboard: () -> Unit = {},
     onExecuteCommand: (String) -> Unit = {},
-    onExitRequested: () -> Unit = {}
+    onExitRequested: () -> Unit = {},
+    onRunWineDesktop: () -> Unit = {}     
 ) {
     val context = LocalContext.current
     val activeContainerId = 2   // Container 2
@@ -262,7 +263,10 @@ DxvkSelectorSection(
         title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
-    EnvSelectorSection(onExecuteCommand = onExecuteCommand)
+    EnvSelectorSection(
+    onExecuteCommand = onExecuteCommand,
+    onRunWineDesktop = onRunWineDesktop  
+)
     ThemeSelectorSection()
     
     HudSelectorSection(

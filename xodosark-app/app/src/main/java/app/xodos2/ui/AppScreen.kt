@@ -849,6 +849,35 @@ fun prepareX11Backend() {
         AppLogger.log("Entered Arch Wayland desktop")
     }
 
+fun runWineDesktopFromEnv() {
+    scope.launch {
+        // 1. Close the drawer
+        drawerState.close()
+
+        // 2. Make sure the Wine terminal session exists
+        if (!NativeBridge.isSessionAlive(TerminalSessionIds.WINE_TERMINAL)) {
+            NativeBridge.spawnSessionInRootfs(
+                TerminalSessionIds.WINE_TERMINAL, 80, 24,
+                TerminalSessionIds.rootfsKindForNativeId(TerminalSessionIds.WINE_TERMINAL)
+            )
+            delay(300)
+        }
+
+        // 3. Run xfex (sources env, starts wineserver, shows launcher)
+        NativeBridge.writeInput(
+            TerminalSessionIds.WINE_TERMINAL,
+            "xfex\n".toByteArray()
+        )
+
+        // 4. Give Wine a moment to initialize
+        delay(2000)
+
+        // 5. Open X11 (this runs the Wine desktop startup script
+        //    and switches to MainActivity's X11 view)
+        enterWineDesktop()
+    }
+}
+
 fun enterWineDesktop() {
     X11Runtime.ensureX11ServerProcessStarted(context)
 
@@ -3960,6 +3989,7 @@ if (showDistroSelection) {
             },
             onTerminalSessionStateChange = { terminalSessionState = it },
             onExitRequested = { showExitDialog = true },
+            onRunWineDesktop = { runWineDesktopFromEnv() },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             },
@@ -4043,6 +4073,7 @@ if (showDistroSelection) {
             },
             onRequestKeyboard = { requestKeyboard() },
             onExitRequested = { showExitDialog = true },
+            onRunWineDesktop = { runWineDesktopFromEnv() },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             }
@@ -4104,6 +4135,7 @@ if (showDistroSelection) {
             },
             onRequestKeyboard = { requestKeyboard() },
             onExitRequested = { showExitDialog = true },
+            onRunWineDesktop = { runWineDesktopFromEnv() },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             }

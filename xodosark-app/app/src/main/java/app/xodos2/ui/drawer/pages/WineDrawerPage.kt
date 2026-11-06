@@ -73,7 +73,8 @@ fun WineDrawerPage(
     onContainerManagerClick: () -> Unit,
     onRequestKeyboard: () -> Unit = {},
     onExecuteCommand: (String) -> Unit = {},
-    onExitRequested: () -> Unit = {}
+    onExitRequested: () -> Unit = {},
+    onRunWineDesktop: () -> Unit = {}     
 ) {
     val context = LocalContext.current
     val activeContainerId = 3   // Container 3
@@ -259,7 +260,10 @@ DesktopLaunchersSection(
         enabled = true
     )
     
-    EnvSelectorSection(onExecuteCommand = onExecuteCommand)
+    EnvSelectorSection(
+    onExecuteCommand = onExecuteCommand,
+    onRunWineDesktop = onRunWineDesktop  
+)
     ThemeSelectorSection()
     
     HudSelectorSection(
