@@ -3959,6 +3959,7 @@ if (showDistroSelection) {
                 persistTerminalFont(id)
             },
             onTerminalSessionStateChange = { terminalSessionState = it },
+            onExitRequested = { showExitDialog = true },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             },
@@ -4041,6 +4042,7 @@ if (showDistroSelection) {
                 showContainerManager = true
             },
             onRequestKeyboard = { requestKeyboard() },
+            onExitRequested = { showExitDialog = true },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             }
@@ -4101,6 +4103,7 @@ if (showDistroSelection) {
                 showContainerManager = true
             },
             onRequestKeyboard = { requestKeyboard() },
+            onExitRequested = { showExitDialog = true },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             }
