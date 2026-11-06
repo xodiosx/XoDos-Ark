@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- res/values-pt/strings.xml -->
 <resources>
+<string name="appscreen_help">❔Ajuda</string>
+<string name="appscreen_wine_using_cached">Usando %1$s em cache…</string>
     <string name="app_name">XoDos-Ark</string>
     <string name="lorie_app_name">Termux:X11</string>
     <string name="lorie_notification_content_text">X11 está em execução</string>

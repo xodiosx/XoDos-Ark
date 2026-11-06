@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- res/values-ja/strings.xml -->
 <resources>
+<string name="appscreen_help">❔ヘルプ</string>
+<string name="appscreen_wine_using_cached">キャッシュされた %1$s を使用中…</string>
     <string name="app_name">XoDos-Ark</string>
     <string name="lorie_app_name">Termux:X11</string>
     <string name="lorie_notification_content_text">X11 は実行中です</string>

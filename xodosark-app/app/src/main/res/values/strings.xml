@@ -280,5 +280,6 @@
 <string name="app_themesel_updated">Theme: %1$s</string>
 <string name="app_themesel_cleared">Theme: Default</string>
 <string name="app_envsel_run_wine">Run Wine Desktop</string>
-<string name="appscreen_help">❔</string>
+<string name="appscreen_help">❔Help</string>
+<string name="appscreen_wine_using_cached">Using cached %1$s…</string>
 </resources>

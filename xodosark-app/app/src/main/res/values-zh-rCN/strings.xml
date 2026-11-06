@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- res/values-zh-rCN/strings.xml -->
 <resources>
+<string name="appscreen_help">❔帮助</string>
+<string name="appscreen_wine_using_cached">正在使用缓存的 %1$s…</string>
     <string name="app_name">XoDos-Ark</string>
     <string name="lorie_app_name">Termux:X11</string>
     <string name="lorie_notification_content_text">X11 正在运行</string>

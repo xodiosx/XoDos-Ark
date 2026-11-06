@@ -5,7 +5,8 @@
     ]>
 <resources>
   
-
+<string name="appscreen_help">❔帮助</string>
+<string name="appscreen_wine_using_cached">正在使用缓存的 %1$s…</string>
     <string name="not_connected">未連線</string>
     <string name="preferences_button_text">   偏好設定   </string>
     <string name="help_button_text">   說明   </string>
