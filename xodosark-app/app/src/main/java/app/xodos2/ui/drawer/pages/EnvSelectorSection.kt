@@ -42,7 +42,7 @@ import app.xodos2.ui.runtime.EnvManager
 fun EnvSelectorSection(
     title: String? = null,
     enabled: Boolean = true,
-    onExecuteCommand: (String) -> Unit = {}
+    onExecuteCommand: (String) -> Unit = {},
     onRunWineDesktop: () -> Unit = {} 
 ) {
     val context = LocalContext.current
@@ -163,7 +163,7 @@ fun EnvSelectorSection(
 
         // ─── Run Wine Desktop ───
         Button(
-            oonClick = onRunWineDesktop,
+            onClick = onRunWineDesktop,
             enabled = enabled,
             modifier = Modifier
                 .fillMaxWidth()
