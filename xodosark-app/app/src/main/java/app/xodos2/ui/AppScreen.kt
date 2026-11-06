@@ -1251,6 +1251,31 @@ suspend fun downloadAndExtractTurnipDrivers(containerIds: List<Int>) = withConte
     }
 }
 */
+@Composable
+ fun WineDownloadOption(title: String, hint: String, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp, horizontal = 4.dp)
+    ) {
+        FitText(
+            text = title,
+            color = Color(0xFFC3B6F9),
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyLarge,
+            maxFontSize = 16.sp,
+            minFontSize = 11.sp,
+        )
+        FitText(
+            text = hint,
+            color = Color.White.copy(alpha = 0.55f),
+            style = MaterialTheme.typography.bodySmall,
+            maxFontSize = 12.sp,
+            minFontSize = 9.sp,
+        )
+    }
+}
 
 fun downloadAndInstallWine(url: String, fileName: String) {
     wineDownloadJob?.cancel()
@@ -1264,12 +1289,16 @@ fun downloadAndInstallWine(url: String, fileName: String) {
         val tmpFile    = File(downloadsDir, "$fileName.tmp")
 
         try {
-            // ── 1. Download ONLY if not already present ──
-            val alreadyDownloaded = outputFile.exists() && outputFile.length() > 0
-            if (alreadyDownloaded) {
+            // ── 1. Download to /sdcard/Download (skip if already cached) ──
+            val alreadyCached = outputFile.exists() && outputFile.length() > 0L
+
+            if (alreadyCached) {
+                // Short pause so the UI switches to progress view before the
+                // (very fast) extraction begins — otherwise it may feel like nothing happened.
                 withContext(Dispatchers.Main) {
-                    wineDownloadProgress = 100 to context.getString(R.string.appscreen_installed)
+                    wineDownloadProgress = 100 to context.getString(R.string.appscreen_wine_using_cached, fileName)
                 }
+                delay(400)
             } else {
                 withContext(Dispatchers.IO) {
                     val conn = URL(url).openConnection() as HttpURLConnection
@@ -1303,7 +1332,7 @@ fun downloadAndInstallWine(url: String, fileName: String) {
                 if (!tmpFile.renameTo(outputFile)) throw Exception("Failed to rename downloaded file")
             }
 
-            // ── 2. Always: remove winece + extract fresh ──
+            // ── 2. Install: rm -rf usr/opt/winece, then extract ──
             withContext(Dispatchers.Main) {
                 wineDownloadProgress = 100 to context.getString(R.string.appscreen_extracting)
             }
@@ -1328,12 +1357,13 @@ fun downloadAndInstallWine(url: String, fileName: String) {
                 "TMPDIR"          to cacheDir.absolutePath
             )
 
-            val totalSize = outputFile.length() * 3
+            // rough uncompressed estimate for pv progress
+            val estTotalSize = outputFile.length() * 3
 
             val shellCmd =
                 "rm -rf $wineceDir && " +
                 "$xzBinary -dc ${outputFile.absolutePath} | " +
-                "$pvBinary -n -s $totalSize | " +
+                "$pvBinary -n -s $estTotalSize | " +
                 "$tarBinary -xf - -C ${dataDir.absolutePath}"
 
             withContext(Dispatchers.IO) {
@@ -1361,6 +1391,10 @@ fun downloadAndInstallWine(url: String, fileName: String) {
                 val exitCode = process.waitFor()
                 progressJob.join()
 
+                // If the user pressed Cancel while extraction was running,
+                // don't show a success toast for a job the user already left.
+                coroutineContext.ensureActive()
+
                 withContext(Dispatchers.Main) {
                     if (exitCode == 0) {
                         wineDownloadProgress = 100 to context.getString(R.string.appscreen_installed)
@@ -1374,7 +1408,7 @@ fun downloadAndInstallWine(url: String, fileName: String) {
                 }
             }
         } catch (e: CancellationException) {
-            tmpFile.delete()
+            tmpFile.delete()          // tmp file only — never the cached outputFile
             throw e
         } catch (e: Exception) {
             tmpFile.delete()

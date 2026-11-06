@@ -2,6 +2,7 @@ package app.xodos2.ui.drawer.pages
 
 import app.xodos2.ui.drawer.pages.AdrenotoolsDrawerButton
 import app.xodos2.ui.drawer.pages.DxvkSelectorSection
+import app.xodos2.ui.drawer.pages.DrawerFooterActions
 import app.xodos2.ui.drawer.pages.HudSelectorSection
 import app.xodos2.ui.drawer.pages.EnvSelectorSection
 import app.xodos2.ui.drawer.pages.ThemeSelectorSection
@@ -71,7 +72,8 @@ fun WineDrawerPage(
     hasWineRootfs: Boolean = true,
     onContainerManagerClick: () -> Unit,
     onRequestKeyboard: () -> Unit = {},
-    onExecuteCommand: (String) -> Unit = {}
+    onExecuteCommand: (String) -> Unit = {},
+    onExitRequested: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activeContainerId = 3   // Container 3
@@ -257,9 +259,9 @@ DesktopLaunchersSection(
         enabled = true
     )
     
-    EnvSelectorSection()
-    ThemeSelectorSection()
     EnvSelectorSection(onExecuteCommand = onExecuteCommand)
+    ThemeSelectorSection()
+    
     HudSelectorSection(
         title = "HUD"
     )
@@ -328,6 +330,11 @@ AdrenotoolsDrawerButton(
                         onContainerManagerClick()
                     }
                     .padding(vertical = 12.dp, horizontal = 12.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DrawerFooterActions(
+                onCloseDrawer = { scope.launch { drawerState.close() } },
+                onExitRequested = onExitRequested
             )
         }
     )

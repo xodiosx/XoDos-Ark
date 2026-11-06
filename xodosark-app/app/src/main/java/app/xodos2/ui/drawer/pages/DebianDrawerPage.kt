@@ -2,6 +2,7 @@ package app.xodos2.ui.drawer.pages
 
 import app.xodos2.ui.drawer.pages.AdrenotoolsDrawerButton
 import app.xodos2.ui.drawer.pages.DxvkSelectorSection
+import app.xodos2.ui.drawer.pages.DrawerFooterActions
 import app.xodos2.ui.drawer.pages.HudSelectorSection
 import app.xodos2.ui.drawer.pages.ThemeSelectorSection
 import app.xodos2.ui.drawer.pages.EnvSelectorSection
@@ -71,7 +72,8 @@ fun DebianDrawerPage(
     hasDebianRootfs: Boolean = true,
     onContainerManagerClick: () -> Unit,
     onRequestKeyboard: () -> Unit = {},
-    onExecuteCommand: (String) -> Unit = {}
+    onExecuteCommand: (String) -> Unit = {},
+    onExitRequested: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val activeContainerId = 2   // Container 2
@@ -260,9 +262,9 @@ DxvkSelectorSection(
         title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
-    EnvSelectorSection()
-    ThemeSelectorSection()
     EnvSelectorSection(onExecuteCommand = onExecuteCommand)
+    ThemeSelectorSection()
+    
     HudSelectorSection(
         title = "HUD"
     )
@@ -331,6 +333,11 @@ DxvkSelectorSection(
                         onContainerManagerClick()
                     }
                     .padding(vertical = 12.dp, horizontal = 12.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            DrawerFooterActions(
+                onCloseDrawer = { scope.launch { drawerState.close() } },
+                onExitRequested = onExitRequested
             )
         }
     )
