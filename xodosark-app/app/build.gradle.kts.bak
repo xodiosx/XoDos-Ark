@@ -2,6 +2,7 @@ import java.util.Properties
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
 import org.w3c.dom.Node
+ffmpeg  libglvnd libsixel libx11 libxcb libxext libxrandr libzip sdl2 sdl2-ttf
 
 plugins {
     alias(libs.plugins.android.application)
@@ -36,8 +37,8 @@ kotlinOptions {
         buildConfigField("String", "COMMIT", "\"xodos2-embedded-x11\"")
         // versionName: user-visible, align with git tag / Release (e.g. v0.1.0 → "0.1.0").
         // versionCode: positive integer, must increase for every new APK you ship (Play / sideload).
-        versionCode = 64
-        versionName = "0.6.4.2"
+        versionCode = 65
+        versionName = "0.6.5"
     }
 
     signingConfigs {

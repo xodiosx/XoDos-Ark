@@ -2,7 +2,6 @@ import java.util.Properties
 import javax.xml.parsers.DocumentBuilderFactory
 import org.w3c.dom.Element
 import org.w3c.dom.Node
-ffmpeg  libglvnd libsixel libx11 libxcb libxext libxrandr libzip sdl2 sdl2-ttf
 
 plugins {
     alias(libs.plugins.android.application)
