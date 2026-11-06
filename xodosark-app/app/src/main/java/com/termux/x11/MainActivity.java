@@ -1730,6 +1730,7 @@ private void setupInputController() {
                 //mNotificationManager.notify(mNotificationId, mNotification);
             }
             maybeReloadGamepad(getLorieView());
+            
     }
 
     @Override
@@ -2379,7 +2380,7 @@ private void stopHudService() {
     private void openHelpUrl() {
         try {
             Intent helpIntent = new Intent(Intent.ACTION_VIEW,
-                    Uri.parse("https://github.com/termux/termux-x11/blob/master/README.md#running-graphical-applications"));
+                    Uri.parse("https://xodos-ark.vercel.app"));
             activity.startActivity(helpIntent);
             activity.drawerLayout.closeDrawer(GravityCompat.START);
         } catch (Exception e) {
