@@ -234,7 +234,7 @@ fun ShellScreen(
     }
 
     val defaultTextSizePx = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_SP, 14f, context.resources.displayMetrics
+        TypedValue.COMPLEX_UNIT_SP, 11f, context.resources.displayMetrics
     ).toInt().coerceAtLeast(1)
 
     var currentTextSize by remember { mutableIntStateOf(defaultTextSizePx) }
