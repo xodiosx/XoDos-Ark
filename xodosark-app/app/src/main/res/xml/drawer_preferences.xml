@@ -24,7 +24,7 @@
             android:key="gamepadSdlEnabled"
             android:title="@string/gamepad_sdlEnabled_title"
             android:summary="@string/gamepad_sdlEnabled_summary_on"
-            android:defaultValue="false"/>
+            android:defaultValue="true"/>
 
         <SwitchPreferenceCompat
             android:key="gamepadForwardX11"

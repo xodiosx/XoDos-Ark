@@ -332,7 +332,7 @@
     <PreferenceScreen app:key="userActions">
         <ListPreference app:key="swipeUpAction" app:defaultValue="no action" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
         <ListPreference app:key="swipeDownAction" app:defaultValue="toggle additional key bar" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
-        <ListPreference app:key="volumeUpAction" app:defaultValue="no action" app:entries="@array/userActionsVolumeUpValues" app:entryValues="@array/userActionsVolumeUpValues" />
+        <ListPreference app:key="volumeUpAction" app:defaultValue="ntoggle soft keyboard" app:entries="@array/userActionsVolumeUpValues" app:entryValues="@array/userActionsVolumeUpValues" />
         <ListPreference app:key="volumeDownAction" app:defaultValue="no action" app:entries="@array/userActionsVolumeDownValues" app:entryValues="@array/userActionsVolumeDownValues" />
         <ListPreference app:key="backButtonAction" app:defaultValue="no action" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
         <ListPreference app:key="notificationTapAction" app:defaultValue="open preferences" app:entries="@array/userActionsValues" app:entryValues="@array/userActionsValues" />
