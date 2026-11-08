@@ -88,7 +88,7 @@ object DesktopInstallScripts {
         //   pulseaudio                     → audio server
         val gpuStack =
             "mesa vulkan-loader-generic angle-android " +
-            "mesa-vulkan-icd-freedreno virglrenderer-venus" +
+            "mesa-vulkan-icd-freedreno virglrenderer-venus " +
             "vulkan-wrapper mali-vulkan-panvk mesa-vulkan-icd-virtio-dri3 " +
             "pulseaudio sdl2 xodos-appstore retroarch"
             
