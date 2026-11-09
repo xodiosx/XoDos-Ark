@@ -164,6 +164,7 @@ export HOME="/data/data/app.xodos2/files/home"
 export WINE_DISABLE_KERNEL_WRITEWATCH=1 
 export WINEPREFIX="${'$'}HOME/.wine"
 #sed -i 's|^export LD_DEBUG=none${'$'}|#export LD_DEBUG=-all|' "${'$'}PREFIX/bin/xfex"
+
 #export PATH="${'$'}PREFIX/bin:/system/bin:/system/xbin"
 #export LD_LIBRARY_PATH="${'$'}PREFIX/lib"
 #export LD_PRELOAD="${'$'}PREFIX/lib/libtermux-exec-ld-preload.so"
@@ -636,6 +637,48 @@ private fun writeXodosEnvScript(context: Context) {
         Log.i("NativeInstall", "Wrote ${scriptFile.absolutePath}")
     } catch (e: Exception) {
         Log.e("NativeInstall", "Failed to write XoDos-env.sh", e)
+    }
+}
+
+/**
+ * Writes $PREFIX/bin/xrun — the native-environment counterpart to the
+ * PRoot bridge at assets/usr/bin/xrun.
+ *
+ * Why an executable and not a bash function:
+ *   `.desktop` files run through g_spawn → /bin/sh -c "xrun …".
+ *   /bin/sh is dash / busybox / non-interactive bash — none of which
+ *   source bash.bashrc, so the `xrun() { "$@"; }` function in
+ *   profile.d/00-xodos-env.sh is invisible there.
+ *   A binary on $PATH is found by every shell, every launcher.
+ *
+ * Behaviour:
+ *   Native env  → `exec "$@"` (run the command directly)
+ *   PRoot env   → assets/usr/bin/xrun still handles the bridge;
+ *                 this shim is never copied into containers.
+ */
+private fun writeNativeXrunShim(context: Context) {
+    try {
+        val usrBin = File(context.filesDir, "usr/bin").apply { mkdirs() }
+        val xrunFile = File(usrBin, "xrun")
+
+        xrunFile.writeText(
+            """
+            #!/data/data/app.xodos2/files/usr/bin/sh
+            # XoDos-Ark native xrun shim.
+            # The native environment is already native — no PRoot bridge to
+            # cross — so just exec the target directly. Executable so that
+            # `Exec=xrun …` in .desktop files works from any launcher.
+            exec "${'$'}@"
+            """.trimIndent() + "\n"
+        )
+
+        xrunFile.setReadable(true, false)
+        xrunFile.setWritable(true, false)
+        xrunFile.setExecutable(true, false)
+
+        Log.i("NativeInstall", "Wrote native xrun shim → ${xrunFile.absolutePath}")
+    } catch (e: Exception) {
+        Log.e("NativeInstall", "Failed to write xrun shim", e)
     }
 }
 
@@ -1360,7 +1403,8 @@ private fun refreshNativeBinariesAndAssets(context: Context) {
      writeXodosVerFile(context)
     writeXodosEnvScript(context) 
     writeNativeEnvironmentHook(context)
-    writeNativeAptRepos(context)   
+    writeNativeAptRepos(context)  
+    writeNativeXrunShim(context)   
 
     // 2. Refresh assets + env into every container that already has a rootfs.
     val assetDirsToRefresh = listOf("usr/bin")
