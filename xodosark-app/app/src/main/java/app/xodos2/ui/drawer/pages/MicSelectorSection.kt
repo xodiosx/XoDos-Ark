@@ -158,7 +158,7 @@ private fun MicMixerDialog(onClose: () -> Unit) {
     var status by remember { mutableStateOf("Checking…") }
 
     LaunchedEffect(Unit) {
-        val name = MicManager.getSourceName(context)
+       val name = MicManager.getSourceName()  
         if (name == null) {
             status = "Not loaded — restart the app to pick up the mic source"
             return@LaunchedEffect
