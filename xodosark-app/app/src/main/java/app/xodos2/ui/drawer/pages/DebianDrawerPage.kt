@@ -6,6 +6,7 @@ import app.xodos2.ui.drawer.pages.DrawerFooterActions
 import app.xodos2.ui.drawer.pages.HudSelectorSection
 import app.xodos2.ui.drawer.pages.ThemeSelectorSection
 import app.xodos2.ui.drawer.pages.EnvSelectorSection
+import app.xodos2.ui.drawer.pages.MicSelectorSection
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -74,7 +75,9 @@ fun DebianDrawerPage(
     onRequestKeyboard: () -> Unit = {},
     onExecuteCommand: (String) -> Unit = {},
     onExitRequested: () -> Unit = {},
-    onRunWineDesktop: () -> Unit = {}     
+    onRunWineDesktop: () -> Unit = {},
+    onRestartRequested: () -> Unit = {}
+    
 ) {
     val context = LocalContext.current
     val activeContainerId = 2   // Container 2
@@ -263,6 +266,8 @@ DxvkSelectorSection(
         title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
+    
+    MicSelectorSection(onRestartRequested = onRestartRequested)
     EnvSelectorSection(
     onExecuteCommand = onExecuteCommand,
     onRunWineDesktop = onRunWineDesktop  

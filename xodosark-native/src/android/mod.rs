@@ -410,8 +410,26 @@ fn run_until_exit(
             "module-native-protocol-tcp listen=127.0.0.1 port={} auth-anonymous=1",
             port
         ))
-        .arg("-L")
-        .arg("module-aaudio-sink sink_name=xodos2-out")
+            .arg("-L")
+    .arg("module-aaudio-sink sink_name=xodos2-out");
+
+// ── NEW: conditionally load the mic source ──
+// The flag is written/deleted by MicManager on the Kotlin side.
+// Read on every loop iteration, so toggling the switch is picked up
+// on the next daemon restart (which happens automatically on app restart).
+let mic_enabled = get_application_context()
+    .ok()
+    .map(|ctx| ctx.data_dir.join("mic_enabled").exists())
+    .unwrap_or(false);
+
+if mic_enabled {
+    cmd.arg("-L")
+        .arg("module-sles-source rate=16000 channels=1 source_name=xodosark-mic");
+}
+// 
+
+cmd.env("PULSE_RUNTIME_PATH", &runtime_dir)
+    .env("XDG_RUNTIME_DIR", &runtime_dir)
         .env("PULSE_RUNTIME_PATH", &runtime_dir)
         .env("XDG_RUNTIME_DIR", &runtime_dir)
         .env("HOME", &runtime_dir)

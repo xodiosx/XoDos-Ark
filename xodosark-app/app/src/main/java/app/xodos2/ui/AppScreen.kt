@@ -1088,6 +1088,15 @@ fun runWineDesktopFromEnv() {
     }
 }
 
+fun requestAppRestart() {
+    val intent = context.packageManager
+        .getLaunchIntentForPackage(context.packageName)
+        ?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK) }
+    if (intent != null) context.startActivity(intent)
+    (context as? Activity)?.finishAffinity()
+    System.exit(0)
+}
+
 LaunchedEffect(installDone) {
     if (installDone) {
         delay(500) // brief pause to let UI settle
@@ -1528,6 +1537,10 @@ LaunchedEffect(Unit) {
 for (id in 1..3) {
         val opts = NativeInstallCoordinator.loadProotOptions(context, id)
         NativeInstallCoordinator.saveProotOptions(context, id, opts)
+    }
+        if (MicManager.isEnabled(context)) {
+        delay(2500)             // let the Rust PulseAudio supervisor start
+        MicManager.pinDefaultSource()
     }
     // Snapshot before init — used to detect "bootstrap was just installed"
     val pkgPath = File(context.filesDir, "usr/bin/pkg")
@@ -3993,6 +4006,7 @@ if (showDistroSelection) {
             onTerminalSessionStateChange = { terminalSessionState = it },
             onExitRequested = { showExitDialog = true },
             onRunWineDesktop = { runWineDesktopFromEnv() },
+            onRestartRequested = { requestAppRestart() },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             },
@@ -4077,6 +4091,7 @@ if (showDistroSelection) {
             onRequestKeyboard = { requestKeyboard() },
             onExitRequested = { showExitDialog = true },
             onRunWineDesktop = { runWineDesktopFromEnv() },
+            onRestartRequested = { requestAppRestart() },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             }
@@ -4139,6 +4154,7 @@ if (showDistroSelection) {
             onRequestKeyboard = { requestKeyboard() },
             onExitRequested = { showExitDialog = true },
             onRunWineDesktop = { runWineDesktopFromEnv() },
+            onRestartRequested = { requestAppRestart() },
             onExecuteCommand = { cmd ->
                 NativeBridge.writeInput(terminalSessionState.activeSessionId, "$cmd\n".toByteArray())
             }

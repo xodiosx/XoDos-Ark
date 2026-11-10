@@ -5,6 +5,7 @@ import app.xodos2.ui.drawer.pages.DxvkSelectorSection
 import app.xodos2.ui.drawer.pages.DrawerFooterActions
 import app.xodos2.ui.drawer.pages.HudSelectorSection
 import app.xodos2.ui.drawer.pages.EnvSelectorSection
+import app.xodos2.ui.drawer.pages.MicSelectorSection
 import app.xodos2.ui.drawer.pages.ThemeSelectorSection
 import android.content.SharedPreferences
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -90,7 +91,8 @@ fun ArchDrawerPage(
     onRequestKeyboard: () -> Unit = {},
     onExecuteCommand: (String) -> Unit = {},
     onExitRequested: () -> Unit = {},
-    onRunWineDesktop: () -> Unit = {}     
+    onRunWineDesktop: () -> Unit = {}, 
+    onRestartRequested: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -326,6 +328,7 @@ DxvkSelectorSection(
         title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
+    MicSelectorSection(onRestartRequested = onRestartRequested)
    EnvSelectorSection(
     onExecuteCommand = onExecuteCommand,
     onRunWineDesktop = onRunWineDesktop  
