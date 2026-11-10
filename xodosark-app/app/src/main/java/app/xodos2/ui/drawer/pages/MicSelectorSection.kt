@@ -2,6 +2,7 @@ package app.xodos2.ui.drawer.pages
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -13,9 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import app.xodos2.R
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.runtime.MicManager
 import kotlinx.coroutines.launch
@@ -33,25 +36,35 @@ fun MicSelectorSection(
     var toastMsg by remember { mutableStateOf<String?>(null) }
     var pendingEnable by remember { mutableStateOf(false) }
 
+    // Real toast so it's visible even if the drawer closes
+    LaunchedEffect(toastMsg) {
+        toastMsg?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            toastMsg = null
+        }
+    }
+
     val requestPerm = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (!granted) {
-            toastMsg = "Microphone permission denied"
+            toastMsg = context.getString(R.string.app_micsel_toast_denied)
             return@rememberLauncherForActivityResult
         }
-        // Got permission — try hot-apply first
         scope.launch {
             MicManager.setEnabled(context, pendingEnable)
             val hot = MicManager.hotApply(pendingEnable)
             enabled = pendingEnable
             if (hot) {
-                toastMsg = if (pendingEnable) "Mic enabled (live)" else "Mic disabled (live)"
+                toastMsg = context.getString(
+                    if (pendingEnable) R.string.app_micsel_toast_enabled
+                    else               R.string.app_micsel_toast_disabled
+                )
             } else {
-                restartReason = if (pendingEnable)
-                    "Microphone source added. Restart to let PulseAudio load the input module."
-                else
-                    "Microphone source removed. Restart to unload the input module."
+                restartReason = context.getString(
+                    if (pendingEnable) R.string.app_micsel_restart_enable_reason
+                    else               R.string.app_micsel_restart_disable_reason
+                )
             }
         }
     }
@@ -72,17 +85,23 @@ fun MicSelectorSection(
             val hot = MicManager.hotApply(wantOn)
             enabled = wantOn
             if (hot) {
-                toastMsg = if (wantOn) "Mic enabled (live)" else "Mic disabled (live)"
+                toastMsg = context.getString(
+                    if (wantOn) R.string.app_micsel_toast_enabled
+                    else        R.string.app_micsel_toast_disabled
+                )
             } else {
-                restartReason = if (wantOn)
-                    "Microphone source added. Restart to let PulseAudio load the input module."
-                else
-                    "Microphone source removed. Restart to unload the input module."
+                restartReason = context.getString(
+                    if (wantOn) R.string.app_micsel_restart_enable_reason
+                    else        R.string.app_micsel_restart_disable_reason
+                )
             }
         }
     }
 
-    DrawerExpandableSection(title = "Microphone", defaultExpanded = false) {
+    DrawerExpandableSection(
+        title = stringResource(R.string.app_micsel_title),
+        defaultExpanded = false
+    ) {
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
@@ -90,15 +109,15 @@ fun MicSelectorSection(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Enable microphone input",
+                    text = stringResource(R.string.app_micsel_toggle_label),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = if (enabled)
-                        "PulseAudio captures from the device mic"
-                    else
-                        "No app can record audio",
+                    text = stringResource(
+                        if (enabled) R.string.app_micsel_state_on
+                        else         R.string.app_micsel_state_off
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -112,18 +131,9 @@ fun MicSelectorSection(
                 horizontalArrangement = Arrangement.End
             ) {
                 OutlinedButton(onClick = { showMixer = true }) {
-                    Text("Open Mic Monitor")
+                    Text(stringResource(R.string.app_micsel_open_monitor))
                 }
             }
-        }
-
-        toastMsg?.let { msg ->
-            Text(
-                text = msg,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-            )
         }
     }
 
@@ -131,16 +141,18 @@ fun MicSelectorSection(
     restartReason?.let { reason ->
         AlertDialog(
             onDismissRequest = { restartReason = null },
-            title = { Text("Restart required") },
+            title = { Text(stringResource(R.string.app_micsel_restart_title)) },
             text = { Text(reason) },
             confirmButton = {
                 TextButton(onClick = {
                     restartReason = null
                     onRestartRequested()
-                }) { Text("Restart Now") }
+                }) { Text(stringResource(R.string.app_micsel_restart_now)) }
             },
             dismissButton = {
-                TextButton(onClick = { restartReason = null }) { Text("Later") }
+                TextButton(onClick = { restartReason = null }) {
+                    Text(stringResource(R.string.app_micsel_restart_later))
+                }
             }
         )
     }
@@ -153,24 +165,24 @@ fun MicSelectorSection(
 
 @Composable
 private fun MicMixerDialog(onClose: () -> Unit) {
-    val context = LocalContext.current
     var level by remember { mutableStateOf(0f) }
-    var status by remember { mutableStateOf("Checking…") }
+    var status by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-       val name = MicManager.getSourceName()  
+        status = stringResourceFallback(R.string.app_micsel_monitor_checking)
+        val name = MicManager.getSourceName()
         if (name == null) {
-            status = "Not loaded — restart the app to pick up the mic source"
+            status = stringResourceFallback(R.string.app_micsel_monitor_not_loaded)
             return@LaunchedEffect
         }
-        status = "Live · $name"
+        status = stringResourceFallback(R.string.app_micsel_monitor_live, name)
         MicManager.pinDefaultSource()
         MicManager.levelFlow(name).collect { level = it }
     }
 
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Microphone Monitor") },
+        title = { Text(stringResource(R.string.app_micsel_monitor_title)) },
         text = {
             Column {
                 Text(
@@ -201,14 +213,23 @@ private fun MicMixerDialog(onClose: () -> Unit) {
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    text = "Speak into the mic — the bar should move",
+                    text = stringResource(R.string.app_micsel_monitor_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = onClose) { Text("Close") }
+            TextButton(onClick = onClose) {
+                Text(stringResource(R.string.app_micsel_close))
+            }
         }
     )
+}
+
+/** Small helper — LocalContext-backed `getString`, usable inside non-composable coroutines. */
+@Composable
+private fun stringResourceFallback(id: Int, vararg args: Any): String {
+    val ctx = LocalContext.current
+    return remember(id, args) { ctx.getString(id, *args) }
 }

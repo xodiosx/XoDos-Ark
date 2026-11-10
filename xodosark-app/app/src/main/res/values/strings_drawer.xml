@@ -11,4 +11,30 @@
 <string name="appscreen_dxvk_extracting">Extracting %1$s…</string>
 <string name="appscreen_dxvk_installed">Installed %1$s</string>
 <string name="appscreen_dxvk_failed">Failed: %1$s</string>
+
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!--  Microphone section (MicSelectorSection + MicMixerDialog)      -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<string name="app_micsel_title">Microphone</string>
+<string name="app_micsel_toggle_label">Enable microphone input</string>
+<string name="app_micsel_state_on">PulseAudio captures from the device mic</string>
+<string name="app_micsel_state_off">No app can record audio</string>
+<string name="app_micsel_open_monitor">Open Mic Monitor</string>
+<string name="app_micsel_restart_title">Restart required</string>
+<string name="app_micsel_restart_now">Restart Now</string>
+<string name="app_micsel_restart_later">Later</string>
+<string name="app_micsel_restart_enable_reason">Microphone source added. Restart to let PulseAudio load the input module.</string>
+<string name="app_micsel_restart_disable_reason">Microphone source removed. Restart to unload the input module.</string>
+<string name="app_micsel_toast_denied">Microphone permission denied</string>
+<string name="app_micsel_toast_enabled">Mic enabled (live)</string>
+<string name="app_micsel_toast_disabled">Mic disabled (live)</string>
+
+<!-- Mixer dialog -->
+<string name="app_micsel_monitor_title">Microphone Monitor</string>
+<string name="app_micsel_monitor_checking">Checking…</string>
+<string name="app_micsel_monitor_not_loaded">Not loaded — restart the app to pick up the mic source</string>
+<string name="app_micsel_monitor_live">Live · %1$s</string>
+<string name="app_micsel_monitor_hint">Speak into the mic — the bar should move</string>
+<string name="app_micsel_close">Close</string>
 </resources>
