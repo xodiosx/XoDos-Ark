@@ -9,18 +9,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/**
- * Global microphone switch for the bundled PulseAudio.
- *
- * State lives in <filesDir>/mic_enabled — a sentinel file read by the Rust
- * PulseAudio supervisor (android/mod.rs) at every daemon restart, so the mic
- * source is (re)loaded exactly when the user wants it, nothing else changes.
- *
- * The rest of this object is convenience plumbing:
- *   - hot-apply via `pactl load/unload` (works without restart when PA is up)
- *   - default source pinning (so every native app records from the mic)
- *   - VU meter flow via `parec` (used by the mixer dialog)
- */
 object MicManager {
 
     private const val FLAG_FILE = "mic_enabled"
@@ -45,7 +33,6 @@ object MicManager {
         "PATH" to "$NATIVE_BIN:/system/bin:/system/xbin"
     )
 
-    /** Best-effort: run one shell command with pactl env, return (exitCode, stdout). */
     private suspend fun sh(cmd: String): Pair<Int, String> = withContext(Dispatchers.IO) {
         try {
             val p = ProcessBuilder("/system/bin/sh", "-c", cmd)
@@ -58,9 +45,9 @@ object MicManager {
 
     /**
      * Returns the running PulseAudio source name for the mic, or null.
-     * Looks for the friendly name `xodosark-mic` first, then any `sles-source`.
+     * No Context needed — this is a global query against `pactl`.
      */
-    suspend fun getSourceName(context: Context): String? {
+    suspend fun getSourceName(): String? {
         val (_, out) = sh("pactl list short sources 2>/dev/null")
         if (out.isEmpty()) return null
         val lines = out.lines()
@@ -76,7 +63,7 @@ object MicManager {
     /** Best-effort hot-apply — loads/unloads the mic without restart. */
     suspend fun hotApply(enabled: Boolean): Boolean {
         return if (enabled) {
-            if (getSourceName(null) != null) return true    // already loaded
+            if (getSourceName() != null) return true
             val (exit, _) = sh(
                 "pactl load-module module-sles-source rate=16000 channels=1 source_name=$SOURCE_NAME 2>&1"
             )
@@ -94,7 +81,6 @@ object MicManager {
         }
     }
 
-    /** Pin xodosark-mic as the default input so every native app records from it. */
     suspend fun pinDefaultSource() {
         repeat(8) {
             val (exit, _) = sh("pactl set-default-source $SOURCE_NAME 2>/dev/null")
@@ -103,10 +89,6 @@ object MicManager {
         }
     }
 
-    /**
-     * Live VU level 0f..1f, emitted at ~10 Hz from `parec`.
-     * Emits silence (0f) when the source is unavailable — safe to display.
-     */
     fun levelFlow(sourceName: String? = null): Flow<Float> = flow {
         val srcArg = sourceName?.let { "-d $it " } ?: ""
         val proc = ProcessBuilder(
@@ -117,7 +99,7 @@ object MicManager {
 
         try {
             val input = proc.inputStream
-            val buf = ByteArray(1600)                   // 100 ms @ 8 kHz mono s16
+            val buf = ByteArray(1600)
             while (true) {
                 val n = input.read(buf)
                 if (n <= 0) break
