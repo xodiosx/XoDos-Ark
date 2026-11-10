@@ -1538,10 +1538,7 @@ for (id in 1..3) {
         val opts = NativeInstallCoordinator.loadProotOptions(context, id)
         NativeInstallCoordinator.saveProotOptions(context, id, opts)
     }
-        if (MicManager.isEnabled(context)) {
-        delay(2500)             // let the Rust PulseAudio supervisor start
-        MicManager.pinDefaultSource()
-    }
+        
     // Snapshot before init — used to detect "bootstrap was just installed"
     val pkgPath = File(context.filesDir, "usr/bin/pkg")
     val hadPkgBefore = pkgPath.exists()
@@ -1649,6 +1646,21 @@ if (!anyRootfsInstalled) {
     showDistroSelection = true
 }
 
+}
+// Pin the mic as default source independently of native init.
+// Runs in parallel — never blocks terminal startup.
+LaunchedEffect(Unit) {
+    if (!MicManager.isEnabled(context)) return@LaunchedEffect
+    // Wait up to 15 s for PulseAudio to accept commands, then pin
+    var waited = 0
+    while (waited < 15_000) {
+        if (MicManager.getSourceName() != null) {
+            MicManager.pinDefaultSource()
+            return@LaunchedEffect
+        }
+        delay(500)
+        waited += 500
+    }
 }
     // ----- wayland / X11 effects (unchanged) -----
     LaunchedEffect(showWayland) {
