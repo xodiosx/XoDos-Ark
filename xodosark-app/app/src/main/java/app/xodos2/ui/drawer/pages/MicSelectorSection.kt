@@ -165,17 +165,19 @@ fun MicSelectorSection(
 
 @Composable
 private fun MicMixerDialog(onClose: () -> Unit) {
+    val context = LocalContext.current
     var level by remember { mutableStateOf(0f) }
-    var status by remember { mutableStateOf("") }
+    var status by remember {
+        mutableStateOf(context.getString(R.string.app_micsel_monitor_checking))
+    }
 
     LaunchedEffect(Unit) {
-        status = stringResourceFallback(R.string.app_micsel_monitor_checking)
         val name = MicManager.getSourceName()
         if (name == null) {
-            status = stringResourceFallback(R.string.app_micsel_monitor_not_loaded)
+            status = context.getString(R.string.app_micsel_monitor_not_loaded)
             return@LaunchedEffect
         }
-        status = stringResourceFallback(R.string.app_micsel_monitor_live, name)
+        status = context.getString(R.string.app_micsel_monitor_live, name)
         MicManager.pinDefaultSource()
         MicManager.levelFlow(name).collect { level = it }
     }
@@ -225,11 +227,4 @@ private fun MicMixerDialog(onClose: () -> Unit) {
             }
         }
     )
-}
-
-/** Small helper — LocalContext-backed `getString`, usable inside non-composable coroutines. */
-@Composable
-private fun stringResourceFallback(id: Int, vararg args: Any): String {
-    val ctx = LocalContext.current
-    return remember(id, args) { ctx.getString(id, *args) }
 }
