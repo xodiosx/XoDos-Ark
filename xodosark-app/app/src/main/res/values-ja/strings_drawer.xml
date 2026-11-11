@@ -11,4 +11,25 @@
     <string name="appscreen_dxvk_extracting">%1$s を展開中…</string>
     <string name="appscreen_dxvk_installed">%1$s をインストールしました</string>
     <string name="appscreen_dxvk_failed">失敗：%1$s</string>
+    
+    
+    <string name="app_micsel_title">マイク</string>
+<string name="app_micsel_toggle_label">マイク入力を有効にする</string>
+<string name="app_micsel_state_on">PulseAudio がデバイスのマイクからキャプチャします</string>
+<string name="app_micsel_state_off">どのアプリも音声を録音できません</string>
+<string name="app_micsel_open_monitor">マイクモニターを開く</string>
+<string name="app_micsel_restart_title">再起動が必要です</string>
+<string name="app_micsel_restart_now">今すぐ再起動</string>
+<string name="app_micsel_restart_later">後で</string>
+<string name="app_micsel_restart_enable_reason">マイクソースが追加されました。PulseAudio に入力モジュールを読み込ませるため再起動してください。</string>
+<string name="app_micsel_restart_disable_reason">マイクソースが削除されました。入力モジュールをアンロードするため再起動してください。</string>
+<string name="app_micsel_toast_denied">マイクの権限が拒否されました</string>
+<string name="app_micsel_toast_enabled">マイク有効（ライブ）</string>
+<string name="app_micsel_toast_disabled">マイク無効（ライブ）</string>
+<string name="app_micsel_monitor_title">マイクモニター</string>
+<string name="app_micsel_monitor_checking">確認中…</string>
+<string name="app_micsel_monitor_not_loaded">未読み込み — アプリを再起動してマイクソースを取得してください</string>
+<string name="app_micsel_monitor_live">ライブ · %1$s</string>
+<string name="app_micsel_monitor_hint">マイクに向かって話してください — バーが動くはずです</string>
+<string name="app_micsel_close">閉じる</string>
 </resources>

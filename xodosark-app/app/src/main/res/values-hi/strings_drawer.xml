@@ -11,4 +11,24 @@
     <string name="appscreen_dxvk_extracting">%1$s extract ho raha hai…</string>
     <string name="appscreen_dxvk_installed">%1$s install ho gaya</string>
     <string name="appscreen_dxvk_failed">Fail: %1$s</string>
+    
+    <string name="app_micsel_title">Microphone</string>
+<string name="app_micsel_toggle_label">Microphone input enable karein</string>
+<string name="app_micsel_state_on">PulseAudio device mic se capture karta hai</string>
+<string name="app_micsel_state_off">Koi app audio record nahi kar sakta</string>
+<string name="app_micsel_open_monitor">Mic Monitor kholein</string>
+<string name="app_micsel_restart_title">Restart zaroori hai</string>
+<string name="app_micsel_restart_now">Abhi restart karein</string>
+<string name="app_micsel_restart_later">Baad mein</string>
+<string name="app_micsel_restart_enable_reason">Microphone source add ho gaya. PulseAudio ko input module load karne ke liye restart karein.</string>
+<string name="app_micsel_restart_disable_reason">Microphone source hata diya gaya. Input module unload karne ke liye restart karein.</string>
+<string name="app_micsel_toast_denied">Microphone permission denied</string>
+<string name="app_micsel_toast_enabled">Mic enabled (live)</string>
+<string name="app_micsel_toast_disabled">Mic disabled (live)</string>
+<string name="app_micsel_monitor_title">Microphone Monitor</string>
+<string name="app_micsel_monitor_checking">Check ho raha hai…</string>
+<string name="app_micsel_monitor_not_loaded">Load nahi hua — mic source pick karne ke liye app restart karein</string>
+<string name="app_micsel_monitor_live">Live · %1$s</string>
+<string name="app_micsel_monitor_hint">Mic mein bolein — bar move honi chahiye</string>
+<string name="app_micsel_close">Close</string>
 </resources>

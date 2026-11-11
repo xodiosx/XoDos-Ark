@@ -11,4 +11,24 @@
     <string name="appscreen_dxvk_extracting">جارٍ استخراج %1$s…</string>
     <string name="appscreen_dxvk_installed">تم تثبيت %1$s</string>
     <string name="appscreen_dxvk_failed">فشل: %1$s</string>
+    
+    <string name="app_micsel_title">الميكروفون</string>
+<string name="app_micsel_toggle_label">تفعيل إدخال الميكروفون</string>
+<string name="app_micsel_state_on">يلتقط PulseAudio من ميكروفون الجهاز</string>
+<string name="app_micsel_state_off">لا يمكن لأي تطبيق تسجيل الصوت</string>
+<string name="app_micsel_open_monitor">فتح مراقب الميكروفون</string>
+<string name="app_micsel_restart_title">إعادة التشغيل مطلوبة</string>
+<string name="app_micsel_restart_now">إعادة التشغيل الآن</string>
+<string name="app_micsel_restart_later">لاحقًا</string>
+<string name="app_micsel_restart_enable_reason">تمت إضافة مصدر الميكروفون. أعد التشغيل حتى يقوم PulseAudio بتحميل وحدة الإدخال.</string>
+<string name="app_micsel_restart_disable_reason">تمت إزالة مصدر الميكروفون. أعد التشغيل لإلغاء تحميل وحدة الإدخال.</string>
+<string name="app_micsel_toast_denied">تم رفض إذن الميكروفون</string>
+<string name="app_micsel_toast_enabled">تم تفعيل الميكروفون (مباشر)</string>
+<string name="app_micsel_toast_disabled">تم تعطيل الميكروفون (مباشر)</string>
+<string name="app_micsel_monitor_title">مراقب الميكروفون</string>
+<string name="app_micsel_monitor_checking">جارٍ التحقق…</string>
+<string name="app_micsel_monitor_not_loaded">غير محمّل — أعد تشغيل التطبيق لالتقاط مصدر الميكروفون</string>
+<string name="app_micsel_monitor_live">مباشر · %1$s</string>
+<string name="app_micsel_monitor_hint">تحدّث في الميكروفون — يجب أن يتحرك الشريط</string>
+<string name="app_micsel_close">إغلاق</string>
 </resources>

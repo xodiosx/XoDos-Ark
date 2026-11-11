@@ -11,4 +11,25 @@
     <string name="appscreen_dxvk_extracting">Extraction de %1$s…</string>
     <string name="appscreen_dxvk_installed">Installé %1$s</string>
     <string name="appscreen_dxvk_failed">Échec : %1$s</string>
+    
+    
+    <string name="app_micsel_title">Microphone</string>
+<string name="app_micsel_toggle_label">Activer l\'entrée microphone</string>
+<string name="app_micsel_state_on">PulseAudio capture depuis le micro de l\'appareil</string>
+<string name="app_micsel_state_off">Aucune application ne peut enregistrer l\'audio</string>
+<string name="app_micsel_open_monitor">Ouvrir le moniteur de micro</string>
+<string name="app_micsel_restart_title">Redémarrage requis</string>
+<string name="app_micsel_restart_now">Redémarrer maintenant</string>
+<string name="app_micsel_restart_later">Plus tard</string>
+<string name="app_micsel_restart_enable_reason">Source microphone ajoutée. Redémarrez pour que PulseAudio charge le module d\'entrée.</string>
+<string name="app_micsel_restart_disable_reason">Source microphone supprimée. Redémarrez pour décharger le module d\'entrée.</string>
+<string name="app_micsel_toast_denied">Autorisation microphone refusée</string>
+<string name="app_micsel_toast_enabled">Micro activé (en direct)</string>
+<string name="app_micsel_toast_disabled">Micro désactivé (en direct)</string>
+<string name="app_micsel_monitor_title">Moniteur de microphone</string>
+<string name="app_micsel_monitor_checking">Vérification…</string>
+<string name="app_micsel_monitor_not_loaded">Non chargé — redémarrez l\'application pour prendre en compte la source micro</string>
+<string name="app_micsel_monitor_live">En direct · %1$s</string>
+<string name="app_micsel_monitor_hint">Parlez dans le micro — la barre doit bouger</string>
+<string name="app_micsel_close">Fermer</string>
 </resources>

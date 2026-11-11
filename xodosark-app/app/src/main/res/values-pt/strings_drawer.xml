@@ -11,4 +11,25 @@
     <string name="appscreen_dxvk_extracting">Extraindo %1$s…</string>
     <string name="appscreen_dxvk_installed">Instalado %1$s</string>
     <string name="appscreen_dxvk_failed">Falhou: %1$s</string>
+    
+    
+    <string name="app_micsel_title">Microfone</string>
+<string name="app_micsel_toggle_label">Ativar entrada de microfone</string>
+<string name="app_micsel_state_on">O PulseAudio captura do microfone do dispositivo</string>
+<string name="app_micsel_state_off">Nenhum app pode gravar áudio</string>
+<string name="app_micsel_open_monitor">Abrir monitor de microfone</string>
+<string name="app_micsel_restart_title">Reinicialização necessária</string>
+<string name="app_micsel_restart_now">Reiniciar agora</string>
+<string name="app_micsel_restart_later">Mais tarde</string>
+<string name="app_micsel_restart_enable_reason">Fonte de microfone adicionada. Reinicie para o PulseAudio carregar o módulo de entrada.</string>
+<string name="app_micsel_restart_disable_reason">Fonte de microfone removida. Reinicie para descarregar o módulo de entrada.</string>
+<string name="app_micsel_toast_denied">Permissão de microfone negada</string>
+<string name="app_micsel_toast_enabled">Microfone ativado (ao vivo)</string>
+<string name="app_micsel_toast_disabled">Microfone desativado (ao vivo)</string>
+<string name="app_micsel_monitor_title">Monitor de microfone</string>
+<string name="app_micsel_monitor_checking">Verificando…</string>
+<string name="app_micsel_monitor_not_loaded">Não carregado — reinicie o app para detectar a fonte de microfone</string>
+<string name="app_micsel_monitor_live">Ao vivo · %1$s</string>
+<string name="app_micsel_monitor_hint">Fale no microfone — a barra deve se mover</string>
+<string name="app_micsel_close">Fechar</string>
 </resources>

@@ -11,4 +11,25 @@
     <string name="appscreen_dxvk_extracting">Извлечение %1$s…</string>
     <string name="appscreen_dxvk_installed">Установлено %1$s</string>
     <string name="appscreen_dxvk_failed">Ошибка: %1$s</string>
+    
+    
+    <string name="app_micsel_title">Микрофон</string>
+<string name="app_micsel_toggle_label">Включить ввод с микрофона</string>
+<string name="app_micsel_state_on">PulseAudio захватывает звук с микрофона устройства</string>
+<string name="app_micsel_state_off">Ни одно приложение не может записывать звук</string>
+<string name="app_micsel_open_monitor">Открыть монитор микрофона</string>
+<string name="app_micsel_restart_title">Требуется перезапуск</string>
+<string name="app_micsel_restart_now">Перезапустить сейчас</string>
+<string name="app_micsel_restart_later">Позже</string>
+<string name="app_micsel_restart_enable_reason">Источник микрофона добавлен. Перезапустите, чтобы PulseAudio загрузил модуль ввода.</string>
+<string name="app_micsel_restart_disable_reason">Источник микрофона удалён. Перезапустите, чтобы выгрузить модуль ввода.</string>
+<string name="app_micsel_toast_denied">Разрешение на микрофон отклонено</string>
+<string name="app_micsel_toast_enabled">Микрофон включён (в реальном времени)</string>
+<string name="app_micsel_toast_disabled">Микрофон выключен (в реальном времени)</string>
+<string name="app_micsel_monitor_title">Монитор микрофона</string>
+<string name="app_micsel_monitor_checking">Проверка…</string>
+<string name="app_micsel_monitor_not_loaded">Не загружено — перезапустите приложение, чтобы подхватить источник микрофона</string>
+<string name="app_micsel_monitor_live">В реальном времени · %1$s</string>
+<string name="app_micsel_monitor_hint">Говорите в микрофон — полоса должна двигаться</string>
+<string name="app_micsel_close">Закрыть</string>
 </resources>
