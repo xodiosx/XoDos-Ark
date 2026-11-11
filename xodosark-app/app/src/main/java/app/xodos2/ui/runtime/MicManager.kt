@@ -16,16 +16,11 @@ object MicManager {
     private const val NATIVE_BIN = "/data/data/app.xodos2/files/usr/bin"
 
     fun flagFile(context: Context): File = File(context.filesDir, FLAG_FILE)
-
     fun isEnabled(context: Context): Boolean = flagFile(context).exists()
 
     fun setEnabled(context: Context, enabled: Boolean) {
         val f = flagFile(context)
-        if (enabled) {
-            if (!f.exists()) f.writeText("1")
-        } else {
-            f.delete()
-        }
+        if (enabled) { if (!f.exists()) f.writeText("1") } else f.delete()
     }
 
     private fun pactlEnv(): Map<String, String> = mapOf(
@@ -48,35 +43,56 @@ object MicManager {
         if (out.isEmpty()) return null
         val lines = out.lines()
         lines.firstOrNull { it.contains(SOURCE_NAME) }
-            ?.split(Regex("\\s+"))?.getOrNull(1)
-            ?.let { return it }
+            ?.split(Regex("\\s+"))?.getOrNull(1)?.let { return it }
         lines.firstOrNull { it.contains("sles-source") }
-            ?.split(Regex("\\s+"))?.getOrNull(1)
-            ?.let { return it }
+            ?.split(Regex("\\s+"))?.getOrNull(1)?.let { return it }
         return null
     }
 
-    suspend fun hotApply(enabled: Boolean): Boolean {
-        return if (enabled) {
-            if (getSourceName() != null) return true
-            val (exit, _) = sh(
-                "pactl load-module module-sles-source rate=16000 channels=1 source_name=$SOURCE_NAME 2>&1"
-            )
-            if (exit == 0) {
-                pinDefaultSource()
-                true
-            } else false
-        } else {
+    /**
+     * Load (or verify) the mic source AND pin it as default AND return the
+     * resulting source name — all in ONE shell process.
+     *
+     * Old version: 3 × sh spawns ≈ 300 ms.
+     * This version: 1 × sh spawn  ≈ 100 ms.
+     */
+    suspend fun hotApplyAndGetSource(enabled: Boolean): Pair<Boolean, String?> {
+        if (!enabled) {
             safeUnload()
-            true
+            return true to null
         }
+        val (exit, out) = sh(
+            """
+            if ! pactl list short sources 2>/dev/null | grep -q 'xodosark-mic'; then
+                pactl load-module module-sles-source rate=16000 channels=1 source_name=xodosark-mic >/dev/null 2>&1 || exit 1
+            fi
+            pactl set-default-source xodosark-mic >/dev/null 2>&1 || true
+            pactl list short sources 2>/dev/null
+            """.trimIndent()
+        )
+        val name = out.lines()
+            .firstOrNull { it.contains(SOURCE_NAME) }
+            ?.split(Regex("\\s+"))?.getOrNull(1)
+            ?: out.lines()
+                .firstOrNull { it.contains("sles-source") }
+                ?.split(Regex("\\s+"))?.getOrNull(1)
+        return (exit == 0) to name
     }
 
-    /**
-     * Pin the mic as PulseAudio's default source.
-     * Max wait: 3 tries × (100 ms delay + ~50 ms sh) = ~450 ms worst case,
-     * ~50 ms typical (first try succeeds).
-     */
+    /** Compatibility wrapper used by AppScreen's ON_START reloader. */
+    suspend fun hotApply(enabled: Boolean): Boolean {
+        return hotApplyAndGetSource(enabled).first
+    }
+
+    /** Batched single-spawn unload. */
+    suspend fun safeUnload() {
+        sh(
+            "for id in $(pactl list short modules 2>/dev/null | awk '/sles-source/ {print \$1}'); " +
+            "do pactl unload-module \$id 2>/dev/null; done"
+        )
+    }
+
+    /** Best-effort pin — used at startup only. */
     suspend fun pinDefaultSource() {
         repeat(3) {
             val (exit, _) = sh("pactl set-default-source $SOURCE_NAME 2>/dev/null")
@@ -85,16 +101,6 @@ object MicManager {
         }
     }
 
-    /** Unload every sles-source module. No-op if none is loaded. */
-    suspend fun safeUnload() {
-        val (_, out) = sh("pactl list short modules 2>/dev/null")
-        val ids = out.lines()
-            .filter { it.contains("sles-source") }
-            .mapNotNull { it.trim().split(Regex("\\s+")).firstOrNull() }
-        for (id in ids) sh("pactl unload-module $id 2>/dev/null")
-    }
-
-    /** Background-safe unload — used by the 5 s watcher in AppScreen. */
     suspend fun safeUnloadIfIdle() {
         sh("pkill -9 parec 2>/dev/null")
         delay(150)

@@ -24,6 +24,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import app.xodos2.R
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.runtime.MicManager
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @Composable
@@ -51,9 +53,14 @@ fun MicSelectorSection(
     }
 
     var enabled by remember { mutableStateOf(MicManager.isEnabled(context)) }
+    var loading by remember { mutableStateOf(false) }
+    var readyEpoch by remember { mutableIntStateOf(0) }
+    var readySourceName by remember { mutableStateOf<String?>(null) }
+    var hotApplyJob by remember { mutableStateOf<Job?>(null) }
     var restartReason by remember { mutableStateOf<String?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
     var pendingEnable by remember { mutableStateOf(false) }
+    var level by remember { mutableStateOf(0f) }
 
     LaunchedEffect(toastMsg) {
         toastMsg?.let {
@@ -62,28 +69,36 @@ fun MicSelectorSection(
         }
     }
 
-    val requestPerm = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) {
-            toastMsg = context.getString(R.string.app_micsel_toast_denied)
-            return@rememberLauncherForActivityResult
+    fun startLoad(wantOn: Boolean) {
+        hotApplyJob?.cancel()
+        hotApplyJob = null
+
+        enabled = wantOn
+        MicManager.setEnabled(context, wantOn)
+
+        if (!wantOn) {
+            loading = false
+            level = 0f
+            readySourceName = null
+            hotApplyJob = scope.launch {
+                MicManager.hotApplyAndGetSource(false)
+            }
+            return
         }
-        // Permission granted — apply the pending toggle with the same optimistic flow
-        enabled = pendingEnable
-        MicManager.setEnabled(context, pendingEnable)
-        scope.launch {
-            val hot = MicManager.hotApply(pendingEnable)
-            if (hot) {
-                toastMsg = context.getString(
-                    if (pendingEnable) R.string.app_micsel_toast_enabled
-                    else               R.string.app_micsel_toast_disabled
-                )
+
+        loading = true
+        level = 0f
+        readySourceName = null
+        hotApplyJob = scope.launch {
+            val (ok, name) = MicManager.hotApplyAndGetSource(true)
+            if (!isActive) return@launch
+            loading = false
+            if (ok) {
+                readySourceName = name
+                readyEpoch++
+                toastMsg = context.getString(R.string.app_micsel_toast_enabled)
             } else {
-                restartReason = context.getString(
-                    if (pendingEnable) R.string.app_micsel_restart_enable_reason
-                    else               R.string.app_micsel_restart_disable_reason
-                )
+                restartReason = context.getString(R.string.app_micsel_restart_enable_reason)
             }
         }
     }
@@ -99,38 +114,46 @@ fun MicSelectorSection(
                 return
             }
         }
-
-        // ── IMMEDIATE UI feedback — switch flips before shell work starts ──
-        enabled = wantOn
-        MicManager.setEnabled(context, wantOn)
-
-        // ── Work happens in the background — never blocks the switch ──
-        scope.launch {
-            val hot = MicManager.hotApply(wantOn)
-            if (hot) {
-                toastMsg = context.getString(
-                    if (wantOn) R.string.app_micsel_toast_enabled
-                    else        R.string.app_micsel_toast_disabled
-                )
-            } else {
-                // Only when load-module genuinely failed
-                restartReason = context.getString(
-                    if (wantOn) R.string.app_micsel_restart_enable_reason
-                    else        R.string.app_micsel_restart_disable_reason
-                )
-            }
-        }
+        startLoad(wantOn)
     }
 
-    // Live VU — only while section is composed, drawer open, app resumed
-    var level by remember { mutableStateOf(0f) }
-    LaunchedEffect(enabled, drawerState.isOpen, isResumed) {
+    val requestPerm = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            toastMsg = context.getString(R.string.app_micsel_toast_denied)
+            return@rememberLauncherForActivityResult
+        }
+        startLoad(pendingEnable)
+    }
+
+    /**
+     * VU effect — keys are ONLY the things that actually change when the mic
+     * becomes ready. `loading` is deliberately excluded so a mid-flight toggle
+     * doesn't restart this. `readySourceName` is used directly (no re-query).
+     */
+    LaunchedEffect(enabled, drawerState.isOpen, isResumed, readyEpoch) {
         if (!enabled || !drawerState.isOpen || !isResumed) {
             level = 0f
             return@LaunchedEffect
         }
-        val name = MicManager.getSourceName() ?: return@LaunchedEffect
+        // Cold-start case: no readySourceName (e.g. reload after ON_START),
+        // poll briefly for the source.
+        var name = readySourceName
+        if (name == null) {
+            repeat(20) {
+                if (!isActive || !enabled) return@LaunchedEffect
+                val n = MicManager.getSourceName()
+                if (n != null) { name = n; return@repeat }
+                kotlinx.coroutines.delay(100)
+            }
+        }
+        if (name == null) return@LaunchedEffect
         MicManager.levelFlow(name).collect { level = it }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { hotApplyJob?.cancel() }
     }
 
     DrawerExpandableSection(
@@ -156,38 +179,61 @@ fun MicSelectorSection(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
+            // NOTE: no `enabled = !loading` — flipping during load is fine,
+            //       and it cancels the previous hotApply cleanly.
             Switch(checked = enabled, onCheckedChange = { applyToggle(it) })
         }
 
         if (enabled) {
             Spacer(Modifier.height(4.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp)
-                    .height(10.dp)
-                    .background(Color(0xFF1F1F1F), RoundedCornerShape(5.dp))
-            ) {
+            if (loading) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Starting microphone…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            } else {
                 Box(
                     modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth(level.coerceIn(0f, 1f))
-                        .background(
-                            color = when {
-                                level > 0.8f -> Color(0xFFFF5252)
-                                level > 0.4f -> Color(0xFFFFC107)
-                                else         -> Color(0xFF4CAF50)
-                            },
-                            shape = RoundedCornerShape(5.dp)
-                        )
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                        .height(10.dp)
+                        .background(Color(0xFF1F1F1F), RoundedCornerShape(5.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(level.coerceIn(0f, 1f))
+                            .background(
+                                color = when {
+                                    level > 0.8f -> Color(0xFFFF5252)
+                                    level > 0.4f -> Color(0xFFFFC107)
+                                    else         -> Color(0xFF4CAF50)
+                                },
+                                shape = RoundedCornerShape(5.dp)
+                            )
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.app_micsel_monitor_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                 )
             }
-            Text(
-                text = stringResource(R.string.app_micsel_monitor_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-            )
         }
     }
 
