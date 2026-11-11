@@ -54,7 +54,7 @@ object MicManager {
         val (exit, out) = sh(
             """
             if ! pactl list short sources 2>/dev/null | grep -q 'xodosark-mic'; then
-                pactl load-module module-sles-source rate=16000 channels=1 source_name=xodosark-mic >/dev/null 2>&1 || exit 1
+                pactl load-module module-sles-source rate=48000 channels=1 source_name=xodosark-mic >/dev/null 2>&1 || exit 1
             fi
             pactl set-default-source xodosark-mic >/dev/null 2>&1 || true
             pactl list short sources 2>/dev/null
@@ -92,44 +92,31 @@ object MicManager {
         safeUnload()
     }
 
-    /**
-     * Counts source-outputs that are NOT our own parec instances.
-     *
-     * Used by the drawer VU to avoid running parec at the same time as Wine,
-     * ffmpeg, RetroArch, browsers, etc. Two concurrent readers on
-     * module-sles-source cause audible glitches on Android 10.
-     *
-     * Returns 0 when only our parec (or nothing) is reading.
-     */
+    /** Counts source-outputs that are NOT our own parec. */
     suspend fun countExternalRecorders(): Int {
-        val (_, out) = sh("pactl list source-outputs 2>/dev/null")
+        val (_, out) = sh("pactl list short source-outputs 2>/dev/null")
         if (out.isBlank()) return 0
-        // Each stream starts with "Source Output #N"; split and inspect
         val blocks = out.split("Source Output #").drop(1)
         return blocks.count { block ->
-            // parec's application.name is "parec"; anything else is external
             !block.contains("application.name = \"parec\"")
         }
     }
 
     /**
-     * Level flow — tuned to NOT disturb the shared mic stream.
-     *
-     * rate=16000 matches module-sles-source's native rate → no resampling.
-     * latency-msec=250 gives large buffer slack for the other clients.
-     * Reading 3200-byte chunks yields 0.1 s windows at 16 kHz mono s16.
+     * Level flow at native 48 kHz — no resampling.
+     * Larger latency buffer so it can't starve any concurrent reader.
      */
     fun levelFlow(sourceName: String? = null): Flow<Float> = flow {
         val srcArg = sourceName?.let { "-d $it " } ?: ""
         val proc = ProcessBuilder(
             "/system/bin/sh", "-c",
-            "exec parec $srcArg--format=s16le --rate=16000 --channels=1 --latency-msec=250 2>/dev/null"
+            "exec parec $srcArg--format=s16le --rate=48000 --channels=1 --latency-msec=250 2>/dev/null"
         ).apply { environment().putAll(pactlEnv()) }
             .redirectErrorStream(false).start()
 
         try {
             val input = proc.inputStream
-            val buf = ByteArray(3200)          // 0.1 s at 16 kHz mono s16
+            val buf = ByteArray(9600)                 // 0.1 s @ 48 kHz mono s16
             while (true) {
                 val n = input.read(buf)
                 if (n <= 0) break

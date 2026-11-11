@@ -54,11 +54,14 @@ fun MicSelectorSection(
 
     var enabled by remember { mutableStateOf(MicManager.isEnabled(context)) }
     var loading by remember { mutableStateOf(false) }
+    var readyEpoch by remember { mutableIntStateOf(0) }
+    var readySourceName by remember { mutableStateOf<String?>(null) }
+    var hotApplyJob by remember { mutableStateOf<Job?>(null) }
     var restartReason by remember { mutableStateOf<String?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
     var pendingEnable by remember { mutableStateOf(false) }
-    var showMonitor by remember { mutableStateOf(false) }
-    var hotApplyJob by remember { mutableStateOf<Job?>(null) }
+    var level by remember { mutableStateOf(0f) }
+    var inUseByOther by remember { mutableStateOf(false) }
 
     LaunchedEffect(toastMsg) {
         toastMsg?.let {
@@ -76,6 +79,9 @@ fun MicSelectorSection(
 
         if (!wantOn) {
             loading = false
+            level = 0f
+            readySourceName = null
+            inUseByOther = false
             hotApplyJob = scope.launch {
                 MicManager.hotApplyAndGetSource(false)
             }
@@ -83,11 +89,15 @@ fun MicSelectorSection(
         }
 
         loading = true
+        level = 0f
+        readySourceName = null
         hotApplyJob = scope.launch {
-            val (ok, _) = MicManager.hotApplyAndGetSource(true)
+            val (ok, name) = MicManager.hotApplyAndGetSource(true)
             if (!isActive) return@launch
             loading = false
             if (ok) {
+                readySourceName = name
+                readyEpoch++
                 toastMsg = context.getString(R.string.app_micsel_toast_enabled)
             } else {
                 restartReason = context.getString(R.string.app_micsel_restart_enable_reason)
@@ -117,6 +127,45 @@ fun MicSelectorSection(
             }
         }
         startLoad(wantOn)
+    }
+
+    // ── Inline VU ──
+    // Runs parec only while (a) switch on, (b) drawer open, (c) app resumed,
+    // (d) no other app already recording. Yields within ~1 s if any external
+    // app opens the mic — so games/voice chat/ffmpeg always get a clean stream.
+    LaunchedEffect(enabled, drawerState.isOpen, isResumed, readyEpoch) {
+        if (!enabled || !drawerState.isOpen || !isResumed) {
+            level = 0f
+            inUseByOther = false
+            return@LaunchedEffect
+        }
+        var name = readySourceName
+        if (name == null) {
+            repeat(20) {
+                if (!isActive || !enabled) return@LaunchedEffect
+                val n = MicManager.getSourceName()
+                if (n != null) { name = n; return@repeat }
+                kotlinx.coroutines.delay(100)
+            }
+        }
+        if (name == null) return@LaunchedEffect
+
+        while (isActive) {
+            if (MicManager.countExternalRecorders() > 0) {
+                inUseByOther = true
+                level = 0f
+                kotlinx.coroutines.delay(1000)
+                continue
+            }
+            inUseByOther = false
+            val meterJob = launch { MicManager.levelFlow(name).collect { level = it } }
+            while (isActive && MicManager.countExternalRecorders() == 0) {
+                kotlinx.coroutines.delay(1000)
+            }
+            meterJob.cancel()
+            level = 0f
+            kotlinx.coroutines.delay(500)
+        }
     }
 
     DisposableEffect(Unit) {
@@ -149,21 +198,63 @@ fun MicSelectorSection(
             Switch(checked = enabled, onCheckedChange = { applyToggle(it) })
         }
 
-        // Only visible when enabled and idle — opens the VU monitor dialog
-        if (enabled && !loading) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
-                OutlinedButton(
-                    onClick = { showMonitor = true },
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+        if (enabled) {
+            Spacer(Modifier.height(4.dp))
+
+            if (loading) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(10.dp))
                     Text(
-                        stringResource(R.string.app_micsel_open_monitor),
-                        style = MaterialTheme.typography.bodySmall
+                        text = "Starting microphone…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                     )
                 }
+            } else if (inUseByOther) {
+                Text(
+                    text = "In use by another app",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                        .height(10.dp)
+                        .background(Color(0xFF1F1F1F), RoundedCornerShape(5.dp))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(level.coerceIn(0f, 1f))
+                            .background(
+                                color = when {
+                                    level > 0.8f -> Color(0xFFFF5252)
+                                    level > 0.4f -> Color(0xFFFFC107)
+                                    else         -> Color(0xFF4CAF50)
+                                },
+                                shape = RoundedCornerShape(5.dp)
+                            )
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.app_micsel_monitor_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                )
             }
         }
     }
@@ -186,113 +277,4 @@ fun MicSelectorSection(
             }
         )
     }
-
-    if (showMonitor) {
-        MicMixerDialog(onClose = { showMonitor = false })
-    }
-}
-
-@Composable
-private fun MicMixerDialog(onClose: () -> Unit) {
-    val context = LocalContext.current
-    var level by remember { mutableStateOf(0f) }
-    var status by remember {
-        mutableStateOf(context.getString(R.string.app_micsel_monitor_checking))
-    }
-    var inUseByOther by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        var name = MicManager.getSourceName()
-        if (name == null) {
-            // Give PA a moment if the source is still starting up
-            repeat(20) {
-                kotlinx.coroutines.delay(100)
-                name = MicManager.getSourceName()
-                if (name != null) return@repeat
-            }
-        }
-        if (name == null) {
-            status = context.getString(R.string.app_micsel_monitor_not_loaded)
-            return@LaunchedEffect
-        }
-        status = context.getString(R.string.app_micsel_monitor_live, name)
-
-        // Loop: run parec only while no external app is recording.
-        // Dialog is the ONLY place the VU runs — closing it kills parec,
-        // so Wine/RetroArch/etc always get the mic cleanly.
-        while (isActive) {
-            if (MicManager.countExternalRecorders() > 0) {
-                inUseByOther = true
-                level = 0f
-                kotlinx.coroutines.delay(1000)
-                continue
-            }
-            inUseByOther = false
-            val meterJob = launch {
-                MicManager.levelFlow(name).collect { level = it }
-            }
-            while (isActive && MicManager.countExternalRecorders() == 0) {
-                kotlinx.coroutines.delay(1000)
-            }
-            meterJob.cancel()
-            level = 0f
-            kotlinx.coroutines.delay(500)
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text(stringResource(R.string.app_micsel_monitor_title)) },
-        text = {
-            Column {
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-                Spacer(Modifier.height(12.dp))
-
-                if (inUseByOther) {
-                    Text(
-                        text = "In use by another app — VU paused to avoid interference",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(24.dp)
-                            .background(Color(0xFF1F1F1F), RoundedCornerShape(6.dp))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .fillMaxWidth(level.coerceIn(0f, 1f))
-                                .background(
-                                    color = when {
-                                        level > 0.8f -> Color(0xFFFF5252)
-                                        level > 0.4f -> Color(0xFFFFC107)
-                                        else         -> Color(0xFF4CAF50)
-                                    },
-                                    shape = RoundedCornerShape(6.dp)
-                                )
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.app_micsel_monitor_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onClose) {
-                Text(stringResource(R.string.app_micsel_close))
-            }
-        }
-    )
 }
