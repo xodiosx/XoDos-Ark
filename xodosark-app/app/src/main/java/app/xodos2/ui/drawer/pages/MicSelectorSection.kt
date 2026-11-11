@@ -69,6 +69,7 @@ fun MicSelectorSection(
         }
     }
 
+    // ── 1. startLoad — does NOT reference requestPerm, so it can go first ──
     fun startLoad(wantOn: Boolean) {
         hotApplyJob?.cancel()
         hotApplyJob = null
@@ -103,6 +104,18 @@ fun MicSelectorSection(
         }
     }
 
+    // ── 2. requestPerm — references startLoad (declared above) ✓ ──
+    val requestPerm = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            toastMsg = context.getString(R.string.app_micsel_toast_denied)
+            return@rememberLauncherForActivityResult
+        }
+        startLoad(pendingEnable)
+    }
+
+    // ── 3. applyToggle — references requestPerm (declared above) ✓ ──
     fun applyToggle(wantOn: Boolean) {
         pendingEnable = wantOn
         if (wantOn) {
@@ -117,30 +130,15 @@ fun MicSelectorSection(
         startLoad(wantOn)
     }
 
-    val requestPerm = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) {
-            toastMsg = context.getString(R.string.app_micsel_toast_denied)
-            return@rememberLauncherForActivityResult
-        }
-        startLoad(pendingEnable)
-    }
-
-    /**
-     * VU effect — keys are ONLY the things that actually change when the mic
-     * becomes ready. `loading` is deliberately excluded so a mid-flight toggle
-     * doesn't restart this. `readySourceName` is used directly (no re-query).
-     */
+    // ── Live VU ──
     LaunchedEffect(enabled, drawerState.isOpen, isResumed, readyEpoch) {
         if (!enabled || !drawerState.isOpen || !isResumed) {
             level = 0f
             return@LaunchedEffect
         }
-        // Cold-start case: no readySourceName (e.g. reload after ON_START),
-        // poll briefly for the source.
         var name = readySourceName
         if (name == null) {
+            // Cold start / ON_START reload — poll briefly for the source
             repeat(20) {
                 if (!isActive || !enabled) return@LaunchedEffect
                 val n = MicManager.getSourceName()
@@ -179,8 +177,6 @@ fun MicSelectorSection(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
             }
-            // NOTE: no `enabled = !loading` — flipping during load is fine,
-            //       and it cancels the previous hotApply cleanly.
             Switch(checked = enabled, onCheckedChange = { applyToggle(it) })
         }
 
