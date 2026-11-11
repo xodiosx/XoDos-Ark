@@ -49,18 +49,8 @@ object MicManager {
         return null
     }
 
-    /**
-     * Load (or verify) the mic source AND pin it as default AND return the
-     * resulting source name — all in ONE shell process.
-     *
-     * Old version: 3 × sh spawns ≈ 300 ms.
-     * This version: 1 × sh spawn  ≈ 100 ms.
-     */
     suspend fun hotApplyAndGetSource(enabled: Boolean): Pair<Boolean, String?> {
-        if (!enabled) {
-            safeUnload()
-            return true to null
-        }
+        if (!enabled) { safeUnload(); return true to null }
         val (exit, out) = sh(
             """
             if ! pactl list short sources 2>/dev/null | grep -q 'xodosark-mic'; then
@@ -71,20 +61,14 @@ object MicManager {
             """.trimIndent()
         )
         val name = out.lines()
-            .firstOrNull { it.contains(SOURCE_NAME) }
-            ?.split(Regex("\\s+"))?.getOrNull(1)
-            ?: out.lines()
-                .firstOrNull { it.contains("sles-source") }
+            .firstOrNull { it.contains(SOURCE_NAME) }?.split(Regex("\\s+"))?.getOrNull(1)
+            ?: out.lines().firstOrNull { it.contains("sles-source") }
                 ?.split(Regex("\\s+"))?.getOrNull(1)
         return (exit == 0) to name
     }
 
-    /** Compatibility wrapper used by AppScreen's ON_START reloader. */
-    suspend fun hotApply(enabled: Boolean): Boolean {
-        return hotApplyAndGetSource(enabled).first
-    }
+    suspend fun hotApply(enabled: Boolean): Boolean = hotApplyAndGetSource(enabled).first
 
-    /** Batched single-spawn unload. */
     suspend fun safeUnload() {
         sh(
             "for id in $(pactl list short modules 2>/dev/null | awk '/sles-source/ {print \$1}'); " +
@@ -92,7 +76,6 @@ object MicManager {
         )
     }
 
-    /** Best-effort pin — used at startup only. */
     suspend fun pinDefaultSource() {
         repeat(3) {
             val (exit, _) = sh("pactl set-default-source $SOURCE_NAME 2>/dev/null")
@@ -109,17 +92,44 @@ object MicManager {
         safeUnload()
     }
 
+    /**
+     * Counts source-outputs that are NOT our own parec instances.
+     *
+     * Used by the drawer VU to avoid running parec at the same time as Wine,
+     * ffmpeg, RetroArch, browsers, etc. Two concurrent readers on
+     * module-sles-source cause audible glitches on Android 10.
+     *
+     * Returns 0 when only our parec (or nothing) is reading.
+     */
+    suspend fun countExternalRecorders(): Int {
+        val (_, out) = sh("pactl list source-outputs 2>/dev/null")
+        if (out.isBlank()) return 0
+        // Each stream starts with "Source Output #N"; split and inspect
+        val blocks = out.split("Source Output #").drop(1)
+        return blocks.count { block ->
+            // parec's application.name is "parec"; anything else is external
+            !block.contains("application.name = \"parec\"")
+        }
+    }
+
+    /**
+     * Level flow — tuned to NOT disturb the shared mic stream.
+     *
+     * rate=16000 matches module-sles-source's native rate → no resampling.
+     * latency-msec=250 gives large buffer slack for the other clients.
+     * Reading 3200-byte chunks yields 0.1 s windows at 16 kHz mono s16.
+     */
     fun levelFlow(sourceName: String? = null): Flow<Float> = flow {
         val srcArg = sourceName?.let { "-d $it " } ?: ""
         val proc = ProcessBuilder(
             "/system/bin/sh", "-c",
-            "exec parec $srcArg--format=s16le --rate=8000 --channels=1 --latency-msec=100 2>/dev/null"
+            "exec parec $srcArg--format=s16le --rate=16000 --channels=1 --latency-msec=250 2>/dev/null"
         ).apply { environment().putAll(pactlEnv()) }
             .redirectErrorStream(false).start()
 
         try {
             val input = proc.inputStream
-            val buf = ByteArray(1600)
+            val buf = ByteArray(3200)          // 0.1 s at 16 kHz mono s16
             while (true) {
                 val n = input.read(buf)
                 if (n <= 0) break
