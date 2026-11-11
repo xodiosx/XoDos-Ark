@@ -268,7 +268,8 @@ DxvkSelectorSection(
     )
     
     MicSelectorSection(
-       drawerState = drawerState,+       onRestartRequested = onRestartRequested
+       drawerState = drawerState,
+      onRestartRequested = onRestartRequested
    )
     EnvSelectorSection(
     onExecuteCommand = onExecuteCommand,

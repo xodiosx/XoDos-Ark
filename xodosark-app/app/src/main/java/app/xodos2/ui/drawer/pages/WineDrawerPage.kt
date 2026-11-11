@@ -262,7 +262,8 @@ DesktopLaunchersSection(
         enabled = true
     )
     MicSelectorSection(
-       drawerState = drawerState,+       onRestartRequested = onRestartRequested
+       drawerState = drawerState,
+      onRestartRequested = onRestartRequested
    )
     EnvSelectorSection(
     onExecuteCommand = onExecuteCommand,
