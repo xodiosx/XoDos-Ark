@@ -328,7 +328,9 @@ DxvkSelectorSection(
         title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
-    MicSelectorSection(onRestartRequested = onRestartRequested)
+    MicSelectorSection(
+       drawerState = drawerState,+       onRestartRequested = onRestartRequested
+   )
    EnvSelectorSection(
     onExecuteCommand = onExecuteCommand,
     onRunWineDesktop = onRunWineDesktop  

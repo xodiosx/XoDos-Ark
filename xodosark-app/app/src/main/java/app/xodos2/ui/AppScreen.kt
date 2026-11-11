@@ -101,6 +101,9 @@ import app.xodos2.ui.glassDialogStyle
 import androidx.compose.ui.res.stringResource
 import app.xodos2.R
 import app.xodos2.ui.util.FitText
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")
 private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
@@ -273,6 +276,48 @@ var showExitDialog by remember { mutableStateOf(false) }
             LogcatLogger.stop()
         }
     }
+    
+    // ── Background mic-safety watcher ──
+// On ON_STOP, wait 5 s. If the app is still backgrounded and not in PIP,
+// unload the mic module (releases Android's AudioRecord → prevents the
+// "mic locked" state that required a reboot). If a real recording is
+// still running (Wine / ffmpeg), the unload is skipped so the user's
+// stream is not interrupted.
+val lifecycleOwner = LocalLifecycleOwner.current
+var pendingUnloadJob by remember { mutableStateOf<Job?>(null) }
+
+DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+        when (event) {
+            Lifecycle.Event.ON_START -> {
+                pendingUnloadJob?.cancel()
+                pendingUnloadJob = null
+                if (MicManager.isEnabled(context)) {
+                    scope.launch { MicManager.hotApply(true) }
+                }
+            }
+            Lifecycle.Event.ON_STOP -> {
+                pendingUnloadJob?.cancel()
+                pendingUnloadJob = scope.launch {
+                    delay(5_000)
+                    val inPip = (context as? Activity)?.isInPictureInPictureMode == true
+                    val backgrounded = !lifecycleOwner.lifecycle.currentState
+                        .isAtLeast(Lifecycle.State.STARTED)
+                    if (backgrounded && !inPip) {
+                        withContext(Dispatchers.IO) { MicManager.safeUnloadIfIdle() }
+                    }
+                }
+            }
+            else -> {}
+        }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose {
+        lifecycleOwner.lifecycle.removeObserver(observer)
+        pendingUnloadJob?.cancel()
+    }
+}
+// ── end mic-safety watcher ──
     LaunchedEffect(Unit) {
         val permission = Manifest.permission.WRITE_EXTERNAL_STORAGE
         if (ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) {

@@ -43,10 +43,6 @@ object MicManager {
         } catch (_: Exception) { -1 to "" }
     }
 
-    /**
-     * Returns the running PulseAudio source name for the mic, or null.
-     * No Context needed — this is a global query against `pactl`.
-     */
     suspend fun getSourceName(): String? {
         val (_, out) = sh("pactl list short sources 2>/dev/null")
         if (out.isEmpty()) return null
@@ -60,7 +56,6 @@ object MicManager {
         return null
     }
 
-    /** Best-effort hot-apply — loads/unloads the mic without restart. */
     suspend fun hotApply(enabled: Boolean): Boolean {
         return if (enabled) {
             if (getSourceName() != null) return true
@@ -72,11 +67,7 @@ object MicManager {
                 true
             } else false
         } else {
-            val (_, out) = sh("pactl list short modules 2>/dev/null")
-            val ids = out.lines()
-                .filter { it.contains("sles-source") }
-                .mapNotNull { it.trim().split(Regex("\\s+")).firstOrNull() }
-            for (id in ids) sh("pactl unload-module $id 2>/dev/null")
+            safeUnload()
             true
         }
     }
@@ -89,6 +80,37 @@ object MicManager {
         }
     }
 
+    /** Unloads every sles-source module. No-op if none is loaded. */
+    suspend fun safeUnload() {
+        val (_, out) = sh("pactl list short modules 2>/dev/null")
+        val ids = out.lines()
+            .filter { it.contains("sles-source") }
+            .mapNotNull { it.trim().split(Regex("\\s+")).firstOrNull() }
+        for (id in ids) sh("pactl unload-module $id 2>/dev/null")
+    }
+
+    /**
+     * Called from the 5-second background timer.
+     *
+     *  1. Kills any lingering VU `parec` (that's ours, safe to kill).
+     *  2. Waits 150 ms so PulseAudio updates its client list.
+     *  3. If a *real* recording stream still exists (Wine voice chat,
+     *     ffmpeg, RetroArch), leave the module loaded.
+     *  4. Otherwise unload — this releases Android's AudioRecord and is
+     *     the core of the mic-lock defence.
+     */
+    suspend fun safeUnloadIfIdle() {
+        sh("pkill -9 parec 2>/dev/null")
+        delay(150)
+        val (_, out) = sh("pactl list short source-outputs 2>/dev/null")
+        if (out.isNotBlank()) return
+        safeUnload()
+    }
+
+    /**
+     * Live VU level 0f..1f from `parec`.
+     * When cancelled, the child process is killed and AudioRecord is released.
+     */
     fun levelFlow(sourceName: String? = null): Flow<Float> = flow {
         val srcArg = sourceName?.let { "-d $it " } ?: ""
         val proc = ProcessBuilder(

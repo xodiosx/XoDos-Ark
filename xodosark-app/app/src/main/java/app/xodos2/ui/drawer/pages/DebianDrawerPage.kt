@@ -267,7 +267,9 @@ DxvkSelectorSection(
         enabled = true
     )
     
-    MicSelectorSection(onRestartRequested = onRestartRequested)
+    MicSelectorSection(
+       drawerState = drawerState,+       onRestartRequested = onRestartRequested
+   )
     EnvSelectorSection(
     onExecuteCommand = onExecuteCommand,
     onRunWineDesktop = onRunWineDesktop  

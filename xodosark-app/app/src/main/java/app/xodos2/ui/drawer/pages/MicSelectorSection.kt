@@ -1,6 +1,9 @@
 package app.xodos2.ui.drawer.pages
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,29 +17,57 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import app.xodos2.R
 import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.runtime.MicManager
 import kotlinx.coroutines.launch
 
+private fun Context.findActivity(): Activity? {
+    var ctx: Context? = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return ctx as? Activity
+}
+
 @Composable
 fun MicSelectorSection(
+    drawerState: DrawerState,
     onRestartRequested: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // VU depends on lifecycle state so it stops when the app is backgrounded
+    var isResumed by remember {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED)
+    }
+    DisposableEffect(lifecycleOwner) {
+        val obs = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> isResumed = true
+                Lifecycle.Event.ON_PAUSE  -> isResumed = false
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
 
     var enabled by remember { mutableStateOf(MicManager.isEnabled(context)) }
-    var showMixer by remember { mutableStateOf(false) }
     var restartReason by remember { mutableStateOf<String?>(null) }
     var toastMsg by remember { mutableStateOf<String?>(null) }
     var pendingEnable by remember { mutableStateOf(false) }
 
-    // Real toast so it's visible even if the drawer closes
     LaunchedEffect(toastMsg) {
         toastMsg?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
@@ -98,11 +129,21 @@ fun MicSelectorSection(
         }
     }
 
+    // ── Live VU — only while section is composed, drawer is open, and app is resumed
+    var level by remember { mutableStateOf(0f) }
+    LaunchedEffect(enabled, drawerState.isOpen, isResumed) {
+        if (!enabled || !drawerState.isOpen || !isResumed) {
+            level = 0f
+            return@LaunchedEffect
+        }
+        val name = MicManager.getSourceName() ?: return@LaunchedEffect
+        MicManager.levelFlow(name).collect { level = it }
+    }
+
     DrawerExpandableSection(
         title = stringResource(R.string.app_micsel_title),
         defaultExpanded = false
     ) {
-
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -125,15 +166,36 @@ fun MicSelectorSection(
             Switch(checked = enabled, onCheckedChange = { applyToggle(it) })
         }
 
+        // ── Inline VU bar (visible only when enabled) ──
         if (enabled) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.End
+            Spacer(Modifier.height(4.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp)
+                    .height(10.dp)
+                    .background(Color(0xFF1F1F1F), RoundedCornerShape(5.dp))
             ) {
-                OutlinedButton(onClick = { showMixer = true }) {
-                    Text(stringResource(R.string.app_micsel_open_monitor))
-                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(level.coerceIn(0f, 1f))
+                        .background(
+                            color = when {
+                                level > 0.8f -> Color(0xFFFF5252)
+                                level > 0.4f -> Color(0xFFFFC107)
+                                else         -> Color(0xFF4CAF50)
+                            },
+                            shape = RoundedCornerShape(5.dp)
+                        )
+                )
             }
+            Text(
+                text = stringResource(R.string.app_micsel_monitor_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            )
         }
     }
 
@@ -156,75 +218,4 @@ fun MicSelectorSection(
             }
         )
     }
-
-    // ── Mixer dialog ──
-    if (showMixer) {
-        MicMixerDialog(onClose = { showMixer = false })
-    }
-}
-
-@Composable
-private fun MicMixerDialog(onClose: () -> Unit) {
-    val context = LocalContext.current
-    var level by remember { mutableStateOf(0f) }
-    var status by remember {
-        mutableStateOf(context.getString(R.string.app_micsel_monitor_checking))
-    }
-
-    LaunchedEffect(Unit) {
-        val name = MicManager.getSourceName()
-        if (name == null) {
-            status = context.getString(R.string.app_micsel_monitor_not_loaded)
-            return@LaunchedEffect
-        }
-        status = context.getString(R.string.app_micsel_monitor_live, name)
-        MicManager.pinDefaultSource()
-        MicManager.levelFlow(name).collect { level = it }
-    }
-
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text(stringResource(R.string.app_micsel_monitor_title)) },
-        text = {
-            Column {
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
-                Spacer(Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(24.dp)
-                        .background(Color(0xFF1F1F1F), RoundedCornerShape(6.dp))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(level.coerceIn(0f, 1f))
-                            .background(
-                                color = when {
-                                    level > 0.8f -> Color(0xFFFF5252)
-                                    level > 0.4f -> Color(0xFFFFC107)
-                                    else         -> Color(0xFF4CAF50)
-                                },
-                                shape = RoundedCornerShape(6.dp)
-                            )
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.app_micsel_monitor_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onClose) {
-                Text(stringResource(R.string.app_micsel_close))
-            }
-        }
-    )
 }
