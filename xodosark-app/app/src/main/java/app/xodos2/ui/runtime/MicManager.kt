@@ -72,15 +72,20 @@ object MicManager {
         }
     }
 
+    /**
+     * Pin the mic as PulseAudio's default source.
+     * Max wait: 3 tries × (100 ms delay + ~50 ms sh) = ~450 ms worst case,
+     * ~50 ms typical (first try succeeds).
+     */
     suspend fun pinDefaultSource() {
-        repeat(8) {
+        repeat(3) {
             val (exit, _) = sh("pactl set-default-source $SOURCE_NAME 2>/dev/null")
             if (exit == 0) return
-            delay(300)
+            delay(100)
         }
     }
 
-    /** Unloads every sles-source module. No-op if none is loaded. */
+    /** Unload every sles-source module. No-op if none is loaded. */
     suspend fun safeUnload() {
         val (_, out) = sh("pactl list short modules 2>/dev/null")
         val ids = out.lines()
@@ -89,16 +94,7 @@ object MicManager {
         for (id in ids) sh("pactl unload-module $id 2>/dev/null")
     }
 
-    /**
-     * Called from the 5-second background timer.
-     *
-     *  1. Kills any lingering VU `parec` (that's ours, safe to kill).
-     *  2. Waits 150 ms so PulseAudio updates its client list.
-     *  3. If a *real* recording stream still exists (Wine voice chat,
-     *     ffmpeg, RetroArch), leave the module loaded.
-     *  4. Otherwise unload — this releases Android's AudioRecord and is
-     *     the core of the mic-lock defence.
-     */
+    /** Background-safe unload — used by the 5 s watcher in AppScreen. */
     suspend fun safeUnloadIfIdle() {
         sh("pkill -9 parec 2>/dev/null")
         delay(150)
@@ -107,10 +103,6 @@ object MicManager {
         safeUnload()
     }
 
-    /**
-     * Live VU level 0f..1f from `parec`.
-     * When cancelled, the child process is killed and AudioRecord is released.
-     */
     fun levelFlow(sourceName: String? = null): Flow<Float> = flow {
         val srcArg = sourceName?.let { "-d $it " } ?: ""
         val proc = ProcessBuilder(

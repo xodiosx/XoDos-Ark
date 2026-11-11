@@ -1,9 +1,6 @@
 package app.xodos2.ui.drawer.pages
 
 import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,15 +26,6 @@ import app.xodos2.ui.drawer.menu.DrawerExpandableSection
 import app.xodos2.ui.runtime.MicManager
 import kotlinx.coroutines.launch
 
-private fun Context.findActivity(): Activity? {
-    var ctx: Context? = this
-    while (ctx is ContextWrapper) {
-        if (ctx is Activity) return ctx
-        ctx = ctx.baseContext
-    }
-    return ctx as? Activity
-}
-
 @Composable
 fun MicSelectorSection(
     drawerState: DrawerState,
@@ -47,7 +35,6 @@ fun MicSelectorSection(
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    // VU depends on lifecycle state so it stops when the app is backgrounded
     var isResumed by remember {
         mutableStateOf(lifecycleOwner.lifecycle.currentState == Lifecycle.State.RESUMED)
     }
@@ -82,10 +69,11 @@ fun MicSelectorSection(
             toastMsg = context.getString(R.string.app_micsel_toast_denied)
             return@rememberLauncherForActivityResult
         }
+        // Permission granted — apply the pending toggle with the same optimistic flow
+        enabled = pendingEnable
+        MicManager.setEnabled(context, pendingEnable)
         scope.launch {
-            MicManager.setEnabled(context, pendingEnable)
             val hot = MicManager.hotApply(pendingEnable)
-            enabled = pendingEnable
             if (hot) {
                 toastMsg = context.getString(
                     if (pendingEnable) R.string.app_micsel_toast_enabled
@@ -111,16 +99,21 @@ fun MicSelectorSection(
                 return
             }
         }
+
+        // ── IMMEDIATE UI feedback — switch flips before shell work starts ──
+        enabled = wantOn
+        MicManager.setEnabled(context, wantOn)
+
+        // ── Work happens in the background — never blocks the switch ──
         scope.launch {
-            MicManager.setEnabled(context, wantOn)
             val hot = MicManager.hotApply(wantOn)
-            enabled = wantOn
             if (hot) {
                 toastMsg = context.getString(
                     if (wantOn) R.string.app_micsel_toast_enabled
                     else        R.string.app_micsel_toast_disabled
                 )
             } else {
+                // Only when load-module genuinely failed
                 restartReason = context.getString(
                     if (wantOn) R.string.app_micsel_restart_enable_reason
                     else        R.string.app_micsel_restart_disable_reason
@@ -129,7 +122,7 @@ fun MicSelectorSection(
         }
     }
 
-    // ── Live VU — only while section is composed, drawer is open, and app is resumed
+    // Live VU — only while section is composed, drawer open, app resumed
     var level by remember { mutableStateOf(0f) }
     LaunchedEffect(enabled, drawerState.isOpen, isResumed) {
         if (!enabled || !drawerState.isOpen || !isResumed) {
@@ -166,7 +159,6 @@ fun MicSelectorSection(
             Switch(checked = enabled, onCheckedChange = { applyToggle(it) })
         }
 
-        // ── Inline VU bar (visible only when enabled) ──
         if (enabled) {
             Spacer(Modifier.height(4.dp))
             Box(
@@ -199,7 +191,6 @@ fun MicSelectorSection(
         }
     }
 
-    // ── Restart dialog ──
     restartReason?.let { reason ->
         AlertDialog(
             onDismissRequest = { restartReason = null },
