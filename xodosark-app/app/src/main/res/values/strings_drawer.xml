@@ -37,4 +37,16 @@
 <string name="app_micsel_monitor_live">Live · %1$s</string>
 <string name="app_micsel_monitor_hint">Speak into the mic — the bar should move</string>
 <string name="app_micsel_close">Close</string>
+
+
+<!-- ISO Manager -->
+<string name="app_isosel_title">ISO Manager</string>
+<string name="app_isosel_manage">Manage ISO / CD…</string>
+<string name="app_isosel_dialog_title">ISO / CD Manager</string>
+<string name="app_isosel_no_iso">No ISO mounted</string>
+<string name="app_isosel_mount">Mount ISO…</string>
+<string name="app_isosel_unmount">Unmount</string>
+<string name="app_isosel_explore">Explore with WFM</string>
+<string name="app_isosel_close">Close</string>
+<string name="app_isosel_wfm_launched">WFM launched — check the Wine desktop</string>
 </resources>

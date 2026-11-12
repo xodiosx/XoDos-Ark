@@ -365,7 +365,16 @@ if grep -q 'virpipe' "$CFG"; then
 else
     rm -rf "${PREFIX}/opt/virgl/virgl-enabled"
 fi
-
+# =====================================================================
+#  Ensure X: (CD-ROM) drive exists — safe on every launch
+#  Mirrors Winlator's createDosdevicesSymlinks(container, true)
+# =====================================================================
+mkdir -p "$WINEPREFIX/drive_x"
+echo "00000058" > "$WINEPREFIX/drive_x/.windows-serial"
+ln -sfn $WINEPREFIX/drive_x "$WINEPREFIX/dosdevices/x:"
+$PREFIX/opt/winece/arm64-v8a/bin/wine reg add \
+    'HKEY_LOCAL_MACHINE\Software\Wine\Drives' \
+    /v 'x:' /t REG_SZ /d 'cdrom' /f 2>/dev/null || true
 # =====================================================================
 #  Input bridge
 # =====================================================================
