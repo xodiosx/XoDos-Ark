@@ -6,7 +6,6 @@ import app.xodos2.ui.drawer.pages.DrawerFooterActions
 import app.xodos2.ui.drawer.pages.HudSelectorSection
 import app.xodos2.ui.drawer.pages.ThemeSelectorSection
 import app.xodos2.ui.drawer.pages.EnvSelectorSection
-import app.xodos2.ui.drawer.pages.IsoSelectorSection
 import app.xodos2.ui.drawer.pages.MicSelectorSection
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
@@ -277,7 +276,6 @@ DxvkSelectorSection(
     onRunWineDesktop = onRunWineDesktop  
 )
     ThemeSelectorSection()
-    IsoSelectorSection()    
     
     HudSelectorSection(
         title = "HUD"
