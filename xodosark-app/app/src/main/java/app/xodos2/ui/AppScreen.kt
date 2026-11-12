@@ -1579,6 +1579,8 @@ fun downloadFullDesktopGUIArchive() {
     // ----- native init and container check -----
 LaunchedEffect(Unit) {
     AppLogger.log("Starting native init and asset sync")
+    //  clean mic
+    MicManager.startupCleanup()
 for (id in 1..3) {
         val opts = NativeInstallCoordinator.loadProotOptions(context, id)
         NativeInstallCoordinator.saveProotOptions(context, id, opts)

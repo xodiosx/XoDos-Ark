@@ -38,6 +38,26 @@ object MicManager {
         } catch (_: Exception) { -1 to "" }
     }
 
+    // ── Startup defense ──────────────────────────────────────────────────
+    /**
+     * Called at app start, BEFORE NativeBridge.init() → Rust → PA spawn.
+     *
+     * Any PulseAudio alive at this point is an orphan from a previous crash
+     * (a healthy PA never survives a clean app exit). Killing it releases
+     * Android's AudioRecord handle *before* Rust spawns a fresh PA, which
+     * prevents the "mic locked until reboot" state.
+     *
+     * No-op when there's no PA running → zero cold-start cost.
+     */
+    suspend fun startupCleanup() {
+        val (alive, _) = sh("pgrep -x pulseaudio 2>/dev/null")
+        if (alive == 0) {
+            sh("pkill -9 -x pulseaudio 2>/dev/null")
+            delay(500)
+        }
+    }
+
+    // ── Source discovery ─────────────────────────────────────────────────
     suspend fun getSourceName(): String? {
         val (_, out) = sh("pactl list short sources 2>/dev/null")
         if (out.isEmpty()) return null
@@ -49,12 +69,20 @@ object MicManager {
         return null
     }
 
+    // ── Hot apply / unload ──────────────────────────────────────────────
+    /**
+     * Loads the mic source and pins it as default.
+     * 48 kHz preferred (native Android rate), 16 kHz fallback for ROMs that
+     * reject 48 kHz (verified on Android 10: 16 kHz always works).
+     */
     suspend fun hotApplyAndGetSource(enabled: Boolean): Pair<Boolean, String?> {
         if (!enabled) { safeUnload(); return true to null }
         val (exit, out) = sh(
             """
             if ! pactl list short sources 2>/dev/null | grep -q 'xodosark-mic'; then
-                pactl load-module module-sles-source rate=48000 channels=1 source_name=xodosark-mic >/dev/null 2>&1 || exit 1
+                pactl load-module module-sles-source rate=48000 channels=1 source_name=xodosark-mic >/dev/null 2>&1 || \
+                pactl load-module module-sles-source rate=16000 channels=1 source_name=xodosark-mic >/dev/null 2>&1 || \
+                exit 1
             fi
             pactl set-default-source xodosark-mic >/dev/null 2>&1 || true
             pactl list short sources 2>/dev/null
@@ -84,17 +112,31 @@ object MicManager {
         }
     }
 
+    /**
+     * Idle unload used by the ON_STOP watchdog.
+     *
+     * 1. Kills our own `parec` (VU meter) so it doesn't count as a client.
+     * 2. If any non-parec source-output still exists, someone is recording →
+     *    don't unload, so their stream isn't interrupted.
+     * 3. Otherwise unload the mic module → releases Android's AudioRecord.
+     */
     suspend fun safeUnloadIfIdle() {
         sh("pkill -9 parec 2>/dev/null")
         delay(150)
-        val (_, out) = sh("pactl list short source-outputs 2>/dev/null")
-        if (out.isNotBlank()) return
+        if (countExternalRecorders() > 0) return
         safeUnload()
     }
 
-    /** Counts source-outputs that are NOT our own parec. */
+    /**
+     * Counts source-outputs that are NOT our own `parec` (VU meter).
+     *
+     * Must use **verbose** output — `pactl list short source-outputs` emits
+     * one tab-separated line per entry with no headers and no
+     * `application.name` property, so the previous split-by-"Source Output #"
+     * approach silently returned 0 and never worked.
+     */
     suspend fun countExternalRecorders(): Int {
-        val (_, out) = sh("pactl list short source-outputs 2>/dev/null")
+        val (_, out) = sh("pactl list source-outputs 2>/dev/null")
         if (out.isBlank()) return 0
         val blocks = out.split("Source Output #").drop(1)
         return blocks.count { block ->
@@ -102,10 +144,7 @@ object MicManager {
         }
     }
 
-    /**
-     * Level flow at native 48 kHz — no resampling.
-     * Larger latency buffer so it can't starve any concurrent reader.
-     */
+    // ── VU level ─────────────────────────────────────────────────────────
     fun levelFlow(sourceName: String? = null): Flow<Float> = flow {
         val srcArg = sourceName?.let { "-d $it " } ?: ""
         val proc = ProcessBuilder(
