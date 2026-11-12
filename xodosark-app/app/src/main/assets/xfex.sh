@@ -369,12 +369,18 @@ fi
 #  Ensure X: (CD-ROM) drive exists — safe on every launch
 #  Mirrors Winlator's createDosdevicesSymlinks(container, true)
 # =====================================================================
+# Create X: drive
 mkdir -p "$WINEPREFIX/drive_x"
-echo "00000058" > "$WINEPREFIX/drive_x/.windows-serial"
-ln -sfn $WINEPREFIX/drive_x "$WINEPREFIX/dosdevices/x:"
-$PREFIX/opt/winece/arm64-v8a/bin/wine reg add \
-    'HKEY_LOCAL_MACHINE\Software\Wine\Drives' \
-    /v 'x:' /t REG_SZ /d 'cdrom' /f 2>/dev/null || true
+chmod 771 "$WINEPREFIX/drive_x"
+
+# Write the correct serial (X in little-endian hex)
+echo "58000000" > "$WINEPREFIX/drive_x/.windows-serial"
+
+# Create RELATIVE symlink
+ln -sfn ../drive_x "$WINEPREFIX/dosdevices/x:"
+
+# Force CD-ROM registry
+$PREFIX/opt/winece/arm64-v8a/bin/wine reg add 'HKEY_LOCAL_MACHINE\Software\Wine\Drives' /v 'x:' /t REG_SZ /d 'cdrom' /f 2>/dev/null
 # =====================================================================
 #  Input bridge
 # =====================================================================

@@ -119,7 +119,7 @@ private val WINE_NATIVE_DEPENDENCIES = listOf(
     "openssl", "openal-soft", "gstreamer", "virglrenderer-venus",
     "angle-android", "pulseaudio", "libsndfile", "alsa-lib", "libevdev",
     "mesa-vulkan-icd-freedreno", "vulkan-loader-generic", "sdl2", "libntsync-android",
-    "vulkan-wrapper", "malig57-vulkan-panvcake", "mesa-vulkan-icd-virtio-dri3"
+    "vulkan-wrapper", "malig57-vulkan-panvcake", "mesa-vulkan-icd-virtio-dri3", "gst-plugins-base", "gst-plugins-good", "gst-plugins-bad", "gst-plugins-ugly", "gst-libav"
 )
 
 private const val X11_MODE_LABEL_NATIVE = "Native"
