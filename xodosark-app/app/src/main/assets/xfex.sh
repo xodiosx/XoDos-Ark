@@ -203,8 +203,20 @@ for DIR in "$WINE_APP" "$WINE_XOD"; do
 done
 	rm -rf "$WINEPREFIX/dosdevices/z:"
 	ln -sf /data/data/app.xodos2/files "$WINEPREFIX/dosdevices/z:"
-	ln -sf /sdcard/Download "$WINEPREFIX/dosdevices/d:"
-	ln -sf /sdcard/Android/data/app.xodos2/files/Download "$WINEPREFIX/dosdevices/e:"
+	ln -sf /sdcard//home/USB_STORAGE "$WINEPREFIX/dosdevices/d:"
+	ln -sf /sdcard/Android/data/app.xodos2/files//home/USB_STORAGE "$WINEPREFIX/dosdevices/e:"
+	
+	mkdir -p "$WINEPREFIX/drive_x"
+# Write the correct serial (X in little-endian hex)
+echo "58000000" > "$WINEPREFIX/drive_x/.windows-serial"
+
+chmod 771 "$WINEPREFIX/drive_x"
+
+# Create RELATIVE symlink
+ln -sfn ../drive_x "$WINEPREFIX/dosdevices/x:"
+
+# Force CD-ROM registry
+$PREFIX/opt/winece/arm64-v8a/bin/wine reg add 'HKEY_LOCAL_MACHINE\Software\Wine\Drives' /v 'x:' /t REG_SZ /d 'cdrom' /f 2>/dev/null
 	echo "Installing registry tweaks"
 	cp $PREFIX/opt/prefix/marlett.ttf $WINEPREFIX/drive_c/windows/Fonts
 	$PREFIX/opt/winece/arm64-v8a/bin/wine regedit $PREFIX/opt/prefix/user.reg
@@ -301,36 +313,6 @@ source $CONFIG_FILE
 # =====================================================================
 #  Adrenotools branch
 # =====================================================================
-if [ "$adrenotool" -eq "1" ]; then
-  echo " Useing bionic adreno tools"
-
-  
-  export ADRENOTOOLS_HOOKS_PATH="$PREFIX/lib"
-  export VK_ICD_FILENAMES=$PREFIX/share/vulkan/icd.d/wrapper_icd.aarch64.json
-  
-
-  JSON_FILE="/data/data/app.xodos2/files/usr/drivers/meta.json"
-  if command -v jq &> /dev/null; then
-      LIBRARY_NAME=$(jq -r '.libraryName' "$JSON_FILE")
-  else
-      LIBRARY_NAME=$(grep 'libraryName' "$JSON_FILE" | awk -F'"' '{print $4}')
-  fi
-  export ADRENOTOOLS_DRIVER_NAME="$LIBRARY_NAME"
-  echo "ADRENOTOOLS_DRIVER_NAME is set to: $ADRENOTOOLS_DRIVER_NAME"
-
-  export ADRENOTOOLS_DRIVER_PATH="$PREFIX/drivers"
-  export ADRENOTOOLS_HOOKS_PATH="$PREFIX/lib"
-  export VK_ICD_FILENAMES="$PREFIX/share/vulkan/icd.d/wrapper_icd.aarch64.json"
- 
-  export VK_LOADER_DEBUG=all
-
-
-  echo "${ADRENOTOOLS_DRIVER_NAME}"
-  echo $ADRENOTOOLS_DRIVER_PATH
-  echo $ADRENOTOOLS_HOOKS_PATH
-  echo $ADRENOTOOLS_DRIVER_CUSTOM
-  export WINEFSYNC=0
-fi
 
 # =====================================================================
 #  Virtio / Virpipe branches
@@ -371,16 +353,17 @@ fi
 # =====================================================================
 # Create X: drive
 mkdir -p "$WINEPREFIX/drive_x"
-chmod 771 "$WINEPREFIX/drive_x"
-
 # Write the correct serial (X in little-endian hex)
 echo "58000000" > "$WINEPREFIX/drive_x/.windows-serial"
+
+chmod 771 "$WINEPREFIX/drive_x"
 
 # Create RELATIVE symlink
 ln -sfn ../drive_x "$WINEPREFIX/dosdevices/x:"
 
 # Force CD-ROM registry
 $PREFIX/opt/winece/arm64-v8a/bin/wine reg add 'HKEY_LOCAL_MACHINE\Software\Wine\Drives' /v 'x:' /t REG_SZ /d 'cdrom' /f 2>/dev/null
+
 # =====================================================================
 #  Input bridge
 # =====================================================================
