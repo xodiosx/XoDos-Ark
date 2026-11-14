@@ -433,7 +433,7 @@ fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): String {
 
     when (vulkan) {
       "NONE" -> {
-        b.append("unset TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG LIBGL_ALWAYS_SOFTWARE || true\n")
+        sb.append("unset TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG LIBGL_ALWAYS_SOFTWARE || true\n")
     }
         "VENUS" -> {
             sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
