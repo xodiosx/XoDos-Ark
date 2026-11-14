@@ -39,14 +39,36 @@
 <string name="app_micsel_close">Close</string>
 
 
-<!-- ISO Manager -->
-<string name="app_isosel_title">ISO Manager</string>
-<string name="app_isosel_manage">Manage ISO / CD…</string>
-<string name="app_isosel_dialog_title">ISO / CD Manager</string>
-<string name="app_isosel_no_iso">No ISO mounted</string>
-<string name="app_isosel_mount">Mount ISO…</string>
-<string name="app_isosel_unmount">Unmount</string>
-<string name="app_isosel_explore">Explore with WFM</string>
-<string name="app_isosel_close">Close</string>
-<string name="app_isosel_wfm_launched">WFM launched — check the Wine desktop</string>
+<!-- ═══════════ Winetricks selector ═══════════ -->
+<string name="app_winetricks_section_title">Winetricks</string>
+<string name="app_winetricks_open_button">Open Winetricks</string>
+<string name="app_winetricks_preparing">Preparing winetricks…</string>
+<string name="app_winetricks_source_missing">winetricks source not found in usr/opt</string>
+<string name="app_winetricks_source_missing_hint">Place the winetricks script at usr/opt/winetricks (or .sh) and reopen.</string>
+<string name="app_winetricks_description">Install Windows components (DLLs, fonts, apps) via winetricks.\nCommands run in the active terminal session.</string>
+<string name="app_winetricks_dialog_title">Winetricks</string>
+<string name="app_winetricks_refresh_desc">Update verb list</string>
+<string name="app_winetricks_fetching">Fetching winetricks verb list…</string>
+<string name="app_winetricks_fetching_hint">This can take 10–20 seconds</string>
+<string name="app_winetricks_search_hint">Search verbs…</string>
+<string name="app_winetricks_category_label">Category: %1$s</string>
+<string name="app_winetricks_category_all">All</string>
+<string name="app_winetricks_category_all_with_count">All (%1$d)</string>
+<string name="app_winetricks_category_with_count">%1$s (%2$d)</string>
+<string name="app_winetricks_count">%1$d of %2$d</string>
+<string name="app_winetricks_no_matches">No matches</string>
+<string name="app_winetricks_close">Close</string>
+<string name="app_winetricks_please_wait">Please wait…</string>
+<string name="app_winetricks_built_in_list">Built-in list — tap refresh to fetch latest</string>
+<string name="app_winetricks_updated_just_now">Updated just now</string>
+<string name="app_winetricks_updated_minutes_ago">Updated %1$d min ago</string>
+<string name="app_winetricks_updated_hours_ago">Updated %1$d h ago</string>
+<string name="app_winetricks_updated_days_ago">Updated %1$d d ago</string>
+<string name="app_winetricks_update_success">Verb list updated (%1$d verbs)</string>
+<string name="app_winetricks_update_failed">Update failed: %1$s</string>
+<string name="app_winetricks_cat_apps">Apps</string>
+<string name="app_winetricks_cat_benchmarks">Benchmarks</string>
+<string name="app_winetricks_cat_dlls">DLLs</string>
+<string name="app_winetricks_cat_fonts">Fonts</string>
+<string name="app_winetricks_cat_settings">Settings</string>
 </resources>

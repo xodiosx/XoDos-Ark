@@ -6,6 +6,7 @@ import app.xodos2.ui.drawer.pages.DrawerFooterActions
 import app.xodos2.ui.drawer.pages.HudSelectorSection
 import app.xodos2.ui.drawer.pages.ThemeSelectorSection
 import app.xodos2.ui.drawer.pages.EnvSelectorSection
+import app.xodos2.ui.drawer.pages.WinetricksSelectorSection
 import app.xodos2.ui.drawer.pages.MicSelectorSection
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
@@ -260,17 +261,20 @@ ProotOptionsSection(
     prefs = prefs,
     containerId = 2
 )
-
+MicSelectorSection(
+       drawerState = drawerState,
+      onRestartRequested = onRestartRequested
+   )
+   WinetricksSelectorSection(
+    onExecuteCommand = onExecuteCommand
+)
 DxvkSelectorSection(
         category = "d3d",
         title = stringResource(R.string.appscreen_d3d_components_dxvk),
         enabled = true
     )
     
-    MicSelectorSection(
-       drawerState = drawerState,
-      onRestartRequested = onRestartRequested
-   )
+    
     EnvSelectorSection(
     onExecuteCommand = onExecuteCommand,
     onRunWineDesktop = onRunWineDesktop  
