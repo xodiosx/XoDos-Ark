@@ -26,12 +26,12 @@
             android:summary="@string/gamepad_sdlEnabled_summary_on"
             android:defaultValue="true"/>
 
-        <SwitchPreferenceCompat
+      <!--   <SwitchPreferenceCompat
             android:key="gamepadForwardX11"
             android:title="@string/gamepad_forwardX11_title"
             android:summary="@string/gamepad_forwardX11_summary"
             android:defaultValue="true"
-            android:dependency="gamepadSdlEnabled"/>
+            android:dependency="gamepadSdlEnabled"/> -->
 
         <EditTextPreference
             android:key="gamepadHost"

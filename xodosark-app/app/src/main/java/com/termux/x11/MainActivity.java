@@ -566,16 +566,15 @@ private void maybeReloadGamepad(LorieView lorieView) {
             Log.d("MainActivity", "Slider released: " + open);
         }
 
-        @Override
-        public void onChangeOrientation(int orientation) {
-            // Set orientation for MainActivity
-            setRequestedOrientation(orientation);
-            
-            // Also update the LorieView if connected
-            if (getLorieView() != null) {
-                getLorieView().regenerate();
-            }
-        }
+       @Override
+public void onChangeOrientation(int requestedOrientation) {
+
+    if (getRequestedOrientation() != requestedOrientation) {
+        setRequestedOrientation(requestedOrientation);
+    }
+    LorieView v = getLorieView();
+    if (v != null) v.regenerate();
+}
 
         @Override
         public void reInstallX11StartScript(Activity activity) {
@@ -1754,18 +1753,20 @@ app.xodos2.X11Runtime.INSTANCE.setLorieInputRouteTopVisible(false);
 }
 
     @Override
-    public void onResume() {
-        super.onResume();
-        app.xodos2.X11Runtime.INSTANCE.setLorieInputRouteTopVisible(true);
-     //  mNotification = buildNotification();
-     //   mNotificationManager.notify(mNotificationId, mNotification);
-isResumed = true;
+public void onResume() {
+    super.onResume();
+    app.xodos2.X11Runtime.INSTANCE.setLorieInputRouteTopVisible(true);
+    isResumed = true;
     if (isBound && hudService != null) {
         hudService.attachToActivity(this);
     }
-        setTerminalToolbarView();
-        getLorieView().requestFocus();
-    }
+
+
+    applyWindowSettings();
+
+    setTerminalToolbarView();
+    getLorieView().requestFocus();
+}
 
         @Override
     public void onPause() {
@@ -1910,32 +1911,30 @@ protected boolean isSettingsActivity() {
         int orientation, densityDpi; 
 
     @Override
-    public void onConfigurationChanged(@NonNull Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
+public void onConfigurationChanged(@NonNull Configuration newConfig) {
+    super.onConfigurationChanged(newConfig);
 
-        if (newConfig.orientation != orientation)
-            inputMethodManager.hideSoftInputFromWindow(getWindow().getDecorView().getRootView().getWindowToken(), 0);
-            if (newConfig.densityDpi != densityDpi)
-            orientationDeniedAt = null;
-            
-
-        orientation = newConfig.orientation;
-        densityDpi = newConfig.densityDpi;
-        applyWindowSettings();
-                if (termuxActivityListener != null) {
-            SharedPreferences p = PreferenceManager.getDefaultSharedPreferences(this);
-            boolean forceLandscape = p.getBoolean("forceLandscape", false);
-            if (!forceLandscape) {
-                termuxActivityListener.onChangeOrientation(newConfig.orientation);
-            } else {
-                termuxActivityListener.onChangeOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-            }
-            handler.postDelayed(() -> {
-                getLorieView().regenerate();
-            }, 1000);
-        }
-        setTerminalToolbarView();
+    if (newConfig.orientation != orientation) {
+        inputMethodManager.hideSoftInputFromWindow(
+                getWindow().getDecorView().getRootView().getWindowToken(), 0);
+        orientationDeniedAt = null;
     }
+    if (newConfig.densityDpi != densityDpi) {
+        orientationDeniedAt = null;
+    }
+
+    orientation = newConfig.orientation;
+    densityDpi  = newConfig.densityDpi;
+
+
+    applyWindowSettings();
+    setTerminalToolbarView();
+
+    handler.postDelayed(() -> {
+        LorieView v = getLorieView();
+        if (v != null) v.regenerate();
+    }, 300);
+}
 
     @SuppressLint("WrongConstant")
     @Override
