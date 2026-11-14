@@ -31,4 +31,36 @@
 <string name="app_micsel_monitor_live">Live · %1$s</string>
 <string name="app_micsel_monitor_hint">Mic mein bolein — bar move honi chahiye</string>
 <string name="app_micsel_close">Close</string>
+
+<string name="app_winetricks_section_title">Winetricks</string>
+<string name="app_winetricks_open_button">Winetricks kholein</string>
+<string name="app_winetricks_preparing">winetricks prepare ho raha hai…</string>
+<string name="app_winetricks_source_missing">usr/opt mein winetricks source nahi mila</string>
+<string name="app_winetricks_source_missing_hint">winetricks script ko usr/opt/winetricks (ya .sh) par rakhein aur dobara kholein.</string>
+<string name="app_winetricks_description">winetricks ke through Windows components (DLLs, fonts, apps) install karein.\nCommands active terminal session mein chalte hain.</string>
+<string name="app_winetricks_dialog_title">Winetricks</string>
+<string name="app_winetricks_refresh_desc">Verb list update karein</string>
+<string name="app_winetricks_fetching">winetricks verb list fetch ho rahi hai…</string>
+<string name="app_winetricks_fetching_hint">Isme 10–20 seconds lag sakte hain</string>
+<string name="app_winetricks_search_hint">Verbs search karein…</string>
+<string name="app_winetricks_category_label">Category: %1$s</string>
+<string name="app_winetricks_category_all">Sab</string>
+<string name="app_winetricks_category_all_with_count">Sab (%1$d)</string>
+<string name="app_winetricks_category_with_count">%1$s (%2$d)</string>
+<string name="app_winetricks_count">%1$d / %2$d</string>
+<string name="app_winetricks_no_matches">Koi match nahi</string>
+<string name="app_winetricks_close">Close</string>
+<string name="app_winetricks_please_wait">Kripya wait karein…</string>
+<string name="app_winetricks_built_in_list">Built-in list — latest fetch karne ke liye refresh tap karein</string>
+<string name="app_winetricks_updated_just_now">Abhi update hua</string>
+<string name="app_winetricks_updated_minutes_ago">%1$d min pehle update hua</string>
+<string name="app_winetricks_updated_hours_ago">%1$d h pehle update hua</string>
+<string name="app_winetricks_updated_days_ago">%1$d d pehle update hua</string>
+<string name="app_winetricks_update_success">Verb list update ho gayi (%1$d verbs)</string>
+<string name="app_winetricks_update_failed">Update fail: %1$s</string>
+<string name="app_winetricks_cat_apps">Apps</string>
+<string name="app_winetricks_cat_benchmarks">Benchmarks</string>
+<string name="app_winetricks_cat_dlls">DLLs</string>
+<string name="app_winetricks_cat_fonts">Fonts</string>
+<string name="app_winetricks_cat_settings">Settings</string>
 </resources>

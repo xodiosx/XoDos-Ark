@@ -32,4 +32,37 @@
 <string name="app_micsel_monitor_live">En direct · %1$s</string>
 <string name="app_micsel_monitor_hint">Parlez dans le micro — la barre doit bouger</string>
 <string name="app_micsel_close">Fermer</string>
+
+
+<string name="app_winetricks_section_title">Winetricks</string>
+<string name="app_winetricks_open_button">Ouvrir Winetricks</string>
+<string name="app_winetricks_preparing">Préparation de winetricks…</string>
+<string name="app_winetricks_source_missing">Source de winetricks introuvable dans usr/opt</string>
+<string name="app_winetricks_source_missing_hint">Placez le script winetricks dans usr/opt/winetricks (ou .sh) et rouvrez.</string>
+<string name="app_winetricks_description">Installez des composants Windows (DLLs, polices, applications) via winetricks.\nLes commandes s\'exécutent dans la session de terminal active.</string>
+<string name="app_winetricks_dialog_title">Winetricks</string>
+<string name="app_winetricks_refresh_desc">Mettre à jour la liste des verbes</string>
+<string name="app_winetricks_fetching">Récupération de la liste des verbes winetricks…</string>
+<string name="app_winetricks_fetching_hint">Cela peut prendre 10 à 20 secondes</string>
+<string name="app_winetricks_search_hint">Rechercher des verbes…</string>
+<string name="app_winetricks_category_label">Catégorie : %1$s</string>
+<string name="app_winetricks_category_all">Tous</string>
+<string name="app_winetricks_category_all_with_count">Tous (%1$d)</string>
+<string name="app_winetricks_category_with_count">%1$s (%2$d)</string>
+<string name="app_winetricks_count">%1$d sur %2$d</string>
+<string name="app_winetricks_no_matches">Aucun résultat</string>
+<string name="app_winetricks_close">Fermer</string>
+<string name="app_winetricks_please_wait">Veuillez patienter…</string>
+<string name="app_winetricks_built_in_list">Liste intégrée — appuyez sur actualiser pour obtenir la dernière</string>
+<string name="app_winetricks_updated_just_now">Mis à jour à l\'instant</string>
+<string name="app_winetricks_updated_minutes_ago">Mis à jour il y a %1$d min</string>
+<string name="app_winetricks_updated_hours_ago">Mis à jour il y a %1$d h</string>
+<string name="app_winetricks_updated_days_ago">Mis à jour il y a %1$d j</string>
+<string name="app_winetricks_update_success">Liste des verbes mise à jour (%1$d verbes)</string>
+<string name="app_winetricks_update_failed">Échec de la mise à jour : %1$s</string>
+<string name="app_winetricks_cat_apps">Applications</string>
+<string name="app_winetricks_cat_benchmarks">Benchmarks</string>
+<string name="app_winetricks_cat_dlls">DLLs</string>
+<string name="app_winetricks_cat_fonts">Polices</string>
+<string name="app_winetricks_cat_settings">Paramètres</string>
 </resources>

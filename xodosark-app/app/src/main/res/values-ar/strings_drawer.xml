@@ -31,4 +31,36 @@
 <string name="app_micsel_monitor_live">مباشر · %1$s</string>
 <string name="app_micsel_monitor_hint">تحدّث في الميكروفون — يجب أن يتحرك الشريط</string>
 <string name="app_micsel_close">إغلاق</string>
+
+<string name="app_winetricks_section_title">Winetricks</string>
+<string name="app_winetricks_open_button">فتح Winetricks</string>
+<string name="app_winetricks_preparing">جارٍ تحضير winetricks…</string>
+<string name="app_winetricks_source_missing">لم يتم العثور على مصدر winetricks في usr/opt</string>
+<string name="app_winetricks_source_missing_hint">ضع سكربت winetricks في usr/opt/winetricks (أو .sh) ثم أعد الفتح.</string>
+<string name="app_winetricks_description">تثبيت مكونات Windows (DLLs، خطوط، تطبيقات) عبر winetricks.\nتُنفَّذ الأوامر في جلسة الطرفية النشطة.</string>
+<string name="app_winetricks_dialog_title">Winetricks</string>
+<string name="app_winetricks_refresh_desc">تحديث قائمة الأفعال</string>
+<string name="app_winetricks_fetching">جارٍ جلب قائمة أفعال winetricks…</string>
+<string name="app_winetricks_fetching_hint">قد يستغرق هذا من 10 إلى 20 ثانية</string>
+<string name="app_winetricks_search_hint">بحث في الأفعال…</string>
+<string name="app_winetricks_category_label">الفئة: %1$s</string>
+<string name="app_winetricks_category_all">الكل</string>
+<string name="app_winetricks_category_all_with_count">الكل (%1$d)</string>
+<string name="app_winetricks_category_with_count">%1$s (%2$d)</string>
+<string name="app_winetricks_count">%1$d من %2$d</string>
+<string name="app_winetricks_no_matches">لا نتائج مطابقة</string>
+<string name="app_winetricks_close">إغلاق</string>
+<string name="app_winetricks_please_wait">يرجى الانتظار…</string>
+<string name="app_winetricks_built_in_list">قائمة مدمجة — اضغط تحديث لجلب الأحدث</string>
+<string name="app_winetricks_updated_just_now">تم التحديث للتو</string>
+<string name="app_winetricks_updated_minutes_ago">تم التحديث قبل %1$d دقيقة</string>
+<string name="app_winetricks_updated_hours_ago">تم التحديث قبل %1$d ساعة</string>
+<string name="app_winetricks_updated_days_ago">تم التحديث قبل %1$d يوم</string>
+<string name="app_winetricks_update_success">تم تحديث قائمة الأفعال (%1$d فعلًا)</string>
+<string name="app_winetricks_update_failed">فشل التحديث: %1$s</string>
+<string name="app_winetricks_cat_apps">التطبيقات</string>
+<string name="app_winetricks_cat_benchmarks">اختبارات الأداء</string>
+<string name="app_winetricks_cat_dlls">مكتبات DLL</string>
+<string name="app_winetricks_cat_fonts">الخطوط</string>
+<string name="app_winetricks_cat_settings">الإعدادات</string>
 </resources>

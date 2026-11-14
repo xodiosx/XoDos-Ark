@@ -32,4 +32,36 @@
 <string name="app_micsel_monitor_live">实时 · %1$s</string>
 <string name="app_micsel_monitor_hint">对着麦克风说话 — 进度条应会移动</string>
 <string name="app_micsel_close">关闭</string>
+
+<string name="app_winetricks_section_title">Winetricks</string>
+<string name="app_winetricks_open_button">打开 Winetricks</string>
+<string name="app_winetricks_preparing">正在准备 winetricks…</string>
+<string name="app_winetricks_source_missing">在 usr/opt 中未找到 winetricks 源文件</string>
+<string name="app_winetricks_source_missing_hint">请将 winetricks 脚本放到 usr/opt/winetricks（或 .sh），然后重新打开。</string>
+<string name="app_winetricks_description">通过 winetricks 安装 Windows 组件（DLL、字体、应用）。\n命令在当前终端会话中执行。</string>
+<string name="app_winetricks_dialog_title">Winetricks</string>
+<string name="app_winetricks_refresh_desc">更新动词列表</string>
+<string name="app_winetricks_fetching">正在获取 winetricks 动词列表…</string>
+<string name="app_winetricks_fetching_hint">这可能需要 10–20 秒</string>
+<string name="app_winetricks_search_hint">搜索动词…</string>
+<string name="app_winetricks_category_label">类别：%1$s</string>
+<string name="app_winetricks_category_all">全部</string>
+<string name="app_winetricks_category_all_with_count">全部（%1$d）</string>
+<string name="app_winetricks_category_with_count">%1$s（%2$d）</string>
+<string name="app_winetricks_count">%1$d / %2$d</string>
+<string name="app_winetricks_no_matches">无匹配项</string>
+<string name="app_winetricks_close">关闭</string>
+<string name="app_winetricks_please_wait">请稍候…</string>
+<string name="app_winetricks_built_in_list">内置列表 — 点击刷新以获取最新</string>
+<string name="app_winetricks_updated_just_now">刚刚更新</string>
+<string name="app_winetricks_updated_minutes_ago">%1$d 分钟前更新</string>
+<string name="app_winetricks_updated_hours_ago">%1$d 小时前更新</string>
+<string name="app_winetricks_updated_days_ago">%1$d 天前更新</string>
+<string name="app_winetricks_update_success">动词列表已更新（%1$d 个动词）</string>
+<string name="app_winetricks_update_failed">更新失败：%1$s</string>
+<string name="app_winetricks_cat_apps">应用</string>
+<string name="app_winetricks_cat_benchmarks">基准测试</string>
+<string name="app_winetricks_cat_dlls">DLL</string>
+<string name="app_winetricks_cat_fonts">字体</string>
+<string name="app_winetricks_cat_settings">设置</string>
 </resources>

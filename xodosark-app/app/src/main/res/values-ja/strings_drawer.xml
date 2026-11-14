@@ -32,4 +32,37 @@
 <string name="app_micsel_monitor_live">ライブ · %1$s</string>
 <string name="app_micsel_monitor_hint">マイクに向かって話してください — バーが動くはずです</string>
 <string name="app_micsel_close">閉じる</string>
+
+
+<string name="app_winetricks_section_title">Winetricks</string>
+<string name="app_winetricks_open_button">Winetricks を開く</string>
+<string name="app_winetricks_preparing">winetricks を準備中…</string>
+<string name="app_winetricks_source_missing">usr/opt に winetricks のソースが見つかりません</string>
+<string name="app_winetricks_source_missing_hint">winetricks スクリプトを usr/opt/winetricks（または .sh）に配置して再度開いてください。</string>
+<string name="app_winetricks_description">winetricks 経由で Windows コンポーネント（DLL、フォント、アプリ）をインストールします。\nコマンドはアクティブなターミナルセッションで実行されます。</string>
+<string name="app_winetricks_dialog_title">Winetricks</string>
+<string name="app_winetricks_refresh_desc">動詞リストを更新</string>
+<string name="app_winetricks_fetching">winetricks の動詞リストを取得中…</string>
+<string name="app_winetricks_fetching_hint">10〜20 秒かかる場合があります</string>
+<string name="app_winetricks_search_hint">動詞を検索…</string>
+<string name="app_winetricks_category_label">カテゴリ：%1$s</string>
+<string name="app_winetricks_category_all">すべて</string>
+<string name="app_winetricks_category_all_with_count">すべて（%1$d）</string>
+<string name="app_winetricks_category_with_count">%1$s（%2$d）</string>
+<string name="app_winetricks_count">%1$d / %2$d</string>
+<string name="app_winetricks_no_matches">一致なし</string>
+<string name="app_winetricks_close">閉じる</string>
+<string name="app_winetricks_please_wait">お待ちください…</string>
+<string name="app_winetricks_built_in_list">組み込みリスト — 最新を取得するには更新をタップ</string>
+<string name="app_winetricks_updated_just_now">たった今更新されました</string>
+<string name="app_winetricks_updated_minutes_ago">%1$d 分前に更新</string>
+<string name="app_winetricks_updated_hours_ago">%1$d 時間前に更新</string>
+<string name="app_winetricks_updated_days_ago">%1$d 日前に更新</string>
+<string name="app_winetricks_update_success">動詞リストを更新しました（%1$d 個）</string>
+<string name="app_winetricks_update_failed">更新に失敗しました：%1$s</string>
+<string name="app_winetricks_cat_apps">アプリ</string>
+<string name="app_winetricks_cat_benchmarks">ベンチマーク</string>
+<string name="app_winetricks_cat_dlls">DLL</string>
+<string name="app_winetricks_cat_fonts">フォント</string>
+<string name="app_winetricks_cat_settings">設定</string>
 </resources>

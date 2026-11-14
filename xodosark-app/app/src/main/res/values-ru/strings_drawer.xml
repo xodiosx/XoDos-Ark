@@ -32,4 +32,36 @@
 <string name="app_micsel_monitor_live">В реальном времени · %1$s</string>
 <string name="app_micsel_monitor_hint">Говорите в микрофон — полоса должна двигаться</string>
 <string name="app_micsel_close">Закрыть</string>
+
+<string name="app_winetricks_section_title">Winetricks</string>
+<string name="app_winetricks_open_button">Открыть Winetricks</string>
+<string name="app_winetricks_preparing">Подготовка winetricks…</string>
+<string name="app_winetricks_source_missing">Исходник winetricks не найден в usr/opt</string>
+<string name="app_winetricks_source_missing_hint">Поместите скрипт winetricks в usr/opt/winetricks (или .sh) и откройте снова.</string>
+<string name="app_winetricks_description">Установка компонентов Windows (DLL, шрифты, приложения) через winetricks.\nКоманды выполняются в активной сессии терминала.</string>
+<string name="app_winetricks_dialog_title">Winetricks</string>
+<string name="app_winetricks_refresh_desc">Обновить список глаголов</string>
+<string name="app_winetricks_fetching">Получение списка глаголов winetricks…</string>
+<string name="app_winetricks_fetching_hint">Это может занять 10–20 секунд</string>
+<string name="app_winetricks_search_hint">Поиск глаголов…</string>
+<string name="app_winetricks_category_label">Категория: %1$s</string>
+<string name="app_winetricks_category_all">Все</string>
+<string name="app_winetricks_category_all_with_count">Все (%1$d)</string>
+<string name="app_winetricks_category_with_count">%1$s (%2$d)</string>
+<string name="app_winetricks_count">%1$d из %2$d</string>
+<string name="app_winetricks_no_matches">Нет совпадений</string>
+<string name="app_winetricks_close">Закрыть</string>
+<string name="app_winetricks_please_wait">Пожалуйста, подождите…</string>
+<string name="app_winetricks_built_in_list">Встроенный список — нажмите «Обновить», чтобы получить актуальный</string>
+<string name="app_winetricks_updated_just_now">Обновлено только что</string>
+<string name="app_winetricks_updated_minutes_ago">Обновлено %1$d мин назад</string>
+<string name="app_winetricks_updated_hours_ago">Обновлено %1$d ч назад</string>
+<string name="app_winetricks_updated_days_ago">Обновлено %1$d дн назад</string>
+<string name="app_winetricks_update_success">Список глаголов обновлён (%1$d глаголов)</string>
+<string name="app_winetricks_update_failed">Ошибка обновления: %1$s</string>
+<string name="app_winetricks_cat_apps">Приложения</string>
+<string name="app_winetricks_cat_benchmarks">Бенчмарки</string>
+<string name="app_winetricks_cat_dlls">DLL</string>
+<string name="app_winetricks_cat_fonts">Шрифты</string>
+<string name="app_winetricks_cat_settings">Настройки</string>
 </resources>
