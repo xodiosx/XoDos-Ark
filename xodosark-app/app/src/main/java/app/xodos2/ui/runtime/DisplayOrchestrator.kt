@@ -297,6 +297,7 @@ val payload = buildString {
         val sb = StringBuilder()
         sb.append("export DISPLAY=:0\n")
         when (openGL) {
+           "NONE" -> {
         sb.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE  MESA_GL_VERSION_OVERRIDE LIBGL_ALWAYS_SOFTWARE || true\n")
     }
             "VIRGL" -> {
@@ -398,7 +399,8 @@ fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): String {
     sb.append("export DISPLAY=:0\n")
 
     when (openGL) {
-    sb.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE  MESA_GL_VERSION_OVERRIDE LIBGL_ALWAYS_SOFTWARE || true\n")
+       "NONE" -> {
+        sb.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE  MESA_GL_VERSION_OVERRIDE LIBGL_ALWAYS_SOFTWARE || true\n")
     }
         "VIRGL" -> {
             sb.append("unset GALLIUM_DRIVER MESA_DRIVER_PATH MESA_LOADER_DRIVER_OVERRIDE TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE MESA_LOADER_DRIVER_OVERRIDE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG || true\n")
@@ -431,7 +433,7 @@ fun buildNativeGraphicsEnv(context: Context, prefs: SharedPreferences): String {
 
     when (vulkan) {
       "NONE" -> {
-        sb.append("unset TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG LIBGL_ALWAYS_SOFTWARE || true\n")
+        b.append("unset TU_DEBUG VK_ICD_FILENAMES MESA_VK_WSI_PRESENT_MODE VKD3D_FEATURE_LEVEL VK_DRIVER_FILES VN_DEBUG LIBGL_ALWAYS_SOFTWARE || true\n")
     }
         "VENUS" -> {
             sb.append("export MESA_VK_WSI_PRESENT_MODE=mailbox\n")
