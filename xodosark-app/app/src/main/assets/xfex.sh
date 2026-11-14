@@ -363,6 +363,8 @@ ln -sfn ../drive_x "$WINEPREFIX/dosdevices/x:"
 
 # Force CD-ROM registry
 $PREFIX/opt/winece/arm64-v8a/bin/wine reg add 'HKEY_LOCAL_MACHINE\Software\Wine\Drives' /v 'x:' /t REG_SZ /d 'cdrom' /f 2>/dev/null
+sleep 1
+PREFIX/opt/winece/arm64-v8a/bin/wineserver -k
 
 # =====================================================================
 #  Input bridge
