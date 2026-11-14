@@ -105,9 +105,8 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 
-private val VULKAN_MODES = listOf("LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")
-private val OPENGL_MODES = listOf("LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
-
+private val VULKAN_MODES = listOf("NONE", "LLVMPIPE", "VENUS", "TURNIP", "WRAPPER","PANVK")
+private val OPENGL_MODES = listOf("NONE", "LLVMPIPE", "VIRGL", "ZINK", "GL4ES")
 
 private val WINE_NATIVE_DEPENDENCIES = listOf(
     "libandroid-support", "libx11", "libxcb", "libxau", "libxdmcp",
@@ -4083,8 +4082,8 @@ if (showDistroSelection) {
             },
             vulkanOptions = VULKAN_MODES,
             openGLOptions = when (desktopVulkanMode) {
-                "TURNIP" -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
-                "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "TURNIP" -> listOf("NONE","LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "VENUS"  -> listOf("NONE","LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
                 else     -> OPENGL_MODES
             },
             hasArchRootfs = hasContainer1,
@@ -4139,8 +4138,8 @@ if (showDistroSelection) {
             },
             vulkanOptions = VULKAN_MODES,
             openGLOptions = when (desktopVulkanMode) {
-                "TURNIP" -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
-                "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "TURNIP" -> listOf("NONE","LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "VENUS"  -> listOf("NONE","LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
                 else     -> OPENGL_MODES
             },
             hasDebianRootfs = hasContainer2,
@@ -4202,8 +4201,8 @@ if (showDistroSelection) {
             },
             vulkanOptions = VULKAN_MODES,
             openGLOptions = when (desktopVulkanMode) {
-                "TURNIP" -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
-                "VENUS"  -> listOf("LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "TURNIP" -> listOf("NONE","LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
+                "VENUS"  -> listOf("NONE","LLVMPIPE", "ZINK", "VIRGL", "GL4ES")
                 else     -> OPENGL_MODES
             },
             hasWineRootfs = hasContainer3,
