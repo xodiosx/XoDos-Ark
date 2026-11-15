@@ -935,6 +935,18 @@ public boolean onGenericMotionEvent(MotionEvent event) {
     return super.onGenericMotionEvent(event);
 }
 
+/** Linux keycodes for keyboard arrow keys — the extra .so maps DPAD_* to BTN_DPAD_*
+ *  (gamepad codes) instead of KEY_*, so we must send explicit scan codes. */
+private static int linuxScanCodeForArrow(int androidKeyCode) {
+    switch (androidKeyCode) {
+        case KeyEvent.KEYCODE_DPAD_UP:    return 103; // KEY_UP
+        case KeyEvent.KEYCODE_DPAD_DOWN:  return 108; // KEY_DOWN
+        case KeyEvent.KEYCODE_DPAD_LEFT:  return 105; // KEY_LEFT
+        case KeyEvent.KEYCODE_DPAD_RIGHT: return 106; // KEY_RIGHT
+        default: return 0;
+    }
+}
+
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -1070,57 +1082,60 @@ lorieContentView = findViewById(R.id.id_display_window);
         
         mInputHandler = new TouchInputHandler(this, new InputEventSender(lorieView));
         mLorieKeyListener = (v, k, e) -> {
-        
-        /// fixing controller binding and support
-           if (e.getDevice() == null) {
-            return mInputHandler.sendKeyEvent(e);
-            }
-       
-             if (k == KEYCODE_BACK) {
-                if (softKeyboardShown) {
-                  if (e.getAction() == ACTION_UP) {
-                    closeSoftKeyboard();
-                  }           
-                   return false;
-                }
-                
-             }
-            
-        
-            InputDevice dev = e.getDevice();
-            boolean result = mInputHandler.sendKeyEvent(e);
+    // ── Arrow keys: send explicit Linux scan codes so the native
+    //    android_to_linux_keycode mapping (which sends DPAD_* to BTN_DPAD_*)
+    //    doesn't corrupt them. Skip if the event came from a controller,
+    //    since gamepad D-pad is handled by the gamepad path.
+    boolean fromGamepad = false;
+    if (e.getDevice() != null) {
+        int s = e.getDevice().getSources();
+        fromGamepad = (s & (InputDevice.SOURCE_GAMEPAD
+                          | InputDevice.SOURCE_JOYSTICK
+                          | InputDevice.SOURCE_DPAD)) != 0;
+    }
+    int arrowScan = linuxScanCodeForArrow(k);
+    if (arrowScan != 0 && !fromGamepad) {
+        getLorieView().sendKeyEvent(arrowScan, arrowScan,
+                e.getAction() == KeyEvent.ACTION_DOWN);
+        return true;
+    }
 
-             /// gamepad and touch 
-if (!sdlEnabled && !isIgnoredDevice(dev) && isGamepadConnected()) {
-    InputDevice device = e.getDevice();
-          //Toast.makeText(this,"Handled Key: " + KeyEvent.keyCodeToString(e.getKeyCode()),Toast.LENGTH_SHORT).show();    
-          // Toast.makeText(this, "Handled:=" + e, Toast.LENGTH_SHORT).show();
-          // inputControlsView.dispatchKeyEvent(e);
+    if (e.getDevice() == null) {
+        return mInputHandler.sendKeyEvent(e);
+    }
 
+    if (k == KEYCODE_BACK) {
+        if (softKeyboardShown) {
+            if (e.getAction() == ACTION_UP) closeSoftKeyboard();
+            return false;
+        }
+    }
+
+    InputDevice dev = e.getDevice();
+    boolean result = mInputHandler.sendKeyEvent(e);
+
+    if (!sdlEnabled && !isIgnoredDevice(dev) && isGamepadConnected()) {
         boolean handledByWine = false;
-        boolean handledByX11 = false;
+        boolean handledByX11  = false;
         boolean handledByInputHandler = false;
 
-          if (isWineRunning()) {
-            winHandler.onKeyEvent(e); // usually no return value
+        if (isWineRunning()) {
+            winHandler.onKeyEvent(e);
             handledByWine = true;
-          }
+        }
+        handledByX11          = inputControlsView.dispatchKeyEvent(e);
+        handledByInputHandler = mInputHandler.sendKeyEvent(e);
 
-        // call X11
-        handledByX11 = inputControlsView.dispatchKeyEvent(e);
-        // call Termux fallback input        
-         handledByInputHandler = mInputHandler.sendKeyEvent(e);
-
-        // Debug toast if needed
-         //Toast.makeText(this, "Handled: wine=" + handledByWine + " x11=" + handledByX11 + " fallback=" + handledByInputHandler, Toast.LENGTH_SHORT).show();       
         return handledByWine || handledByX11 || handledByInputHandler;
-    }      
-          // Do not steal dedicated buttons from a full external keyboard.
-            if (useTermuxEKBarBehaviour && mExtraKeys != null && (dev == null || dev.isVirtual()))
-                mExtraKeys.unsetSpecialKeys();
-                
-            return result;
-        };
+    }
+
+    if (useTermuxEKBarBehaviour && mExtraKeys != null && (dev == null || dev.isVirtual()))
+        mExtraKeys.unsetSpecialKeys();
+
+    return result;
+};
+        
+        
 
 
         lorieParent.setOnTouchListener((v, e) -> {
