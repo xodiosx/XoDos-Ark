@@ -925,11 +925,29 @@ public static void sendWindowChange(int width, int height, int framerate, String
     if (ctx != 0) requestStylusEnabled(ctx, enabled);
 }
 @FastNative private static native void requestStylusEnabled(long ptr, boolean enabled);
-    public boolean sendKeyEvent(int scanCode, int keyCode, boolean keyDown) {
-//        if (keyCode == 67)
-//            new Exception().printStackTrace();
-        return sendKeyEvent(mNativeContext, scanCode, keyCode, keyDown);
+public boolean sendKeyEvent(int scanCode, int keyCode, boolean keyDown) {
+    // Workaround for the libXlorie.so you're running: its compiled
+    // android_to_linux_keycode[] still maps KEYCODE_DPAD_* to
+    // BTN_DPAD_* (gamepad codes 544–547), producing X keycodes
+    // 552–555 which the X server drops. Supplying a Linux keyboard
+    // scan code here takes the `scan_code ?: mapping` fast path in
+    // native sendKeyEvent and bypasses the mapping entirely.
+    //
+    // To verify the sendKeyEvent is being hit, uncomment the log:
+    // Log.d("KeyFix", "scan=" + scanCode + " key=" + keyCode + " down=" + keyDown);
+
+    if (scanCode == 0) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_UP:    scanCode = 103; break; // KEY_UP
+            case KeyEvent.KEYCODE_DPAD_DOWN:  scanCode = 108; break; // KEY_DOWN
+            case KeyEvent.KEYCODE_DPAD_LEFT:  scanCode = 105; break; // KEY_LEFT
+            case KeyEvent.KEYCODE_DPAD_RIGHT: scanCode = 106; break; // KEY_RIGHT
+        }
     }
+    return sendKeyEvent(mNativeContext, scanCode, keyCode, keyDown);
+}
+    
+    
     @FastNative public native boolean sendKeyEvent(long ptr, int scanCode, int keyCode, boolean keyDown);
 @Override public void sendTextEvent(byte[] utf8Bytes) {
     if (mNativeContext != 0) sendTextEvent(mNativeContext, utf8Bytes);
