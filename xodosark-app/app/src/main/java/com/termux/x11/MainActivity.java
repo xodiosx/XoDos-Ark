@@ -889,17 +889,17 @@ private static boolean isControllerEvent(KeyEvent e) {
 @Override
 public boolean dispatchKeyEvent(KeyEvent e) {
     // ★ SDL takes priority — nothing else sees this event when SDL is on
-  //  if (sdlEnabled && gamepadHandler != null && isControllerEvent(e)) {
+    if (sdlEnabled && gamepadHandler != null && isControllerEvent(e)) {
     
         if (e.getAction() == KeyEvent.ACTION_DOWN) {
             if (e.getRepeatCount() == 0) gamepadHandler.handleKeyDown(e.getKeyCode(), e);
-            return false;
+            return true;
         }
         if (e.getAction() == KeyEvent.ACTION_UP) {
             gamepadHandler.handleKeyUp(e.getKeyCode(), e);
-            return false;
+            return true;
         }
-  //  }
+    }
     // SDL off → normal flow → LorieView → mLorieKeyListener → WinHandler
     return super.dispatchKeyEvent(e);
 }
@@ -930,7 +930,7 @@ public boolean onKeyUp(int keyCode, KeyEvent event) {
 @Override
 public boolean onGenericMotionEvent(MotionEvent event) {
     if (sdlEnabled && gamepadHandler != null && gamepadHandler.handleGenericMotionEvent(event))
-        return false;
+        return true;
     // SDL off → activity falls through to the view listeners that feed WinHandler
     return super.onGenericMotionEvent(event);
 }
@@ -1091,7 +1091,7 @@ lorieContentView = findViewById(R.id.id_display_window);
             boolean result = mInputHandler.sendKeyEvent(e);
 
              /// gamepad and touch 
-if (!isIgnoredDevice(dev) && isGamepadConnected()) {
+if (!sdlEnabled && !isIgnoredDevice(dev) && isGamepadConnected()) {
     InputDevice device = e.getDevice();
           //Toast.makeText(this,"Handled Key: " + KeyEvent.keyCodeToString(e.getKeyCode()),Toast.LENGTH_SHORT).show();    
           // Toast.makeText(this, "Handled:=" + e, Toast.LENGTH_SHORT).show();
