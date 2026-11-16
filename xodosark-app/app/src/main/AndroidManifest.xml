@@ -37,7 +37,11 @@
     <meta-data android:name="android.allow_multiple_resumed_activities" android:value="true" />
     
 
-
+   <uses-permission android:name="android.permission.WAKE_LOCK" />
+     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -102,6 +106,16 @@ android:grantUriPermissions="true">
 android:name="android.content.action.DOCUMENTS_PROVIDER"/>
 </intent-filter>
 </provider>
+<!-- ── Miroir screen streaming ── -->
+<service
+    android:name="com.miroir.MiroirService"
+    android:enabled="true"
+    android:exported="false"
+    android:foregroundServiceType="mediaProjection" />
+
+<receiver
+    android:name="com.miroir.CopyErrorReceiver"
+    android:exported="false" />
 
            <!-- ================= X11 MAIN ================= -->
 

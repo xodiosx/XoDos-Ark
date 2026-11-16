@@ -1,13 +1,6 @@
 package app.xodos2.ui.drawer.pages
 
-import app.xodos2.ui.drawer.pages.AdrenotoolsDrawerButton
-import app.xodos2.ui.drawer.pages.DxvkSelectorSection
-import app.xodos2.ui.drawer.pages.DrawerFooterActions
-import app.xodos2.ui.drawer.pages.HudSelectorSection
-import app.xodos2.ui.drawer.pages.ThemeSelectorSection
-import app.xodos2.ui.drawer.pages.EnvSelectorSection
-import app.xodos2.ui.drawer.pages.WinetricksSelectorSection
-import app.xodos2.ui.drawer.pages.MicSelectorSection
+import app.xodos2.ui.drawer.pages.*
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -219,7 +212,7 @@ fun DebianDrawerPage(
         ),
         showDebianDesktop = true,
         extraContent = {
-            // Wayland scripts (private composable)
+           MirroringDrawerSection()
             DebianExtraContent(
                 prefs = prefs,
                 waylandScriptEditorOpen = waylandScriptEditorOpen,

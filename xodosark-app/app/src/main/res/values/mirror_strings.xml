@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- ═══════ Drawer section ═══════ -->
+    <string name="app_mirror_section_title">Screen Mirroring</string>
+    <string name="app_mirror_section_description">Stream this device\'s screen to any other device on the same network. Open the displayed URL in a browser to view.</string>
+    <string name="app_mirror_open_settings">Open Mirror Settings</string>
+
+    <!-- ═══════ Dialog chrome ═══════ -->
+    <string name="app_mirror_dialog_title">Screen Mirroring</string>
+    <string name="app_mirror_status_live">● LIVE</string>
+    <string name="app_mirror_status_stopped">○ Stopped</string>
+
+    <!-- ═══════ URL row ═══════ -->
+    <string name="app_mirror_view_at">View at</string>
+    <string name="app_mirror_copy_url">Copy URL</string>
+    <string name="app_mirror_share">Share</string>
+    <string name="app_mirror_url_copied">URL copied</string>
+    <string name="app_mirror_share_text">Watch my screen: %1$s</string>
+    <string name="app_mirror_share_chooser">Share stream URL</string>
+
+    <!-- ═══════ Section labels ═══════ -->
+    <string name="app_mirror_label_fps">FPS</string>
+    <string name="app_mirror_label_quality">JPEG quality: %1$d%%</string>
+    <string name="app_mirror_label_resolution">Resolution</string>
+    <string name="app_mirror_label_audio">Audio</string>
+    <string name="app_mirror_label_port">Port</string>
+    <string name="app_mirror_label_authentication">Authentication</string>
+    <string name="app_mirror_label_pin">PIN: %1$s</string>
+    <string name="app_mirror_label_basic">User: %1$s  &#183;  Pass: %2$s</string>
+
+    <!-- ═══════ Buttons ═══════ -->
+    <string name="app_mirror_regenerate">Regenerate</string>
+    <string name="app_mirror_new_pass">New pass</string>
+    <string name="app_mirror_start">Start Streaming</string>
+    <string name="app_mirror_stop">Stop Streaming</string>
+    <string name="app_mirror_close">Close</string>
+
+    <!-- ═══════ Auth mode chips ═══════ -->
+    <string name="app_mirror_auth_none">None</string>
+    <string name="app_mirror_auth_pin">PIN</string>
+    <string name="app_mirror_auth_basic">Basic</string>
+
+    <!-- ═══════ Toasts ═══════ -->
+    <string name="app_mirror_toast_capture_denied">Screen capture permission denied</string>
+    <string name="app_mirror_toast_audio_denied">Audio permission denied, streaming without audio</string>
+
+</resources>
+    <!-- Shortcuts -->
+    <string name="shortcut_start_stream">Start Stream</string>
+    <string name="shortcut_start_stream_long">Start screen streaming</string>
+    <string name="shortcut_stop_stream">Stop Stream</string>
+    <string name="shortcut_stop_stream_long">Stop screen streaming</string>
+    <string name="shortcut_presentation">Presentation</string>
+    <string name="shortcut_presentation_long">Start streaming (Presentation mode)</string>
+    <string name="shortcut_gaming">Gaming</string>
+    <string name="shortcut_gaming_long">Start streaming (Gaming mode)</string>
+    <string name="shortcut_dashboard">Dashboard</string>
+    <string name="shortcut_dashboard_long">Start streaming (Dashboard mode)</string>
+    <string name="shortcut_low_bandwidth">Low Bandwidth</string>
+    <string name="shortcut_low_bandwidth_long">Start streaming (Low Bandwidth mode)</string>
+</resources>
