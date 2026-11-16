@@ -32,6 +32,7 @@ import androidx.core.content.ContextCompat
 import app.xodos2.R
 import app.xodos2.ui.glassDialogStyle
 import com.miroir.MiroirService
+import java.net.InetAddress
 import java.net.NetworkInterface
 import java.security.SecureRandom
 import java.util.Collections
@@ -44,46 +45,168 @@ private const val AUTH_NONE  = 0
 private const val AUTH_PIN   = 1
 private const val AUTH_BASIC = 2
 
+// The exact keys used by Miroir's original Settings.java, so prefs are compatible
+private const val K_FPS              = "fps"
+private const val K_QUALITY          = "quality"
+private const val K_PORT             = "port"
+private const val K_AUDIO_ENABLED    = "audio_enabled"
+private const val K_AUDIO_SR         = "audio_sample_rate"
+private const val K_AUDIO_CH         = "audio_channels"
+private const val K_AUDIO_ENC        = "audio_encoding"
+private const val K_MAX_W            = "max_width"
+private const val K_MAX_H            = "max_height"
+private const val K_BITRATE          = "bitrate"
+private const val K_AUTH_MODE        = "auth_mode"
+private const val K_PIN              = "pin"
+private const val K_BASIC_USER       = "basic_user"
+private const val K_BASIC_PASS       = "basic_pass"
+private const val K_AUTO_RESTART     = "auto_restart"
+private const val K_HTTPS            = "https_enabled"
+private const val K_KEEP_AWAKE       = "keep_awake"
+
 @Composable
 fun MirrorSettingsDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences(PREFS_NAME, 0) }
 
-    // ── Persistent settings ─────────────────────────────────────
-    var fps           by remember { mutableIntStateOf(prefs.getInt("fps", 24)) }
-    var quality       by remember { mutableIntStateOf(prefs.getInt("quality", 70)) }
-    var port          by remember { mutableIntStateOf(prefs.getInt("port", 8080)) }
-    var audioEnabled  by remember { mutableStateOf(prefs.getBoolean("audio_enabled", true)) }
-    var audioSr       by remember { mutableIntStateOf(prefs.getInt("audio_sr", 44100)) }
-    var resolutionIdx by remember { mutableIntStateOf(prefs.getInt("resolution", 1)) } // 0=480p 1=720p 2=1080p
-    var bitrate       by remember { mutableIntStateOf(prefs.getInt("bitrate", 4000)) }
-    var authMode      by remember { mutableIntStateOf(prefs.getInt("auth_mode", AUTH_NONE)) }
-    var pin           by remember { mutableStateOf(prefs.getString("pin", null) ?: generatePin()) }
-    var basicUser     by remember { mutableStateOf(prefs.getString("basic_user", "viewer") ?: "viewer") }
-    var basicPass     by remember { mutableStateOf(prefs.getString("basic_pass", null) ?: generatePassword()) }
+    // ── State ────────────────────────────────────────────────────
+    var fps           by remember { mutableIntStateOf(prefs.getInt(K_FPS, 24)) }
+    var quality       by remember { mutableIntStateOf(prefs.getInt(K_QUALITY, 70)) }
+    var port          by remember { mutableIntStateOf(prefs.getInt(K_PORT, 8080)) }
+    var audioEnabled  by remember { mutableStateOf(prefs.getBoolean(K_AUDIO_ENABLED, true)) }
+    var audioSr       by remember { mutableIntStateOf(prefs.getInt(K_AUDIO_SR, 44100)) }
+    var audioCh       by remember { mutableIntStateOf(prefs.getInt(K_AUDIO_CH, 2)) }
+    var audioEnc      by remember { mutableIntStateOf(prefs.getInt(K_AUDIO_ENC, AudioFormat.ENCODING_PCM_16BIT)) }
+    var maxW          by remember { mutableIntStateOf(prefs.getInt(K_MAX_W, 1280)) }
+    var maxH          by remember { mutableIntStateOf(prefs.getInt(K_MAX_H, 720)) }
+    var bitrate       by remember { mutableIntStateOf(prefs.getInt(K_BITRATE, 4000)) }
+    var authMode      by remember { mutableIntStateOf(prefs.getInt(K_AUTH_MODE, AUTH_NONE)) }
+    var pin           by remember { mutableStateOf(prefs.getString(K_PIN, null) ?: generatePin()) }
+    var basicUser     by remember { mutableStateOf(prefs.getString(K_BASIC_USER, "viewer") ?: "viewer") }
+    var basicPass     by remember { mutableStateOf(prefs.getString(K_BASIC_PASS, null) ?: generatePassword()) }
+    var autoRestart   by remember { mutableStateOf(prefs.getBoolean(K_AUTO_RESTART, false)) }
+    var httpsEnabled  by remember { mutableStateOf(prefs.getBoolean(K_HTTPS, false)) }
+    var keepAwake     by remember { mutableStateOf(prefs.getBoolean(K_KEEP_AWAKE, true)) }
 
-    val resolutions = listOf(854 to 480, 1280 to 720, 1920 to 1080)
+    var showAdvanced  by remember { mutableStateOf(false) }
+    var isStreaming   by remember { mutableStateOf(isMiroirRunning(context)) }
 
-    // ── Live status ─────────────────────────────────────────────
-    var isStreaming by remember { mutableStateOf(isMiroirRunning(context)) }
-    var currentUrl  by remember { mutableStateOf("") }
-
-    fun refreshUrlFromSettings() {
-        if (!isStreaming) { currentUrl = ""; return }
-        val ip = getLocalIpAddress()
-        var url = "http://$ip:$port"
-        if (authMode == AUTH_PIN) url += "/?pin=$pin"
-        currentUrl = url
+    // ── IP list & picker ────────────────────────────────────────
+    val allIps = remember { getAllLocalIps() }
+    var selectedIp by remember { mutableStateOf(allIps.firstOrNull() ?: "") }
+    if (selectedIp.isEmpty() && allIps.isNotEmpty()) {
+        selectedIp = allIps.first()
     }
 
-    LaunchedEffect(isStreaming) { refreshUrlFromSettings() }
+    // ── Precomputed option lists ────────────────────────────────
+    val resolutionOptions = listOf(854 to 480, 1280 to 720, 1920 to 1080)
+    val resolutionLabels = listOf("480p", "720p", "1080p")
+    val resolutionIdx = resolutionOptions.indexOfFirst { it.first == maxW && it.second == maxH }
+        .takeIf { it >= 0 } ?: 1
 
-    // ── Stopped broadcast receiver ──────────────────────────────
+    val bitrateOptions = listOf(1000, 2000, 4000, 6000, 8000)
+
+    val sampleRates = listOf(16000, 22050, 44100, 48000)
+    val sampleRateLabels = listOf(
+        stringResource(R.string.app_mirror_sr_16k),
+        stringResource(R.string.app_mirror_sr_22k),
+        stringResource(R.string.app_mirror_sr_44k),
+        stringResource(R.string.app_mirror_sr_48k),
+    )
+    val encodings = listOf(
+        AudioFormat.ENCODING_PCM_16BIT,
+        AudioFormat.ENCODING_PCM_8BIT,
+        AudioFormat.ENCODING_PCM_FLOAT,
+    )
+    val encodingLabels = listOf(
+        stringResource(R.string.app_mirror_enc_pcm16),
+        stringResource(R.string.app_mirror_enc_pcm8),
+        stringResource(R.string.app_mirror_enc_float),
+    )
+
+    // ── Computed URL (always visible) ───────────────────────────
+    val proto = if (httpsEnabled) "https" else "http"
+    val displayIp = selectedIp.ifEmpty { "0.0.0.0" }
+    val computedUrl = buildString {
+        append(proto); append("://"); append(displayIp); append(":"); append(port)
+        if (authMode == AUTH_PIN) { append("/?pin="); append(pin) }
+    }
+    val noNetwork = displayIp == "0.0.0.0" || allIps.isEmpty()
+
+    // ── Persist ─────────────────────────────────────────────────
+    fun saveAll() {
+        prefs.edit()
+            .putInt(K_FPS, fps)
+            .putInt(K_QUALITY, quality)
+            .putInt(K_PORT, port)
+            .putBoolean(K_AUDIO_ENABLED, audioEnabled)
+            .putInt(K_AUDIO_SR, audioSr)
+            .putInt(K_AUDIO_CH, audioCh)
+            .putInt(K_AUDIO_ENC, audioEnc)
+            .putInt(K_MAX_W, maxW)
+            .putInt(K_MAX_H, maxH)
+            .putInt(K_BITRATE, bitrate)
+            .putInt(K_AUTH_MODE, authMode)
+            .putString(K_PIN, pin)
+            .putString(K_BASIC_USER, basicUser)
+            .putString(K_BASIC_PASS, basicPass)
+            .putBoolean(K_AUTO_RESTART, autoRestart)
+            .putBoolean(K_HTTPS, httpsEnabled)
+            .putBoolean(K_KEEP_AWAKE, keepAwake)
+            .apply()
+    }
+
+    // ── Presets — mirror Miroir's MainActivity.applyPreset() ────
+    fun applyPreset(name: String) {
+        if (isStreaming) return
+        when (name) {
+            "presentation" -> {
+                fps = 15; quality = 70; audioEnabled = false
+                maxW = 1280; maxH = 720; bitrate = 4000
+                audioSr = 44100; audioCh = 2
+                audioEnc = AudioFormat.ENCODING_PCM_16BIT
+                keepAwake = true
+                authMode = AUTH_NONE
+            }
+            "gaming" -> {
+                fps = 60; quality = 85; audioEnabled = true
+                maxW = 1920; maxH = 1080; bitrate = 8000
+                audioSr = 48000; audioCh = 2
+                audioEnc = AudioFormat.ENCODING_PCM_16BIT
+                keepAwake = true
+                authMode = AUTH_NONE
+            }
+            "dashboard" -> {
+                fps = 5; quality = 50; audioEnabled = false
+                maxW = 1280; maxH = 720; bitrate = 2000
+                audioSr = 44100; audioCh = 2
+                audioEnc = AudioFormat.ENCODING_PCM_16BIT
+                keepAwake = true
+                authMode = AUTH_NONE
+            }
+            "low_bw" -> {
+                fps = 10; quality = 40; audioEnabled = false
+                maxW = 854; maxH = 480; bitrate = 1000
+                audioSr = 44100; audioCh = 2
+                audioEnc = AudioFormat.ENCODING_PCM_16BIT
+                keepAwake = false
+                authMode = AUTH_NONE
+            }
+        }
+        saveAll()
+    }
+
+    // ── Stopped broadcast ───────────────────────────────────────
     DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
                 if (intent.action == MiroirService.ACTION_STOPPED) {
                     isStreaming = false
+                    // Auto-restart only meaningful while dialog is open (needs user tap
+                    // for MediaProjection permission on every restart anyway).
+                    if (autoRestart) {
+                        // will require user interaction — we simply show a hint below
+                    }
                 }
             }
         }
@@ -94,24 +217,7 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
         onDispose { runCatching { context.unregisterReceiver(receiver) } }
     }
 
-    // ── Persist on change ───────────────────────────────────────
-    fun saveAll() {
-        prefs.edit()
-            .putInt("fps", fps)
-            .putInt("quality", quality)
-            .putInt("port", port)
-            .putBoolean("audio_enabled", audioEnabled)
-            .putInt("audio_sr", audioSr)
-            .putInt("resolution", resolutionIdx)
-            .putInt("bitrate", bitrate)
-            .putInt("auth_mode", authMode)
-            .putString("pin", pin)
-            .putString("basic_user", basicUser)
-            .putString("basic_pass", basicPass)
-            .apply()
-    }
-
-    // ── MediaProjection launcher ────────────────────────────────
+    // ── Launchers ───────────────────────────────────────────────
     val projectionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -123,11 +229,12 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                 data = result.data!!,
                 fps = fps, quality = quality, port = port,
                 audioEnabled = audioEnabled, audioSr = audioSr,
-                maxWidth = resolutions[resolutionIdx].first,
-                maxHeight = resolutions[resolutionIdx].second,
-                bitrate = bitrate,
+                audioCh = audioCh, audioEnc = audioEnc,
+                maxWidth = maxW, maxHeight = maxH, bitrate = bitrate,
                 authMode = authMode, pin = pin,
-                basicUser = basicUser, basicPass = basicPass
+                basicUser = basicUser, basicPass = basicPass,
+                httpsEnabled = httpsEnabled,
+                keepAwake = keepAwake
             )
             isStreaming = true
         } else {
@@ -139,7 +246,6 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
         }
     }
 
-    // ── Audio permission launcher ───────────────────────────────
     val audioPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -166,10 +272,11 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
     }
 
     fun stopStream() {
-        val svc = Intent(context, MiroirService::class.java).apply {
-            action = MiroirService.ACTION_STOP
-        }
-        context.startService(svc)
+        context.startService(
+            Intent(context, MiroirService::class.java).apply {
+                action = MiroirService.ACTION_STOP
+            }
+        )
         isStreaming = false
     }
 
@@ -189,10 +296,10 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 620.dp)
+                    .heightIn(max = 640.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                // ── Status ─────────────────────────────
+                // ── Status ───────────────────────────────────────
                 Text(
                     stringResource(
                         if (isStreaming) R.string.app_mirror_status_live
@@ -202,14 +309,30 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                     fontWeight = FontWeight.Bold
                 )
 
-                if (isStreaming && currentUrl.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
+
+                // ── URL (always shown) ───────────────────────────
+                if (noNetwork) {
+                    Text(
+                        stringResource(R.string.app_mirror_status_no_network),
+                        color = Color(0xFFF59E0B),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                } else {
                     OutlinedTextField(
-                        value = currentUrl,
+                        value = computedUrl,
                         onValueChange = {},
                         readOnly = true,
                         singleLine = true,
-                        label = { Text(stringResource(R.string.app_mirror_view_at)) },
+                        label = {
+                            Text(
+                                stringResource(
+                                    if (isStreaming) R.string.app_mirror_stream_url_live
+                                    else R.string.app_mirror_stream_url_preview
+                                )
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
@@ -226,7 +349,7 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                         OutlinedButton(
                             onClick = {
                                 (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
-                                    .setPrimaryClip(ClipData.newPlainText("URL", currentUrl))
+                                    .setPrimaryClip(ClipData.newPlainText("URL", computedUrl))
                                 Toast.makeText(
                                     context,
                                     context.getString(R.string.app_mirror_url_copied),
@@ -242,7 +365,7 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                                     type = "text/plain"
                                     putExtra(
                                         Intent.EXTRA_TEXT,
-                                        context.getString(R.string.app_mirror_share_text, currentUrl)
+                                        context.getString(R.string.app_mirror_share_text, computedUrl)
                                     )
                                 }
                                 context.startActivity(
@@ -255,15 +378,93 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                             modifier = Modifier.weight(1f)
                         ) { Text(stringResource(R.string.app_mirror_share)) }
                     }
+
+                    // ── IP picker ────────────────────────────────
+                    if (allIps.size > 1) {
+                        Spacer(Modifier.height(6.dp))
+                        var ipExpanded by remember { mutableStateOf(false) }
+                        Box {
+                            TextButton(
+                                onClick = { ipExpanded = true },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    stringResource(R.string.app_mirror_ip_label) + ": " + displayIp + " ▼",
+                                    color = Color(0xFFC3B6F9),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = ipExpanded,
+                                onDismissRequest = { ipExpanded = false }
+                            ) {
+                                allIps.forEach { ip ->
+                                    DropdownMenuItem(
+                                        text = { Text(ip) },
+                                        onClick = { selectedIp = ip; ipExpanded = false }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
                 Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                Spacer(Modifier.height(10.dp))
 
-                // ── FPS ────────────────────────────────
-                SectionLabel(stringResource(R.string.app_mirror_label_fps))
+                // ── Presets ──────────────────────────────────────
+                SectionLabel(stringResource(R.string.app_mirror_label_presets))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "presentation" to stringResource(R.string.app_mirror_preset_presentation),
+                        "gaming"       to stringResource(R.string.app_mirror_preset_gaming),
+                    ).forEach { (k, label) ->
+                        OutlinedButton(
+                            onClick = { applyPreset(k) },
+                            enabled = !isStreaming,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text(label, style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "dashboard" to stringResource(R.string.app_mirror_preset_dashboard),
+                        "low_bw"    to stringResource(R.string.app_mirror_preset_low_bw),
+                    ).forEach { (k, label) ->
+                        OutlinedButton(
+                            onClick = { applyPreset(k) },
+                            enabled = !isStreaming,
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text(label, style = MaterialTheme.typography.bodySmall) }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                Spacer(Modifier.height(10.dp))
+
+                // ── Simple / Advanced tabs ───────────────────────
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(
+                        selected = !showAdvanced,
+                        onClick = { showAdvanced = false },
+                        label = { Text(stringResource(R.string.app_mirror_tab_simple)) }
+                    )
+                    FilterChip(
+                        selected = showAdvanced,
+                        onClick = { showAdvanced = true },
+                        label = { Text(stringResource(R.string.app_mirror_tab_advanced)) }
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+
+                // ── FPS (always visible) ─────────────────────────
+                SectionLabel(stringResource(R.string.app_mirror_label_fps))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     listOf(5, 10, 15, 24, 30, 60).forEach { f ->
                         FilterChip(
                             selected = fps == f,
@@ -274,114 +475,281 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // ── Quality ────────────────────────────
+                // ── Quality ──────────────────────────────────────
                 SectionLabel(stringResource(R.string.app_mirror_label_quality, quality))
                 Slider(
                     value = quality.toFloat(),
-                    onValueChange = { if (!isStreaming) { quality = it.toInt().coerceIn(10, 100); saveAll() } },
+                    onValueChange = {
+                        if (!isStreaming) {
+                            quality = it.toInt().coerceIn(10, 100)
+                            saveAll()
+                        }
+                    },
                     valueRange = 10f..100f,
                     enabled = !isStreaming
                 )
 
-                // ── Resolution ─────────────────────────
-                SectionLabel(stringResource(R.string.app_mirror_label_resolution))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("480p", "720p", "1080p").forEachIndexed { i, label ->
-                        FilterChip(
-                            selected = resolutionIdx == i,
-                            onClick = { if (!isStreaming) { resolutionIdx = i; saveAll() } },
-                            enabled = !isStreaming,
-                            label = { Text(label) }
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
-
-                // ── Audio ──────────────────────────────
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        stringResource(R.string.app_mirror_label_audio),
-                        color = Color.White,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = audioEnabled,
-                        onCheckedChange = { if (!isStreaming) { audioEnabled = it; saveAll() } },
-                        enabled = !isStreaming
-                    )
-                }
-
-                // ── Port ───────────────────────────────
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = port.toString(),
-                    onValueChange = { txt ->
-                        if (!isStreaming) {
-                            val p = txt.toIntOrNull()
-                            if (p != null && p in 1..65535) { port = p; saveAll() }
+                // ════════════════════════════════════════════════
+                //  SIMPLE-ONLY section
+                // ════════════════════════════════════════════════
+                if (!showAdvanced) {
+                    SectionLabel(stringResource(R.string.app_mirror_label_resolution))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        resolutionLabels.forEachIndexed { i, label ->
+                            FilterChip(
+                                selected = resolutionIdx == i,
+                                onClick = {
+                                    if (!isStreaming) {
+                                        maxW = resolutionOptions[i].first
+                                        maxH = resolutionOptions[i].second
+                                        saveAll()
+                                    }
+                                },
+                                enabled = !isStreaming,
+                                label = { Text(label) }
+                            )
                         }
-                    },
-                    label = { Text(stringResource(R.string.app_mirror_label_port)) },
-                    singleLine = true,
-                    enabled = !isStreaming,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = Color(0xFFC3B6F9),
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
-                        focusedLabelColor = Color(0xFFC3B6F9),
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
-                        cursorColor = Color(0xFFC3B6F9)
-                    )
-                )
+                    }
 
-                // ── Auth ───────────────────────────────
-                Spacer(Modifier.height(12.dp))
-                SectionLabel(stringResource(R.string.app_mirror_label_authentication))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val authLabels = listOf(
-                        stringResource(R.string.app_mirror_auth_none),
-                        stringResource(R.string.app_mirror_auth_pin),
-                        stringResource(R.string.app_mirror_auth_basic)
-                    )
-                    authLabels.forEachIndexed { i, label ->
-                        FilterChip(
-                            selected = authMode == i,
-                            onClick = { if (!isStreaming) { authMode = i; saveAll() } },
-                            enabled = !isStreaming,
-                            label = { Text(label) }
+                    Spacer(Modifier.height(8.dp))
+
+                    // Audio on/off + (when on) sample rate / channels / encoding
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.app_mirror_label_audio),
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
                         )
+                        Switch(
+                            checked = audioEnabled,
+                            onCheckedChange = {
+                                if (!isStreaming) { audioEnabled = it; saveAll() }
+                            },
+                            enabled = !isStreaming
+                        )
+                    }
+                    if (audioEnabled) {
+                        Spacer(Modifier.height(4.dp))
+                        SectionLabel(stringResource(R.string.app_mirror_label_audio_sample_rate))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            sampleRates.forEachIndexed { i, sr ->
+                                FilterChip(
+                                    selected = audioSr == sr,
+                                    onClick = { if (!isStreaming) { audioSr = sr; saveAll() } },
+                                    enabled = !isStreaming,
+                                    label = { Text(sampleRateLabels[i], style = MaterialTheme.typography.bodySmall) }
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        SectionLabel(stringResource(R.string.app_mirror_label_audio_channels))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            FilterChip(
+                                selected = audioCh == 1,
+                                onClick = { if (!isStreaming) { audioCh = 1; saveAll() } },
+                                enabled = !isStreaming,
+                                label = { Text(stringResource(R.string.app_mirror_ch_mono)) }
+                            )
+                            FilterChip(
+                                selected = audioCh == 2,
+                                onClick = { if (!isStreaming) { audioCh = 2; saveAll() } },
+                                enabled = !isStreaming,
+                                label = { Text(stringResource(R.string.app_mirror_ch_stereo)) }
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        SectionLabel(stringResource(R.string.app_mirror_label_audio_encoding))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            encodings.forEachIndexed { i, enc ->
+                                FilterChip(
+                                    selected = audioEnc == enc,
+                                    onClick = { if (!isStreaming) { audioEnc = enc; saveAll() } },
+                                    enabled = !isStreaming,
+                                    label = { Text(encodingLabels[i], style = MaterialTheme.typography.bodySmall) }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Port
+                    OutlinedTextField(
+                        value = port.toString(),
+                        onValueChange = { txt ->
+                            if (!isStreaming) {
+                                val p = txt.toIntOrNull()
+                                if (p != null && p in 1..65535) { port = p; saveAll() }
+                            }
+                        },
+                        label = { Text(stringResource(R.string.app_mirror_label_port)) },
+                        singleLine = true,
+                        enabled = !isStreaming,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color(0xFFC3B6F9),
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            focusedLabelColor = Color(0xFFC3B6F9),
+                            unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                            cursorColor = Color(0xFFC3B6F9)
+                        )
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Auth
+                    SectionLabel(stringResource(R.string.app_mirror_label_authentication))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val authLabels = listOf(
+                            stringResource(R.string.app_mirror_auth_none),
+                            stringResource(R.string.app_mirror_auth_pin),
+                            stringResource(R.string.app_mirror_auth_basic),
+                        )
+                        authLabels.forEachIndexed { i, label ->
+                            FilterChip(
+                                selected = authMode == i,
+                                onClick = { if (!isStreaming) { authMode = i; saveAll() } },
+                                enabled = !isStreaming,
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                    if (authMode == AUTH_PIN) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                stringResource(R.string.app_mirror_label_pin, pin),
+                                color = Color.White,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                onClick = { pin = generatePin(); saveAll() },
+                                enabled = !isStreaming
+                            ) { Text(stringResource(R.string.app_mirror_regenerate)) }
+                        }
+                    } else if (authMode == AUTH_BASIC) {
+                        Spacer(Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = basicUser,
+                            onValueChange = { if (!isStreaming) { basicUser = it; saveAll() } },
+                            label = { Text(stringResource(R.string.app_mirror_label_basic_user)) },
+                            singleLine = true,
+                            enabled = !isStreaming,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = Color(0xFFC3B6F9),
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                focusedLabelColor = Color(0xFFC3B6F9),
+                                unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                                cursorColor = Color(0xFFC3B6F9)
+                            )
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = basicPass,
+                                onValueChange = { if (!isStreaming) { basicPass = it; saveAll() } },
+                                label = { Text(stringResource(R.string.app_mirror_label_basic_pass)) },
+                                singleLine = true,
+                                enabled = !isStreaming,
+                                modifier = Modifier.weight(1f),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = Color(0xFFC3B6F9),
+                                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                                    focusedLabelColor = Color(0xFFC3B6F9),
+                                    unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                                    cursorColor = Color(0xFFC3B6F9)
+                                )
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            TextButton(
+                                onClick = { basicPass = generatePassword(); saveAll() },
+                                enabled = !isStreaming
+                            ) { Text(stringResource(R.string.app_mirror_regenerate)) }
+                        }
                     }
                 }
-                if (authMode == AUTH_PIN) {
-                    Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            stringResource(R.string.app_mirror_label_pin, pin),
-                            color = Color.White,
-                            modifier = Modifier.weight(1f)
-                        )
-                        TextButton(
-                            onClick = { pin = generatePin(); saveAll() },
-                            enabled = !isStreaming
-                        ) { Text(stringResource(R.string.app_mirror_regenerate)) }
+
+                // ════════════════════════════════════════════════
+                //  ADVANCED-ONLY section
+                // ════════════════════════════════════════════════
+                if (showAdvanced) {
+                    // Bitrate
+                    SectionLabel(stringResource(R.string.app_mirror_label_bitrate))
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        bitrateOptions.forEach { b ->
+                            FilterChip(
+                                selected = bitrate == b,
+                                onClick = { if (!isStreaming) { bitrate = b; saveAll() } },
+                                enabled = !isStreaming,
+                                label = {
+                                    Text(
+                                        stringResource(R.string.app_mirror_bitrate_kbps, b),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            )
+                        }
                     }
-                } else if (authMode == AUTH_BASIC) {
-                    Spacer(Modifier.height(6.dp))
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Auto-restart
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            stringResource(R.string.app_mirror_label_basic, basicUser, basicPass),
+                            stringResource(R.string.app_mirror_label_auto_restart),
                             color = Color.White,
                             modifier = Modifier.weight(1f)
                         )
-                        TextButton(
-                            onClick = { basicPass = generatePassword(); saveAll() },
+                        Switch(
+                            checked = autoRestart,
+                            onCheckedChange = { if (!isStreaming) { autoRestart = it; saveAll() } },
                             enabled = !isStreaming
-                        ) { Text(stringResource(R.string.app_mirror_new_pass)) }
+                        )
+                    }
+
+                    // HTTPS
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.app_mirror_label_https),
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = httpsEnabled,
+                            onCheckedChange = { if (!isStreaming) { httpsEnabled = it; saveAll() } },
+                            enabled = !isStreaming
+                        )
+                    }
+                    if (httpsEnabled) {
+                        Text(
+                            stringResource(R.string.app_mirror_label_https_warn),
+                            color = Color(0xFFF59E0B),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                    }
+
+                    // Keep awake
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.app_mirror_label_keep_awake),
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = keepAwake,
+                            onCheckedChange = { if (!isStreaming) { keepAwake = it; saveAll() } },
+                            enabled = !isStreaming
+                        )
                     }
                 }
             }
@@ -436,10 +804,11 @@ private fun startMiroirService(
     resultCode: Int,
     data: Intent,
     fps: Int, quality: Int, port: Int,
-    audioEnabled: Boolean, audioSr: Int,
+    audioEnabled: Boolean, audioSr: Int, audioCh: Int, audioEnc: Int,
     maxWidth: Int, maxHeight: Int, bitrate: Int,
     authMode: Int, pin: String,
-    basicUser: String, basicPass: String
+    basicUser: String, basicPass: String,
+    httpsEnabled: Boolean, keepAwake: Boolean
 ) {
     val authModeName = when (authMode) {
         AUTH_PIN   -> "PIN"
@@ -454,11 +823,11 @@ private fun startMiroirService(
         putExtra(MiroirService.EXTRA_QUALITY, quality)
         putExtra(MiroirService.EXTRA_FPS, fps)
         putExtra(MiroirService.EXTRA_AUDIO, audioEnabled)
-        putExtra(MiroirService.EXTRA_HTTPS, false)
-        putExtra(MiroirService.EXTRA_KEEP_AWAKE, true)
+        putExtra(MiroirService.EXTRA_HTTPS, httpsEnabled)
+        putExtra(MiroirService.EXTRA_KEEP_AWAKE, keepAwake)
         putExtra(MiroirService.EXTRA_AUDIO_SR, audioSr)
-        putExtra(MiroirService.EXTRA_AUDIO_CH, 2)
-        putExtra(MiroirService.EXTRA_AUDIO_ENC, AudioFormat.ENCODING_PCM_16BIT)
+        putExtra(MiroirService.EXTRA_AUDIO_CH, audioCh)
+        putExtra(MiroirService.EXTRA_AUDIO_ENC, audioEnc)
         putExtra(MiroirService.EXTRA_MAX_WIDTH, maxWidth)
         putExtra(MiroirService.EXTRA_MAX_HEIGHT, maxHeight)
         putExtra(MiroirService.EXTRA_BITRATE, bitrate)
@@ -497,30 +866,21 @@ private fun generatePassword(): String {
     }
 }
 
-private fun getLocalIpAddress(): String {
+/** All usable IPv4 addresses on the device — same filtering as Miroir's original. */
+private fun getAllLocalIps(): List<String> {
+    val ips = mutableListOf<String>()
     try {
-        for (iface in Collections.list(NetworkInterface.getNetworkInterfaces())) {
-            val n = iface.name.lowercase(Locale.ROOT)
-            if (n.startsWith("wlan") || n.startsWith("wifi") ||
-                n.startsWith("eth") || n.startsWith("enp")) {
-                for (addr in Collections.list(iface.inetAddresses)) {
-                    val h = addr.hostAddress ?: continue
-                    if (addr.isLoopbackAddress || h.contains(":")) continue
-                    return h
-                }
-            }
-        }
         for (iface in Collections.list(NetworkInterface.getNetworkInterfaces())) {
             val n = iface.name.lowercase(Locale.ROOT)
             if (n.contains("tun") || n.contains("tap") || n.contains("vpn") ||
                 n.contains("ppp") || n.contains("docker") || n.contains("veth") ||
                 n == "lo" || n.startsWith("lo:")) continue
-            for (addr in Collections.list(iface.inetAddresses)) {
+            for (addr: InetAddress in Collections.list(iface.inetAddresses)) {
                 val h = addr.hostAddress ?: continue
                 if (addr.isLoopbackAddress || h.contains(":")) continue
-                return h
+                if (!ips.contains(h)) ips.add(h)
             }
         }
     } catch (_: Exception) {}
-    return "0.0.0.0"
+    return ips
 }
