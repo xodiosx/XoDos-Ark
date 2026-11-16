@@ -1,6 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-<?xml version="1.0" encoding="utf-8"?>
+
 <resources>
 
     <!-- ═══════ Drawer section ═══════ -->
@@ -47,7 +45,8 @@
     <string name="app_mirror_toast_capture_denied">Screen capture permission denied</string>
     <string name="app_mirror_toast_audio_denied">Audio permission denied, streaming without audio</string>
 
-</resources>
+
+
     <!-- Shortcuts -->
     <string name="shortcut_start_stream">Start Stream</string>
     <string name="shortcut_start_stream_long">Start screen streaming</string>
