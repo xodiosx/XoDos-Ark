@@ -1676,21 +1676,35 @@ public class MiroirService extends Service {
     }
 
     private Notification buildNotification(int port) {
-        PendingIntent stopPi = PendingIntent.getService(this, 0,
-            new Intent(this, MiroirService.class).setAction(ACTION_STOP),
+    PendingIntent stopPi = PendingIntent.getService(this, 0,
+        new Intent(this, MiroirService.class).setAction(ACTION_STOP),
+        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+    // Open XoDos's launcher activity instead of Miroir's MainActivity (which no
+    // longer exists in this app). getLaunchIntentForPackage resolves to whatever
+    // activity declares <action MAIN> + <category LAUNCHER> in our manifest.
+    Intent openIntent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+    PendingIntent mainPi;
+    if (openIntent != null) {
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        mainPi = PendingIntent.getActivity(this, 0, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        PendingIntent mainPi = PendingIntent.getActivity(this, 0,
-            new Intent(this, MainActivity.class),
-            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Miroir - Live")
-            .setContentText("Streaming on port " + port)
-            .setSmallIcon(android.R.drawable.ic_menu_share)
-            .setContentIntent(mainPi)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPi)
-            .setOngoing(true)
-            .build();
+    } else {
+        // Extremely unlikely (manifest would have to be broken), but the
+        // NotificationCompat.Builder below tolerates a null contentIntent
+        // — the "Stop" action still works, and that's the important part.
+        mainPi = null;
     }
+
+    return new NotificationCompat.Builder(this, CHANNEL_ID)
+        .setContentTitle("Miroir - Live")
+        .setContentText("Streaming on port " + port)
+        .setSmallIcon(android.R.drawable.ic_menu_share)
+        .setContentIntent(mainPi)
+        .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop", stopPi)
+        .setOngoing(true)
+        .build();
+}
 
     @Override
     public void onDestroy() {
