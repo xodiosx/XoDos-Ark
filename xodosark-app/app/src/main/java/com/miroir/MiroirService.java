@@ -1376,7 +1376,7 @@ public class MiroirService extends Service {
         return "<!DOCTYPE html><html lang='en'><head>"
 + "<meta charset='utf-8'>"
 + "<meta name='viewport' content='width=device-width,initial-scale=1,maximum-scale=1'>"
-+ "<title>Miroir</title>"
++ "<title>XoDos</title>"
 + "<style>"
 + ":root{--bg:#0a0a0f;--sur:#13131a;--bdr:#1e1e2e;--acc:#4f8ef7;--ac2:#7c5cbf;--txt:#e2e2f0;--mut:#555570;--grn:#22c55e;--red:#ef4444;--yel:#f59e0b;}"
 + "*{margin:0;padding:0;box-sizing:border-box;}"
@@ -1429,7 +1429,7 @@ public class MiroirService extends Service {
 + "</style></head><body>"
 + "<div id='app'>"
 + "<div id='topbar'>"
-+ "<h1>Miroir</h1>"
++ "<h1>XoDos</h1>"
 + "<div id='badge'><div id='dot'></div><span id='stxt'>Connecting...</span></div>"
 + "<div id='controls'>"
 + "<span id='obadge'>--</span>"
@@ -1697,7 +1697,7 @@ public class MiroirService extends Service {
     }
 
     return new NotificationCompat.Builder(this, CHANNEL_ID)
-        .setContentTitle("Miroir - Live")
+        .setContentTitle("XoDos - Live")
         .setContentText("Streaming on port " + port)
         .setSmallIcon(android.R.drawable.ic_menu_share)
         .setContentIntent(mainPi)
