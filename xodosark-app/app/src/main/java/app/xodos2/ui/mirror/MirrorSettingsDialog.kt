@@ -45,7 +45,7 @@ private const val AUTH_NONE  = 0
 private const val AUTH_PIN   = 1
 private const val AUTH_BASIC = 2
 
-// The exact keys used by Miroir's original Settings.java, so prefs are compatible
+// Exact keys used by Miroir's original Settings.java, so prefs are compatible
 private const val K_FPS              = "fps"
 private const val K_QUALITY          = "quality"
 private const val K_PORT             = "port"
@@ -202,11 +202,6 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
             override fun onReceive(ctx: Context, intent: Intent) {
                 if (intent.action == MiroirService.ACTION_STOPPED) {
                     isStreaming = false
-                    // Auto-restart only meaningful while dialog is open (needs user tap
-                    // for MediaProjection permission on every restart anyway).
-                    if (autoRestart) {
-                        // will require user interaction — we simply show a hint below
-                    }
                 }
             }
         }
@@ -415,33 +410,18 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
 
                 // ── Presets ──────────────────────────────────────
                 SectionLabel(stringResource(R.string.app_mirror_label_presets))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(
+                ChipWrap(
+                    items = listOf(
                         "presentation" to stringResource(R.string.app_mirror_preset_presentation),
                         "gaming"       to stringResource(R.string.app_mirror_preset_gaming),
-                    ).forEach { (k, label) ->
-                        OutlinedButton(
-                            onClick = { applyPreset(k) },
-                            enabled = !isStreaming,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.weight(1f)
-                        ) { Text(label, style = MaterialTheme.typography.bodySmall) }
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(
-                        "dashboard" to stringResource(R.string.app_mirror_preset_dashboard),
-                        "low_bw"    to stringResource(R.string.app_mirror_preset_low_bw),
-                    ).forEach { (k, label) ->
-                        OutlinedButton(
-                            onClick = { applyPreset(k) },
-                            enabled = !isStreaming,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.weight(1f)
-                        ) { Text(label, style = MaterialTheme.typography.bodySmall) }
-                    }
-                }
+                        "dashboard"    to stringResource(R.string.app_mirror_preset_dashboard),
+                        "low_bw"       to stringResource(R.string.app_mirror_preset_low_bw),
+                    ),
+                    label = { it.second },
+                    isSelected = { false },
+                    onClick = { (key, _) -> applyPreset(key) },
+                    enabled = !isStreaming
+                )
 
                 Spacer(Modifier.height(12.dp))
                 HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
@@ -462,18 +442,15 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                 }
                 Spacer(Modifier.height(10.dp))
 
-                // ── FPS (always visible) ─────────────────────────
+                // ── FPS  ← FIXED: uses ChipWrap so 60 wraps to next line ──
                 SectionLabel(stringResource(R.string.app_mirror_label_fps))
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf(5, 10, 15, 24, 30, 60).forEach { f ->
-                        FilterChip(
-                            selected = fps == f,
-                            onClick = { if (!isStreaming) { fps = f; saveAll() } },
-                            enabled = !isStreaming,
-                            label = { Text("$f") }
-                        )
-                    }
-                }
+                ChipWrap(
+                    items = listOf(5, 10, 15, 24, 30, 60),
+                    label = { "$it" },
+                    isSelected = { fps == it },
+                    onClick = { if (!isStreaming) { fps = it; saveAll() } },
+                    enabled = !isStreaming
+                )
 
                 Spacer(Modifier.height(8.dp))
 
@@ -496,26 +473,24 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                 // ════════════════════════════════════════════════
                 if (!showAdvanced) {
                     SectionLabel(stringResource(R.string.app_mirror_label_resolution))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        resolutionLabels.forEachIndexed { i, label ->
-                            FilterChip(
-                                selected = resolutionIdx == i,
-                                onClick = {
-                                    if (!isStreaming) {
-                                        maxW = resolutionOptions[i].first
-                                        maxH = resolutionOptions[i].second
-                                        saveAll()
-                                    }
-                                },
-                                enabled = !isStreaming,
-                                label = { Text(label) }
-                            )
-                        }
-                    }
+                    ChipWrap(
+                        items = resolutionLabels,
+                        label = { it },
+                        isSelected = { resolutionIdx == resolutionLabels.indexOf(it) },
+                        onClick = { label ->
+                            if (!isStreaming) {
+                                val i = resolutionLabels.indexOf(label)
+                                maxW = resolutionOptions[i].first
+                                maxH = resolutionOptions[i].second
+                                saveAll()
+                            }
+                        },
+                        enabled = !isStreaming
+                    )
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Audio on/off + (when on) sample rate / channels / encoding
+                    // Audio on/off + sub-options
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(R.string.app_mirror_label_audio),
@@ -533,44 +508,39 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                     if (audioEnabled) {
                         Spacer(Modifier.height(4.dp))
                         SectionLabel(stringResource(R.string.app_mirror_label_audio_sample_rate))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            sampleRates.forEachIndexed { i, sr ->
-                                FilterChip(
-                                    selected = audioSr == sr,
-                                    onClick = { if (!isStreaming) { audioSr = sr; saveAll() } },
-                                    enabled = !isStreaming,
-                                    label = { Text(sampleRateLabels[i], style = MaterialTheme.typography.bodySmall) }
-                                )
-                            }
-                        }
+                        ChipWrap(
+                            items = sampleRateLabels,
+                            label = { it },
+                            isSelected = { audioSr == sampleRates[sampleRateLabels.indexOf(it)] },
+                            onClick = { label ->
+                                if (!isStreaming) {
+                                    audioSr = sampleRates[sampleRateLabels.indexOf(label)]
+                                    saveAll()
+                                }
+                            },
+                            enabled = !isStreaming
+                        )
                         Spacer(Modifier.height(4.dp))
                         SectionLabel(stringResource(R.string.app_mirror_label_audio_channels))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            FilterChip(
-                                selected = audioCh == 1,
-                                onClick = { if (!isStreaming) { audioCh = 1; saveAll() } },
-                                enabled = !isStreaming,
-                                label = { Text(stringResource(R.string.app_mirror_ch_mono)) }
-                            )
-                            FilterChip(
-                                selected = audioCh == 2,
-                                onClick = { if (!isStreaming) { audioCh = 2; saveAll() } },
-                                enabled = !isStreaming,
-                                label = { Text(stringResource(R.string.app_mirror_ch_stereo)) }
-                            )
-                        }
+                        ChipWrap(
+                            items = listOf(1, 2),
+                            label = {
+                                if (it == 1) stringResource(R.string.app_mirror_ch_mono)
+                                else stringResource(R.string.app_mirror_ch_stereo)
+                            },
+                            isSelected = { audioCh == it },
+                            onClick = { if (!isStreaming) { audioCh = it; saveAll() } },
+                            enabled = !isStreaming
+                        )
                         Spacer(Modifier.height(4.dp))
                         SectionLabel(stringResource(R.string.app_mirror_label_audio_encoding))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            encodings.forEachIndexed { i, enc ->
-                                FilterChip(
-                                    selected = audioEnc == enc,
-                                    onClick = { if (!isStreaming) { audioEnc = enc; saveAll() } },
-                                    enabled = !isStreaming,
-                                    label = { Text(encodingLabels[i], style = MaterialTheme.typography.bodySmall) }
-                                )
-                            }
-                        }
+                        ChipWrap(
+                            items = encodings,
+                            label = { encodingLabels[encodings.indexOf(it)] },
+                            isSelected = { audioEnc == it },
+                            onClick = { if (!isStreaming) { audioEnc = it; saveAll() } },
+                            enabled = !isStreaming
+                        )
                     }
 
                     Spacer(Modifier.height(8.dp))
@@ -603,21 +573,19 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
 
                     // Auth
                     SectionLabel(stringResource(R.string.app_mirror_label_authentication))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        val authLabels = listOf(
-                            stringResource(R.string.app_mirror_auth_none),
-                            stringResource(R.string.app_mirror_auth_pin),
-                            stringResource(R.string.app_mirror_auth_basic),
-                        )
-                        authLabels.forEachIndexed { i, label ->
-                            FilterChip(
-                                selected = authMode == i,
-                                onClick = { if (!isStreaming) { authMode = i; saveAll() } },
-                                enabled = !isStreaming,
-                                label = { Text(label) }
-                            )
-                        }
-                    }
+                    ChipWrap(
+                        items = listOf(AUTH_NONE, AUTH_PIN, AUTH_BASIC),
+                        label = {
+                            when (it) {
+                                AUTH_PIN   -> stringResource(R.string.app_mirror_auth_pin)
+                                AUTH_BASIC -> stringResource(R.string.app_mirror_auth_basic)
+                                else       -> stringResource(R.string.app_mirror_auth_none)
+                            }
+                        },
+                        isSelected = { authMode == it },
+                        onClick = { if (!isStreaming) { authMode = it; saveAll() } },
+                        enabled = !isStreaming
+                    )
                     if (authMode == AUTH_PIN) {
                         Spacer(Modifier.height(6.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -682,27 +650,17 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                 //  ADVANCED-ONLY section
                 // ════════════════════════════════════════════════
                 if (showAdvanced) {
-                    // Bitrate
                     SectionLabel(stringResource(R.string.app_mirror_label_bitrate))
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        bitrateOptions.forEach { b ->
-                            FilterChip(
-                                selected = bitrate == b,
-                                onClick = { if (!isStreaming) { bitrate = b; saveAll() } },
-                                enabled = !isStreaming,
-                                label = {
-                                    Text(
-                                        stringResource(R.string.app_mirror_bitrate_kbps, b),
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            )
-                        }
-                    }
+                    ChipWrap(
+                        items = bitrateOptions,
+                        label = { stringResource(R.string.app_mirror_bitrate_kbps, it) },
+                        isSelected = { bitrate == it },
+                        onClick = { if (!isStreaming) { bitrate = it; saveAll() } },
+                        enabled = !isStreaming
+                    )
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Auto-restart
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(R.string.app_mirror_label_auto_restart),
@@ -716,7 +674,6 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                         )
                     }
 
-                    // HTTPS
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(R.string.app_mirror_label_https),
@@ -738,7 +695,6 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
                         )
                     }
 
-                    // Keep awake
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             stringResource(R.string.app_mirror_label_keep_awake),
@@ -779,6 +735,35 @@ fun MirrorSettingsDialog(onDismiss: () -> Unit) {
 }
 
 /* ─────────────── helpers ─────────────── */
+
+/**
+ * Wraps a list of chips onto multiple lines when they don't fit in the
+ * dialog width. Without this, the last one or two chips of any row of
+ * 5+ items were being rendered off-screen (Row never wraps).
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> ChipWrap(
+    items: List<T>,
+    label: @Composable (T) -> String,
+    isSelected: (T) -> Boolean,
+    onClick: (T) -> Unit,
+    enabled: Boolean = true
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items.forEach { item ->
+            FilterChip(
+                selected = isSelected(item),
+                onClick = { onClick(item) },
+                enabled = enabled,
+                label = { Text(label(item)) }
+            )
+        }
+    }
+}
 
 @Composable
 private fun SectionLabel(text: String) {
@@ -866,7 +851,6 @@ private fun generatePassword(): String {
     }
 }
 
-/** All usable IPv4 addresses on the device — same filtering as Miroir's original. */
 private fun getAllLocalIps(): List<String> {
     val ips = mutableListOf<String>()
     try {
