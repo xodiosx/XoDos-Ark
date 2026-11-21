@@ -1468,7 +1468,7 @@ private fun symlinksNeedRefresh(context: Context): Boolean {
 
         val symlinks = mapOf(
             "libexec_busybox.so" to "busybox",
-            "libexec_tar.so"    to "tar",
+            "libexec_busybox.so"    to "tar",
             "libproot.so"       to "proot",
             "libxz.so"          to "xz",
             "libpv.so"          to "pv",

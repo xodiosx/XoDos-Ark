@@ -505,10 +505,10 @@ pub(super) fn find_shell_in_rootfs(rootfs: &Path) -> Option<(&'static str, bool)
 fn build_native_args() -> Result<(Vec<CString>, Vec<CString>)> {
     let ctx = get_application_context()?;
     let prefix_str = ctx.data_dir.join("usr").to_string_lossy().into_owned();
-    let home_dir   = "/data/data/app.xodos2/files/home";
+    let home_dir   = format!("{}/home", ctx.data_dir.display());
     let tmp_dir    = format!("{}/tmp", prefix_str);
     let _ = fs::create_dir_all(&tmp_dir);
-    let _ = fs::create_dir_all(home_dir);
+    let _ = fs::create_dir_all(&home_dir);
 
     #[cfg(target_pointer_width = "64")]
     let linker = "/system/bin/linker64";
@@ -517,25 +517,56 @@ fn build_native_args() -> Result<(Vec<CString>, Vec<CString>)> {
 
     let bash = format!("{}/bin/bash", prefix_str);
     let sh   = format!("{}/bin/sh", prefix_str);
-    let (shell, is_bionic) = if Path::new(&bash).exists() { (bash, true) }
-        else if Path::new(&sh).exists() { (sh, true) }
-        else { ("/system/bin/sh".to_string(), false) };
+
+    // Prefer bash > sh > system fallback. Only bash/sh from the Termux
+    // prefix need the linker trick — /system/bin/sh is invoked directly.
+    let (shell_path, use_linker) = if Path::new(&bash).exists() {
+        (bash, true)
+    } else if Path::new(&sh).exists() {
+        (sh, true)
+    } else {
+        ("/system/bin/sh".to_string(), false)
+    };
 
     let mut argv: Vec<CString> = Vec::new();
-    if is_bionic { argv.push(CString::new(linker).unwrap()); }
-    argv.push(CString::new(shell).unwrap());
+    if use_linker {
+        // Invoking linker explicitly bypasses the kernel's PT_INTERP path,
+        // which is what fails on API 24/25 for Termux-prefix binaries.
+        argv.push(CString::new(linker).unwrap());
+    }
+    argv.push(CString::new(shell_path.as_str()).unwrap());
+    // ── THE FIX ── force interactive just like the proot path does.
     argv.push(CString::new("-l").unwrap());
+    argv.push(CString::new("-i").unwrap());
 
-    let env = vec![
+    // ── Android system env (critical on API 24/25) ──
+    let mut env: Vec<CString> = vec![
+        CString::new("ANDROID_ROOT=/system").unwrap(),
+        CString::new("ANDROID_DATA=/data").unwrap(),
+        CString::new("EXTERNAL_STORAGE=/sdcard").unwrap(),
         CString::new(format!("PREFIX={}", prefix_str)).unwrap(),
         CString::new(format!("HOME={}", home_dir)).unwrap(),
         CString::new(format!("TMPDIR={}", tmp_dir)).unwrap(),
         CString::new(format!("PATH={}/bin:/system/bin:/system/xbin", prefix_str)).unwrap(),
         CString::new(format!("LD_LIBRARY_PATH={}/lib", prefix_str)).unwrap(),
         CString::new("TERM=xterm-256color").unwrap(),
+        CString::new("LANG=C.UTF-8").unwrap(),
         CString::new("DISPLAY=:0").unwrap(),
-        CString::new("PS1=[XoDos-Ark\\W]\\$ ").unwrap(),
     ];
+
+    // Inherit apex/ART/classpath vars from the parent so libc doesn't fall
+    // back to /system-only paths on API 24/25.
+    for name in [
+        "ANDROID_ART_ROOT", "ANDROID_I18N_ROOT", "ANDROID_TZDATA_ROOT",
+        "ANDROID_RUNTIME_ROOT", "BOOTCLASSPATH",
+    ] {
+        if let Ok(v) = std::env::var(name) {
+            if let Ok(cs) = CString::new(format!("{}={}", name, v)) {
+                env.push(cs);
+            }
+        }
+    }
+
     Ok((argv, env))
 }
 
@@ -867,7 +898,20 @@ fn fork_pty_with_argv(
     let r = unsafe { forkpty(Some(&ws), None).context("forkpty failed")? };
     match r {
         ForkptyResult::Child => {
-            if execve(argv[0].as_c_str(), &a, &e).is_err() {
+            // If execve fails, write a visible error to the PTY (stderr is
+            // the slave) BEFORE exiting, so the terminal shows why it died.
+            if let Err(err) = execve(argv[0].as_c_str(), &a, &e) {
+                use std::io::Write as _;
+                let msg = format!(
+                    "\r\n[xodos2] execve failed: {}\r\n  argv[0]={:?}\r\n  errno={}\r\n",
+                    err,
+                    argv[0],
+                    std::io::Error::last_os_error(),
+                );
+                let _ = std::io::stderr().write_all(msg.as_bytes());
+                let _ = std::io::stderr().flush();
+                // Give the PTY a moment to flush before we exit.
+                std::thread::sleep(std::time::Duration::from_millis(80));
                 unsafe { nix::libc::_exit(1) };
             }
             unreachable!();
