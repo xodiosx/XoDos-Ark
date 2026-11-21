@@ -123,23 +123,38 @@ mod combined {
     }
 
     fn pty_master_reader_loop(session_id: i32, mut master_read: std::fs::File) {
-        let mut buf = [0u8; 4096];
-        loop {
-            match master_read.read(&mut buf) {
-                Ok(0) => {
-                    log::info!("pty[{}]: EOF", session_id);
-                    break;
-                }
-                Ok(n) => {
-                    post_pty_chunk_to_java(session_id, &buf[..n]);
-                }
-                Err(e) => {
-                    log::info!("pty[{}]: read err {:?}", session_id, e);
-                    break;
+    let mut buf = [0u8; 4096];
+    loop {
+        match master_read.read(&mut buf) {
+            Ok(0) => {
+                log::warn!("pty[{}]: EOF — child closed slave side", session_id);
+                break;
+            }
+            Ok(n) => {
+                log::warn!("pty[{}]: {} bytes from child", session_id, n); // TEMP
+                post_pty_chunk_to_java(session_id, &buf[..n]);
+            }
+            Err(e) => {
+                log::warn!("pty[{}]: read err {:?}", session_id, e);   // ← WARN not INFO
+                break;
+            }
+        }
+    }
+    // ── reap child status ──
+    if let Ok(mut map) = SESSIONS.lock() {
+        if let Some(sess) = map.remove(&session_id) {
+            let mut status: i32 = 0;
+            let r = unsafe { libc::waitpid(sess._child.pid.as_raw(), &mut status, libc::WNOHANG) };
+            if r > 0 {
+                if libc::WIFSIGNALED(status) {
+                    log::warn!("pty[{}]: child died by signal {}", session_id, libc::WTERMSIG(status));
+                } else if libc::WIFEXITED(status) {
+                    log::warn!("pty[{}]: child exited with code {}", session_id, libc::WEXITSTATUS(status));
                 }
             }
         }
     }
+}
 
     fn post_pty_chunk_to_java(session_id: i32, bytes: &[u8]) {
         let Some(vm) = JAVA_VM.get() else { return };
@@ -233,10 +248,10 @@ mod combined {
         external_storage_dir: jni::sys::jstring,
     ) -> jboolean {
         android_logger::init_once(
-            android_logger::Config::default()
-                .with_max_level(log::LevelFilter::Warn)
-                .with_tag("xodos2"),
-        );
+    android_logger::Config::default()
+        .with_max_level(log::LevelFilter::Debug)   // ← was Warn
+        .with_tag("xodos2"),
+);
         std::panic::set_hook(Box::new(|info| {
             log::error!("xodos2: panic: {:?}", info);
         }));
