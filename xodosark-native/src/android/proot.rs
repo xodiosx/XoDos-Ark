@@ -1,3 +1,4 @@
+
 //! proot.rs — Proot argv/env with full proot-distro-style options.
 //!
 //! Options live in `<filesDir>/proot_options/container_<id>.json`.
@@ -7,7 +8,7 @@
 //! the Android UI rewrites on every drawer save), so prompt updates take
 //! effect on the very next shell prompt — even mid-session.
 
-use super::{get_application_context, has_rootfs};
+use super::{get_application_context, has_rootfs, should_use_linker_trampoline};
 use super::{host_pulse_runtime_dir, guest_pulse_server_env, GUEST_PULSE_RUNTIME_MOUNT};
 use anyhow::{Context, Result};
 use nix::pty::{forkpty, ForkptyResult, Winsize};
@@ -254,706 +255,638 @@ fn ensure_user_in_rootfs(rootfs: &Path, username: &str) -> Result<(u32, u32)> {
     if let Some(p) = passwd.parent() { let _ = fs::create_dir_all(p); }
     let content = fs::read_to_string(&passwd).unwrap_or_default();
     if !content.lines().any(|l| l.starts_with(&format!("{}:", user))) {
-        let entry = format!("{}:x:{}:{}:{}:/home/{}:/bin/bash\n", user, uid, gid, user, user);
-        fs::OpenOptions::new().create(true).append(true).open(&passwd)?
-            .write_all(entry.as_bytes())?;
-    }
-
-    let group = rootfs.join("etc/group");
-    if let Some(p) = group.parent() { let _ = fs::create_dir_all(p); }
-    let g = fs::read_to_string(&group).unwrap_or_default();
-    if !g.lines().any(|l| l.starts_with(&format!("{}:", user))) {
-        fs::OpenOptions::new().create(true).append(true).open(&group)?
-            .write_all(format!("{}:x:{}:\n", user, gid).as_bytes())?;
-    }
-
-    let home = rootfs.join(format!("home/{}", user));
-    fs::create_dir_all(&home)?;
-    let _ = fs::set_permissions(&home, PermissionsExt::from_mode(0o777));
-
-    Ok((uid, gid))
+let entry = format!("{}:x:{}:{}:{}:/home/{}:/bin/bash\n", user, uid, gid, user, user);
+fs::OpenOptions::new().create(true).append(true).open(&passwd)?
+.write_all(entry.as_bytes())?;
 }
-
+let group = rootfs.join("etc/group");
+if let Some(p) = group.parent() { let _ = fs::create_dir_all(p); }
+let g = fs::read_to_string(&group).unwrap_or_default();
+if !g.lines().any(|l| l.starts_with(&format!("{}:", user))) {
+fs::OpenOptions::new().create(true).append(true).open(&group)?
+.write_all(format!("{}:x:{}:\n", user, gid).as_bytes())?;
+}
+let home = rootfs.join(format!("home/{}", user));
+fs::create_dir_all(&home)?;
+let _ = fs::set_permissions(&home, PermissionsExt::from_mode(0o777));
+Ok((uid, gid))
+}
 // ==========================================================================
 // Hostname override — dynamic, marker-block replacement
 // ==========================================================================
-
-/// The block we install into every startup file. It is *dynamic*: it reads
-/// `/etc/hostname` at source time and again inside `_xodos2_fix_ps1`, which
-/// `PROMPT_COMMAND` invokes before every prompt. So a change to `/etc/hostname`
+/// The block we install into every startup file. It is dynamic: it reads
+/// /etc/hostname at source time and again inside _xodos2_fix_ps1, which
+/// PROMPT_COMMAND invokes before every prompt. So a change to /etc/hostname
 /// (which Kotlin writes on every drawer save) propagates to the very next
 /// prompt, with no restart.
 const HOSTNAME_BLOCK: &str = r#"
-# XoDos-Ark hostname override — dynamic, reads /etc/hostname at every prompt
+
+XoDos-Ark hostname override — dynamic, reads /etc/hostname at every prompt
+
 _hostname_from_file() {
-    local h="$(cat /etc/hostname 2>/dev/null | tr -d '[:space:]')"
-    [ -z "$h" ] && h="localhost"
-    printf '%s' "$h"
+local h="$(cat /etc/hostname 2>/dev/null | tr -d '[:space:]')"
+[ -z "$h" ] && h="localhost"
+printf '%s' "$h"
 }
 HOSTNAME="$(_hostname_from_file)"; export HOSTNAME
-
 if [ -n "${BASH_VERSION:-}" ]; then
-    _xodos2_fix_ps1() {
-        local h
-        h="$(_hostname_from_file)"
-        HOSTNAME="$h"; export HOSTNAME
-        case "${PS1:-}" in
-            *'\h'*|*'\H'*)
-                PS1="${PS1//\\h/$h}"
-                PS1="${PS1//\\H/$h}"
-                ;;
-        esac
-    }
-    case "${PROMPT_COMMAND:-}" in
-        *_xodos2_fix_ps1*) ;;
-        *) PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}_xodos2_fix_ps1" ;;
-    esac
+_xodos2_fix_ps1() {
+local h
+h="$(_hostname_from_file)"
+HOSTNAME="$h"; export HOSTNAME
+case "${PS1:-}" in
+'\h'|'\H')
+PS1="${PS1//\h/$h}"
+PS1="${PS1//\H/$h}"
+;;
+esac
+}
+case "${PROMPT_COMMAND:-}" in
+_xodos2_fix_ps1) ;;
+*) PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}_xodos2_fix_ps1" ;;
+esac
 elif [ -n "${PS1:-}" ]; then
-    PS1=$(printf '%s' "$PS1" | sed "s/\\\\h/$(_hostname_from_file)/g; s/\\\\H/$(_hostname_from_file)/g")
-    export PS1
+PS1=$(printf '%s' "$PS1" | sed "s/\\h/$(_hostname_from_file)/g; s/\\H/$(_hostname_from_file)/g")
+export PS1
 fi
 "#;
-
-/// Removes any existing `>>> xodos2-hostname >>>` … `<<< xodos2-hostname <<<`
-/// block from `content`. Old-style blocks from previous versions (marker line
-/// `# XoDos-Ark hostname override` without the `>>>`/`<<<` wrappers) are also
+/// Removes any existing >>> xodos2-hostname >>> … <<< xodos2-hostname <<<
+/// block from content. Old-style blocks from previous versions (marker line
+/// # XoDos-Ark hostname override without the >>>/<<< wrappers) are also
 /// stripped, using a bounded heuristic (max 40 lines after the marker).
 fn strip_hostname_block(content: &str) -> String {
-    let mut out = String::with_capacity(content.len());
-    let mut skip_until_end_marker = false;
-    let mut skip_old_remaining: i32 = 0;
-
-    for line in content.lines() {
-        let t = line.trim();
-
-        if t == HN_START { skip_until_end_marker = true; continue; }
-        if t == HN_END   { skip_until_end_marker = false; continue; }
-        if skip_until_end_marker { continue; }
-
-        // Old-style block from previous builds
-        if t == "# XoDos-Ark hostname override" { skip_old_remaining = 40; continue; }
-        if skip_old_remaining > 0 {
-            skip_old_remaining -= 1;
-            // Stop skipping early on lines that clearly belong to user config.
-            let looks_like_ours =
-                t.is_empty()
-                || t == "fi" || t == "esac" || t == "}" || t == ";;"
-                || t.starts_with("if ") || t.starts_with("elif ") || t.starts_with("else")
-                || t.starts_with("case ") || t.starts_with("export ")
-                || t.starts_with("HOSTNAME") || t.starts_with("PS1")
-                || t.starts_with("PROMPT_COMMAND") || t.starts_with("_xodos2_")
-                || t.starts_with("_hostname_")
-                || t.starts_with("*'\\h'") || t.starts_with("*'\\H'")
-                || t.contains("HOSTNAME") || t.contains("_xodos2_fix_ps1")
-                || t.contains("PS1=") || t.contains("PROMPT_COMMAND=")
-                || t.starts_with('#');
-            if !looks_like_ours {
-                skip_old_remaining = 0;
-            } else {
-                continue;
-            }
-        }
-
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
+let mut out = String::with_capacity(content.len());
+let mut skip_until_end_marker = false;
+let mut skip_old_remaining: i32 = 0;
+for line in content.lines() {
+let t = line.trim();
+if t == HN_START { skip_until_end_marker = true; continue; }
+if t == HN_END   { skip_until_end_marker = false; continue; }
+if skip_until_end_marker { continue; }
+// Old-style block from previous builds
+if t == "# XoDos-Ark hostname override" { skip_old_remaining = 40; continue; }
+if skip_old_remaining > 0 {
+skip_old_remaining -= 1;
+// Stop skipping early on lines that clearly belong to user config.
+let looks_like_ours =
+t.is_empty()
+|| t == "fi" || t == "esac" || t == "}" || t == ";;"
+|| t.starts_with("if ") || t.starts_with("elif ") || t.starts_with("else")
+|| t.starts_with("case ") || t.starts_with("export ")
+|| t.starts_with("HOSTNAME") || t.starts_with("PS1")
+|| t.starts_with("PROMPT_COMMAND") || t.starts_with("xodos2")
+|| t.starts_with("hostname")
+|| t.starts_with("'\h'") || t.starts_with("'\H'")
+|| t.contains("HOSTNAME") || t.contains("_xodos2_fix_ps1")
+|| t.contains("PS1=") || t.contains("PROMPT_COMMAND=")
+|| t.starts_with('#');
+if !looks_like_ours {
+skip_old_remaining = 0;
+} else {
+continue;
 }
-
-/// Rewrites `path` so it contains `new_block` wrapped in our markers,
+}
+out.push_str(line);
+out.push('\n');
+}
+out
+}
+/// Rewrites path so it contains new_block wrapped in our markers,
 /// preserving any other content.
 fn install_hostname_block(path: &Path, new_block: &str) {
-    let existing = fs::read_to_string(path).unwrap_or_default();
-    let mut cleaned = strip_hostname_block(&existing);
-    if !cleaned.is_empty() && !cleaned.ends_with('\n') { cleaned.push('\n'); }
-    cleaned.push_str(HN_START); cleaned.push('\n');
-    cleaned.push_str(new_block);
-    if !new_block.ends_with('\n') { cleaned.push('\n'); }
-    cleaned.push_str(HN_END); cleaned.push('\n');
-    if let Some(p) = path.parent() { let _ = fs::create_dir_all(p); }
-    let _ = fs::write(path, cleaned);
+let existing = fs::read_to_string(path).unwrap_or_default();
+let mut cleaned = strip_hostname_block(&existing);
+if !cleaned.is_empty() && !cleaned.ends_with('\n') { cleaned.push('\n'); }
+cleaned.push_str(HN_START); cleaned.push('\n');
+cleaned.push_str(new_block);
+if !new_block.ends_with('\n') { cleaned.push('\n'); }
+cleaned.push_str(HN_END); cleaned.push('\n');
+if let Some(p) = path.parent() { let _ = fs::create_dir_all(p); }
+let _ = fs::write(path, cleaned);
 }
-
 fn inject_hostname_profile(
-    rootfs: &Path,
-    effective_user: &str,
-    host_home: Option<&Path>,
+rootfs: &Path,
+effective_user: &str,
+host_home: Option<&Path>,
 ) {
-    // 1. profile.d — the most reliable hook for `bash -l`
-    let profile_d = rootfs.join("etc/profile.d");
-    let _ = fs::create_dir_all(&profile_d);
-    let script = profile_d.join("zz-xodos2-hostname.sh");
-    let _ = fs::write(&script, format!("#!/bin/sh\n{}\n", HOSTNAME_BLOCK));
-    let _ = fs::set_permissions(&script, PermissionsExt::from_mode(0o755));
-
-    // 2. /etc/bash.bashrc — interactive non-login shells (Debian/Ubuntu)
-    install_hostname_block(&rootfs.join("etc/bash.bashrc"), HOSTNAME_BLOCK);
-
-    // 3. ~/.bashrc for root (container-side)
-    let root_home = rootfs.join("root");
-    let _ = fs::create_dir_all(&root_home);
-    install_hostname_block(&root_home.join(".bashrc"), HOSTNAME_BLOCK);
-
-    // 4. ~/.bashrc for the target user (container-side) + .profile fallback
-    if effective_user != "root" && !effective_user.is_empty() {
-        let user_home = rootfs.join(format!("home/{}", effective_user));
-        let _ = fs::create_dir_all(&user_home);
-        install_hostname_block(&user_home.join(".bashrc"), HOSTNAME_BLOCK);
-        let profile = user_home.join(".profile");
-        if !profile.exists() {
-            let _ = fs::write(&profile,
-                "if [ -f ~/.bashrc ]; then . ~/.bashrc; fi\n");
-        }
-    }
-
-    // 5. Host home — only when shared_home is on, because the bind shadows
-    //    the container-side home at runtime.
-    if let Some(hh) = host_home {
-        let _ = fs::create_dir_all(hh);
-        install_hostname_block(&hh.join(".bashrc"), HOSTNAME_BLOCK);
-        let profile = hh.join(".profile");
-        if !profile.exists() {
-            let _ = fs::write(&profile,
-                "if [ -f ~/.bashrc ]; then . ~/.bashrc; fi\n");
-        }
-    }
+// 1. profile.d — the most reliable hook for bash -l
+let profile_d = rootfs.join("etc/profile.d");
+let _ = fs::create_dir_all(&profile_d);
+let script = profile_d.join("zz-xodos2-hostname.sh");
+let _ = fs::write(&script, format!("#!/bin/sh\n{}\n", HOSTNAME_BLOCK));
+let _ = fs::set_permissions(&script, PermissionsExt::from_mode(0o755));
+// 2. /etc/bash.bashrc — interactive non-login shells (Debian/Ubuntu)
+install_hostname_block(&rootfs.join("etc/bash.bashrc"), HOSTNAME_BLOCK);
+// 3. ~/.bashrc for root (container-side)
+let root_home = rootfs.join("root");
+let _ = fs::create_dir_all(&root_home);
+install_hostname_block(&root_home.join(".bashrc"), HOSTNAME_BLOCK);
+// 4. ~/.bashrc for the target user (container-side) + .profile fallback
+if effective_user != "root" && !effective_user.is_empty() {
+let user_home = rootfs.join(format!("home/{}", effective_user));
+let _ = fs::create_dir_all(&user_home);
+install_hostname_block(&user_home.join(".bashrc"), HOSTNAME_BLOCK);
+let profile = user_home.join(".profile");
+if !profile.exists() {
+let _ = fs::write(&profile,
+"if [ -f ~/.bashrc ]; then . ~/.bashrc; fi\n");
 }
-
+}
+// 5. Host home — only when shared_home is on, because the bind shadows
+//    the container-side home at runtime.
+if let Some(hh) = host_home {
+let _ = fs::create_dir_all(hh);
+install_hostname_block(&hh.join(".bashrc"), HOSTNAME_BLOCK);
+let profile = hh.join(".profile");
+if !profile.exists() {
+let _ = fs::write(&profile,
+"if [ -f ~/.bashrc ]; then . ~/.bashrc; fi\n");
+}
+}
+}
 // ==========================================================================
 // Fake /proc + /sys data
 // ==========================================================================
-
 fn ensure_fake_sysdata(rootfs: &Path) -> Result<()> {
-    let sysdata_dir = rootfs.parent().context("rootfs parent")?.join("sysdata");
-    fs::create_dir_all(&sysdata_dir)?;
-    let _ = fs::set_permissions(&sysdata_dir, PermissionsExt::from_mode(0o700));
-    fs::create_dir_all(rootfs.join("sys/.empty"))?;
-
-    let w = |p: &Path, c: &str| { if !p.exists() { let _ = fs::write(p, c); } };
-    w(&sysdata_dir.join("loadavg"), "0.12 0.07 0.02 2/165 765\n");
-    w(&sysdata_dir.join("stat"),
-      "cpu  1957 0 2877 93280 262 342 254 87 0 0\nctxt 140223\nbtime 1680020856\nprocesses 772\nprocs_running 2\nprocs_blocked 0\n");
-    w(&sysdata_dir.join("uptime"), "124.08 932.80\n");
-    w(&sysdata_dir.join("version"),
-      &format!("Linux version {} (proot@xodos2) (gcc 13.3.0) {}\n",
-               DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION));
-    w(&sysdata_dir.join("vmstat"), "nr_free_pages 1743136\n");
-    w(&sysdata_dir.join("sysctl_entry_cap_last_cap"), "40\n");
-    w(&sysdata_dir.join("sysctl_inotify_max_user_watches"), "4096\n");
-    w(&sysdata_dir.join("sysctl_kernel_overflowuid"), "65534\n");
-    w(&sysdata_dir.join("sysctl_kernel_overflowgid"), "65534\n");
-    Ok(())
+let sysdata_dir = rootfs.parent().context("rootfs parent")?.join("sysdata");
+fs::create_dir_all(&sysdata_dir)?;
+let _ = fs::set_permissions(&sysdata_dir, PermissionsExt::from_mode(0o700));
+fs::create_dir_all(rootfs.join("sys/.empty"))?;
+let w = |p: &Path, c: &str| { if !p.exists() { let _ = fs::write(p, c); } };
+w(&sysdata_dir.join("loadavg"), "0.12 0.07 0.02 2/165 765\n");
+w(&sysdata_dir.join("stat"),
+"cpu  1957 0 2877 93280 262 342 254 87 0 0\nctxt 140223\nbtime 1680020856\nprocesses 772\nprocs_running 2\nprocs_blocked 0\n");
+w(&sysdata_dir.join("uptime"), "124.08 932.80\n");
+w(&sysdata_dir.join("version"),
+&format!("Linux version {} (proot@xodos2) (gcc 13.3.0) {}\n",
+DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION));
+w(&sysdata_dir.join("vmstat"), "nr_free_pages 1743136\n");
+w(&sysdata_dir.join("sysctl_entry_cap_last_cap"), "40\n");
+w(&sysdata_dir.join("sysctl_inotify_max_user_watches"), "4096\n");
+w(&sysdata_dir.join("sysctl_kernel_overflowuid"), "65534\n");
+w(&sysdata_dir.join("sysctl_kernel_overflowgid"), "65534\n");
+Ok(())
 }
-
-fn fake_proc_bindings(sysdata_dir: &Path) -> Result<Vec<CString>> {
-    let mut binds = Vec::new();
-    let pairs = [
-        ("/proc/loadavg", "loadavg"),
-        ("/proc/stat", "stat"),
-        ("/proc/uptime", "uptime"),
-        ("/proc/version", "version"),
-        ("/proc/vmstat", "vmstat"),
-        ("/proc/sys/kernel/cap_last_cap", "sysctl_entry_cap_last_cap"),
-        ("/proc/sys/fs/inotify/max_user_watches", "sysctl_inotify_max_user_watches"),
-        ("/proc/sys/kernel/overflowuid", "sysctl_kernel_overflowuid"),
-        ("/proc/sys/kernel/overflowgid", "sysctl_kernel_overflowgid"),
-    ];
-    for (real, fake) in pairs {
-        let real_path = Path::new(real);
-        let readable = File::open(real_path).map(|f| f.metadata().is_ok()).unwrap_or(false);
-        if !readable {
-            let fake_file = sysdata_dir.join(fake);
-            if fake_file.exists() {
-                binds.push(CString::new(format!(
-                    "--bind={}:{}", fake_file.display(), real
-                ))?);
-            }
-        }
-    }
-    Ok(binds)
+fn fake_proc_bindings(sysdata_dir: &Path) -> Result<Vec> {
+let mut binds = Vec::new();
+let pairs = [
+("/proc/loadavg", "loadavg"),
+("/proc/stat", "stat"),
+("/proc/uptime", "uptime"),
+("/proc/version", "version"),
+("/proc/vmstat", "vmstat"),
+("/proc/sys/kernel/cap_last_cap", "sysctl_entry_cap_last_cap"),
+("/proc/sys/fs/inotify/max_user_watches", "sysctl_inotify_max_user_watches"),
+("/proc/sys/kernel/overflowuid", "sysctl_kernel_overflowuid"),
+("/proc/sys/kernel/overflowgid", "sysctl_kernel_overflowgid"),
+];
+for (real, fake) in pairs {
+let real_path = Path::new(real);
+let readable = File::open(real_path).map(|f| f.metadata().is_ok()).unwrap_or(false);
+if !readable {
+let fake_file = sysdata_dir.join(fake);
+if fake_file.exists() {
+binds.push(CString::new(format!(
+"--bind={}:{}", fake_file.display(), real
+))?);
 }
-
+}
+}
+Ok(binds)
+}
 // ==========================================================================
 // Shell resolution
 // ==========================================================================
-
 pub(super) fn find_shell_in_rootfs(rootfs: &Path) -> Option<(&'static str, bool)> {
-    let termux = has_termux_inside_container(rootfs);
-    let candidates: Vec<(&'static str, bool)> = if termux {
-        vec![
-            ("/data/data/com.termux/files/usr/bin/bash", false),
-            ("/data/data/com.termux/files/usr/bin/sh", false),
-        ]
-    } else {
-        vec![
-            ("/usr/bin/bash", false), ("/bin/bash", false),
-            ("/usr/bin/sh", false),   ("/bin/sh", false),
-            ("/usr/bin/dash", false), ("/bin/dash", false),
-            ("/usr/bin/ash", false),  ("/bin/ash", false),
-        ]
-    };
-    for (p, b) in candidates {
-        if path_exists_in_rootfs(rootfs, p) { return Some((p, b)); }
-    }
-    if path_exists_in_rootfs(rootfs, "/usr/bin/busybox") {
-        Some(("/usr/bin/busybox", true))
-    } else if path_exists_in_rootfs(rootfs, "/bin/busybox") {
-        Some(("/bin/busybox", true))
-    } else { None }
+let termux = has_termux_inside_container(rootfs);
+let candidates: Vec<(&'static str, bool)> = if termux {
+vec![
+("/data/data/com.termux/files/usr/bin/bash", false),
+("/data/data/com.termux/files/usr/bin/sh", false),
+]
+} else {
+vec![
+("/usr/bin/bash", false), ("/bin/bash", false),
+("/usr/bin/sh", false),   ("/bin/sh", false),
+("/usr/bin/dash", false), ("/bin/dash", false),
+("/usr/bin/ash", false),  ("/bin/ash", false),
+]
+};
+for (p, b) in candidates {
+if path_exists_in_rootfs(rootfs, p) { return Some((p, b)); }
 }
-
-fn build_native_args() -> Result<(Vec<CString>, Vec<CString>)> {
-    let ctx = get_application_context()?;
-    let prefix_str = ctx.data_dir.join("usr").to_string_lossy().into_owned();
-    let home_dir   = format!("{}/home", ctx.data_dir.display());
-    let tmp_dir    = format!("{}/tmp", prefix_str);
-    let _ = fs::create_dir_all(&tmp_dir);
-    let _ = fs::create_dir_all(&home_dir);
-
-    #[cfg(target_pointer_width = "64")]
-    let linker = "/system/bin/linker64";
-    #[cfg(target_pointer_width = "32")]
-    let linker = "/system/bin/linker";
-
-    let bash = format!("{}/bin/bash", prefix_str);
-    let sh   = format!("{}/bin/sh", prefix_str);
-
-    // Prefer bash > sh > system fallback. Only bash/sh from the Termux
-    // prefix need the linker trick — /system/bin/sh is invoked directly.
-    let (shell_path, use_linker) = if Path::new(&bash).exists() {
-        (bash, true)
-    } else if Path::new(&sh).exists() {
-        (sh, true)
-    } else {
-        ("/system/bin/sh".to_string(), false)
-    };
-
-    let mut argv: Vec<CString> = Vec::new();
-    if use_linker {
-        // Invoking linker explicitly bypasses the kernel's PT_INTERP path,
-        // which is what fails on API 24/25 for Termux-prefix binaries.
-        argv.push(CString::new(linker).unwrap());
-    }
-    argv.push(CString::new(shell_path.as_str()).unwrap());
-    // ── THE FIX ── force interactive just like the proot path does.
-    argv.push(CString::new("-l").unwrap());
-    argv.push(CString::new("-i").unwrap());
-
-    // ── Android system env (critical on API 24/25) ──
-    let mut env: Vec<CString> = vec![
-        CString::new("ANDROID_ROOT=/system").unwrap(),
-        CString::new("ANDROID_DATA=/data").unwrap(),
-        CString::new("EXTERNAL_STORAGE=/sdcard").unwrap(),
-        CString::new(format!("PREFIX={}", prefix_str)).unwrap(),
-        CString::new(format!("HOME={}", home_dir)).unwrap(),
-        CString::new(format!("TMPDIR={}", tmp_dir)).unwrap(),
-        CString::new(format!("PATH={}/bin:/system/bin:/system/xbin", prefix_str)).unwrap(),
-        CString::new(format!("LD_LIBRARY_PATH={}/lib", prefix_str)).unwrap(),
-        CString::new("TERM=xterm-256color").unwrap(),
-        CString::new("LANG=C.UTF-8").unwrap(),
-        CString::new("DISPLAY=:0").unwrap(),
-    ];
-
-    // Inherit apex/ART/classpath vars from the parent so libc doesn't fall
-    // back to /system-only paths on API 24/25.
-    for name in [
-        "ANDROID_ART_ROOT", "ANDROID_I18N_ROOT", "ANDROID_TZDATA_ROOT",
-        "ANDROID_RUNTIME_ROOT", "BOOTCLASSPATH",
-    ] {
-        if let Ok(v) = std::env::var(name) {
-            if let Ok(cs) = CString::new(format!("{}={}", name, v)) {
-                env.push(cs);
-            }
-        }
-    }
-
-    Ok((argv, env))
+if path_exists_in_rootfs(rootfs, "/usr/bin/busybox") {
+Some(("/usr/bin/busybox", true))
+} else if path_exists_in_rootfs(rootfs, "/bin/busybox") {
+Some(("/bin/busybox", true))
+} else { None }
 }
-
+fn build_native_args() -> Result<(Vec, Vec)> {
+let ctx = get_application_context()?;
+let prefix_str = ctx.data_dir.join("usr").to_string_lossy().into_owned();
+let home_dir   = format!("{}/home", ctx.data_dir.display());
+let tmp_dir    = format!("{}/tmp", prefix_str);
+let _ = fs::create_dir_all(&tmp_dir);
+let _ = fs::create_dir_all(&home_dir);
+#[cfg(target_pointer_width = "64")]
+let linker = "/system/bin/linker64";
+#[cfg(target_pointer_width = "32")]
+let linker = "/system/bin/linker";
+let bash = format!("{}/bin/bash", prefix_str);
+let sh   = format!("{}/bin/sh", prefix_str);
+// Prefer bash > sh > system fallback.
+// Only invoke via linker64 on Android 10+ (API 29+) where W^X blocks
+// direct execution from app-private /files/; on API 24/25 invoking
+// linker64 <exe> crashes with SIGSEGV.
+let (shell_path, use_linker) = if Path::new(&bash).exists() {
+let p = PathBuf::from(&bash);
+let trampoline = should_use_linker_trampoline(&p);
+(bash, trampoline)
+} else if Path::new(&sh).exists() {
+let p = PathBuf::from(&sh);
+let trampoline = should_use_linker_trampoline(&p);
+(sh, trampoline)
+} else {
+("/system/bin/sh".to_string(), false)
+};
+let mut argv: Vec = Vec::new();
+if use_linker {
+argv.push(CString::new(linker).unwrap());
+}
+argv.push(CString::new(shell_path.as_str()).unwrap());
+argv.push(CString::new("-l").unwrap());
+argv.push(CString::new("-i").unwrap());
+// ── Android system env (critical on API 24/25) ──
+let mut env: Vec = vec![
+CString::new("ANDROID_ROOT=/system").unwrap(),
+CString::new("ANDROID_DATA=/data").unwrap(),
+CString::new("EXTERNAL_STORAGE=/sdcard").unwrap(),
+CString::new(format!("PREFIX={}", prefix_str)).unwrap(),
+CString::new(format!("HOME={}", home_dir)).unwrap(),
+CString::new(format!("TMPDIR={}", tmp_dir)).unwrap(),
+CString::new(format!("PATH={}/bin:/system/bin:/system/xbin", prefix_str)).unwrap(),
+CString::new(format!("LD_LIBRARY_PATH={}/lib", prefix_str)).unwrap(),
+CString::new("TERM=xterm-256color").unwrap(),
+CString::new("LANG=C.UTF-8").unwrap(),
+CString::new("DISPLAY=:0").unwrap(),
+];
+// Inherit apex/ART/classpath vars from the parent so libc doesn't fall
+// back to /system-only paths on API 24/25.
+for name in [
+"ANDROID_ART_ROOT", "ANDROID_I18N_ROOT", "ANDROID_TZDATA_ROOT",
+"ANDROID_RUNTIME_ROOT", "BOOTCLASSPATH",
+] {
+if let Ok(v) = std::env::var(name) {
+if let Ok(cs) = CString::new(format!("{}={}", name, v)) {
+env.push(cs);
+}
+}
+}
+Ok((argv, env))
+}
 // ==========================================================================
 // build_proot_args
 // ==========================================================================
-
 fn build_proot_args(
-    rootfs: &Path,
-    shell_binary: &str,
-    is_busybox: bool,
-    opts: &ProotOptions,
-) -> Result<(Vec<CString>, Vec<CString>)> {
-    let ctx = get_application_context()?;
-    let (proot, loader) = proot_and_loader_paths()?;
-    let termux_detected = has_termux_inside_container(rootfs);
-    let cid = container_id_from_rootfs(rootfs).unwrap_or(0);
-
-    let effective_user = if opts.username.trim().is_empty() || opts.username.trim() == "root" {
-        "root".to_string()
-    } else {
-        opts.username.trim().to_string()
-    };
-    let (target_uid, target_gid) = ensure_user_in_rootfs(rootfs, &effective_user)?;
-
-    let mut argv: Vec<CString> = Vec::new();
-    argv.push(CString::new(proot.to_string_lossy().as_bytes())?);
-    ensure_fake_sysdata(rootfs)?;
-    let sysdata_dir = rootfs.parent().context("rootfs parent")?.join("sysdata");
-
-    argv.push(CString::new("-r").unwrap());
-    argv.push(CString::new(rootfs.to_string_lossy().as_bytes())?);
-
-    let kernel = if opts.kernel_release.trim().is_empty() {
-        format!("{} {}", DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION)
-    } else { opts.kernel_release.clone() };
-    argv.push(CString::new(format!("--kernel-release={}", kernel)).unwrap());
-
-    if !opts.no_link2symlink {
-        argv.push(CString::new("-L").unwrap());
-        argv.push(CString::new("--link2symlink").unwrap());
-    }
-    if !opts.no_sysvipc {
-        argv.push(CString::new("--sysvipc").unwrap());
-    }
-    argv.push(CString::new("--kill-on-exit").unwrap());
-
-    // Direct user switch via fake_id0 — NO su
-    if !opts.change_id.trim().is_empty() {
-        argv.push(CString::new(format!("--change-id={}", opts.change_id.trim())).unwrap());
-    } else if termux_detected {
-        let (u, g) = current_uid_gid();
-        argv.push(CString::new(format!("--change-id={}:{}", u, g)).unwrap());
-    } else if target_uid != 0 {
-        argv.push(CString::new(format!("--change-id={}:{}", target_uid, target_gid)).unwrap());
-    } else {
-        argv.push(CString::new("--change-id=0:0").unwrap());
-    }
-
-    // Core binds FIRST, so /proc & /etc exist before we bind over them.
-    argv.push(CString::new("--bind=/dev").unwrap());
-    argv.push(CString::new("--bind=/proc").unwrap());
-    argv.push(CString::new("--bind=/sys").unwrap());
-    if !opts.minimal && !opts.isolated {
-        argv.push(CString::new("--bind=/system").unwrap());
-        argv.push(CString::new("--bind=/apex").unwrap());
-        argv.push(CString::new("--bind=/storage").unwrap());
-    }
-
-    // Hostname: fake /etc/hostname (create target if missing) + /proc entry
-    let host_home_path = if opts.shared_home && !termux_detected {
-        Some(PathBuf::from("/data/data/app.xodos2/files/home"))
-    } else { None };
-
-    let guest_etc_hostname = rootfs.join("etc/hostname");
-    if !guest_etc_hostname.exists() {
-        let _ = fs::create_dir_all(guest_etc_hostname.parent().unwrap_or(Path::new("/")));
-        let _ = fs::write(&guest_etc_hostname, "\n");
-    }
-    let fake_hn = write_fake_hostname(&ctx.data_dir, cid, &opts.hostname);
-    argv.push(CString::new(format!(
-        "--bind={}:/etc/hostname", fake_hn.display()
-    ))?);
-    argv.push(CString::new(format!(
-        "--bind={}:/proc/sys/kernel/hostname", fake_hn.display()
-    ))?);
-
-    // Install dynamic hostname snippet everywhere the shell might source
-    inject_hostname_profile(
-        rootfs,
-        &effective_user,
-        host_home_path.as_deref(),
-    );
-
-    // Home bind — ONLY when shared_home=true (fixes the "always bound" bug)
-    if termux_detected {
-        if opts.shared_home {
-            let host_home = Path::new("/data/data/app.xodos2/files/home");
-            if host_home.exists() {
-                argv.push(CString::new(format!(
-                    "--bind={}:/data/data/com.termux/files/home",
-                    host_home.display()
-                ))?);
-            }
-        }
-    } else if opts.shared_home {
-        let host_home = Path::new("/data/data/app.xodos2/files/home");
-        let _ = fs::create_dir_all(host_home);
-        let guest_home = if effective_user == "root" { "/root".to_string() }
-                         else { format!("/home/{}", effective_user) };
-        argv.push(CString::new(format!(
-            "--bind={}:{}", host_home.display(), guest_home
-        ))?);
-    }
-
-    // GPU
-    if Path::new("/dev/kgsl-3d0").exists() {
-        argv.push(CString::new("--bind=/dev/kgsl-3d0:/dev/kgsl-3d0").unwrap());
-    }
-    if Path::new("/dev/dri").exists() && File::open("/dev/dri").is_ok() {
-        argv.push(CString::new("--bind=/dev/dri:/dev/dri").unwrap());
-    }
-
-    // Wayland/X11/VirGL/Pulse
-    if !opts.minimal {
-        let wayland_rt = ctx.data_dir.join("usr/tmp");
-        let _ = fs::create_dir_all(&wayland_rt);
-        let _ = fs::set_permissions(&wayland_rt, PermissionsExt::from_mode(0o700));
-
-        let host_x11 = ctx.data_dir.join("usr/tmp/.X11-unix");
-        let guest_x11 = rootfs.join("tmp/.X11-unix");
-        let _ = fs::create_dir_all(&host_x11);
-        let _ = fs::create_dir_all(&guest_x11);
-        let _ = fs::set_permissions(&host_x11, PermissionsExt::from_mode(0o1777));
-        let _ = fs::set_permissions(&guest_x11, PermissionsExt::from_mode(0o1777));
-
-        argv.push(CString::new(format!("--bind={}:/run/user/0", wayland_rt.display()))?);
-        argv.push(CString::new(format!("--bind={}:/tmp/.X11-unix", host_x11.display()))?);
-
-        let virgl_rt = ctx.data_dir.join("virgl-run");
-        let _ = fs::create_dir_all(&virgl_rt);
-        argv.push(CString::new(format!("--bind={}:/run/xodos2-virgl", virgl_rt.display()))?);
-
-        let pulse_rt = host_pulse_runtime_dir(&ctx.data_dir);
-        let _ = fs::create_dir_all(&pulse_rt);
-        argv.push(CString::new(format!(
-            "--bind={}:{}", pulse_rt.display(), GUEST_PULSE_RUNTIME_MOUNT
-        ))?);
-        let pulse_frag = write_pulse_guest_client_fragment(&ctx.data_dir);
-        argv.push(CString::new(format!(
-            "--bind={}:/etc/pulse/client.conf.d/99-xodos2-noshm.conf",
-            pulse_frag.display()
-        ))?);
-        let profile_frag = write_guest_profile_fragment(&ctx.data_dir);
-        argv.push(CString::new(format!(
-            "--bind={}:/etc/profile.d/99-xodos2-runtime.sh",
-            profile_frag.display()
-        ))?);
-    }
-
-    // /dev/shm
-    argv.push(CString::new(format!("--bind={}/tmp:/dev/shm", rootfs.display()))?);
-
-    // FORCED shared /tmp
-    let host_tmp = ctx.data_dir.join("usr/tmp");
-    let _ = fs::create_dir_all(&host_tmp);
-    let _ = fs::set_permissions(&host_tmp, PermissionsExt::from_mode(0o1777));
-    argv.push(CString::new(format!("--bind={}:/tmp", host_tmp.display()))?);
-
-    // SD card
-    if !opts.isolated && !opts.minimal {
-        if let Some(ref sd) = ctx.external_storage_path {
-            if sd.exists() {
-                for guest in ["/android", "/root/android", "/sdcard", "/root/sdcard"] {
-                    argv.push(CString::new(format!("--bind={}:{}", sd.display(), guest))?);
-                }
-            }
-        }
-    }
-
-    // Standard fds
-    for (a, b) in [
-        ("/dev/urandom", "/dev/random"),
-        ("/proc/self/fd", "/dev/fd"),
-        ("/proc/self/fd/0", "/dev/stdin"),
-        ("/proc/self/fd/1", "/dev/stdout"),
-        ("/proc/self/fd/2", "/dev/stderr"),
-    ] {
-        argv.push(CString::new(format!("--bind={}:{}", a, b)).unwrap());
-    }
-
-    // Fake proc + SELinux
-    if !opts.minimal {
-        for b in fake_proc_bindings(&sysdata_dir)? { argv.push(b); }
-        argv.push(CString::new(format!(
-            "--bind={}/sys/.empty:/sys/fs/selinux", rootfs.display()
-        ))?);
-    }
-
-    // Extra Android dirs
-    if !opts.isolated && !opts.minimal {
-        for p in [
-            "/vendor", "/odm", "/product", "/system_ext",
-            "/linkerconfig/ld.config.txt", "/plat_property_contexts", "/property_contexts",
-        ] {
-            if Path::new(p).exists() {
-                argv.push(CString::new(format!("--bind={}", p)).unwrap());
-            }
-        }
-    }
-
-    // User binds
-    for b in &opts.binds {
-        let b = b.trim();
-        if b.is_empty() { continue; }
-        argv.push(CString::new(format!("--bind={}", b))?);
-    }
-
-    // resolv.conf + hosts
-    let resolv = rootfs.join("etc/resolv.conf");
-    if !resolv.exists() {
-        let _ = fs::create_dir_all(resolv.parent().unwrap_or(Path::new("/")));
-        let _ = fs::write(&resolv, "nameserver 8.8.8.8\nnameserver 1.1.1.1\n");
-    }
-    let hosts = rootfs.join("etc/hosts");
-    if !hosts.exists() {
-        let _ = fs::create_dir_all(hosts.parent().unwrap_or(Path::new("/")));
-        let _ = fs::write(&hosts,
-            "127.0.0.1 localhost.localdomain localhost\n\
-             ::1 localhost.localdomain localhost ip6-localhost ip6-loopback\n");
-    }
-
-    // cwd
-    let default_cwd = if effective_user == "root" { "/root".to_string() }
-                      else { format!("/home/{}", effective_user) };
-    let cwd = if opts.cwd.trim().is_empty() { default_cwd } else { opts.cwd.trim().to_string() };
-    argv.push(CString::new(format!("--cwd={}", cwd))?);
-
-    // Shell
-    if is_busybox {
-        argv.push(CString::new(shell_binary).unwrap());
-        argv.push(CString::new("sh").unwrap());
-        argv.push(CString::new("-i").unwrap());
-    } else {
-        argv.push(CString::new(shell_binary).unwrap());
-        argv.push(CString::new("-l").unwrap());
-        argv.push(CString::new("-i").unwrap());
-    }
-
-    // Env
-    let mut env: Vec<CString> = Vec::new();
-    env.push(CString::new(format!("PROOT_LOADER={}", loader.to_string_lossy()))?);
-    env.push(CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display()))?);
-
-    let home_dir = if termux_detected {
-        "/data/data/com.termux/files/home".to_string()
-    } else if effective_user == "root" {
-        "/root".to_string()
-    } else {
-        format!("/home/{}", effective_user)
-    };
-    env.push(CString::new(format!("HOME={}", home_dir))?);
-    env.push(CString::new(format!("USER={}", effective_user))?);
-    env.push(CString::new(format!("LOGNAME={}", effective_user))?);
-    env.push(CString::new(format!("HOSTNAME={}", opts.hostname.trim()))?);
-
-    env.push(CString::new(format!(
-        "PATH={}", if termux_detected {
-            "/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin"
-        } else {
-            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/data/data/app.xodos2/files/usr/bin"
-        }
-    ))?);
-
-    env.push(CString::new("TERM=xterm-256color").unwrap());
-    env.push(CString::new("LANG=C.UTF-8").unwrap());
-    env.push(CString::new(format!("SHELL={}", shell_binary)).unwrap());
-    env.push(CString::new("TMPDIR=/tmp").unwrap());
-    env.push(CString::new("XDG_RUNTIME_DIR=/run/user/0").unwrap());
-    env.push(CString::new("WAYLAND_DISPLAY=wayland-xodos2").unwrap());
-    env.push(CString::new("XDG_SESSION_TYPE=wayland").unwrap());
-    env.push(CString::new("QT_QPA_PLATFORM=wayland").unwrap());
-    env.push(CString::new("QT_QUICK_BACKEND=software").unwrap());
-    env.push(CString::new("VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock").unwrap());
-    env.push(CString::new(format!("PULSE_SERVER={}", guest_pulse_server_env()))?);
-
-    if rootfs.join("nix/store").is_dir() {
-        env.push(CString::new("ENV=/root/.bashrc").unwrap());
-    }
-
-    for e in &opts.envs {
-        let e = e.trim();
-        if e.is_empty() || !e.contains('=') { continue; }
-        env.push(CString::new(e)?);
-    }
-
-    Ok((argv, env))
+rootfs: &Path,
+shell_binary: &str,
+is_busybox: bool,
+opts: &ProotOptions,
+) -> Result<(Vec, Vec)> {
+let ctx = get_application_context()?;
+let (proot, loader) = proot_and_loader_paths()?;
+let termux_detected = has_termux_inside_container(rootfs);
+let cid = container_id_from_rootfs(rootfs).unwrap_or(0);
+let effective_user = if opts.username.trim().is_empty() || opts.username.trim() == "root" {
+"root".to_string()
+} else {
+opts.username.trim().to_string()
+};
+let (target_uid, target_gid) = ensure_user_in_rootfs(rootfs, &effective_user)?;
+let mut argv: Vec = Vec::new();
+argv.push(CString::new(proot.to_string_lossy().as_bytes())?);
+ensure_fake_sysdata(rootfs)?;
+let sysdata_dir = rootfs.parent().context("rootfs parent")?.join("sysdata");
+argv.push(CString::new("-r").unwrap());
+argv.push(CString::new(rootfs.to_string_lossy().as_bytes())?);
+let kernel = if opts.kernel_release.trim().is_empty() {
+format!("{} {}", DEFAULT_FAKE_KERNEL_RELEASE, DEFAULT_FAKE_KERNEL_VERSION)
+} else { opts.kernel_release.clone() };
+argv.push(CString::new(format!("--kernel-release={}", kernel)).unwrap());
+if !opts.no_link2symlink {
+argv.push(CString::new("-L").unwrap());
+argv.push(CString::new("--link2symlink").unwrap());
 }
-
+if !opts.no_sysvipc {
+argv.push(CString::new("--sysvipc").unwrap());
+}
+argv.push(CString::new("--kill-on-exit").unwrap());
+// Direct user switch via fake_id0 — NO su
+if !opts.change_id.trim().is_empty() {
+argv.push(CString::new(format!("--change-id={}", opts.change_id.trim())).unwrap());
+} else if termux_detected {
+let (u, g) = current_uid_gid();
+argv.push(CString::new(format!("--change-id={}:{}", u, g)).unwrap());
+} else if target_uid != 0 {
+argv.push(CString::new(format!("--change-id={}:{}", target_uid, target_gid)).unwrap());
+} else {
+argv.push(CString::new("--change-id=0:0").unwrap());
+}
+// Core binds FIRST, so /proc & /etc exist before we bind over them.
+argv.push(CString::new("--bind=/dev").unwrap());
+argv.push(CString::new("--bind=/proc").unwrap());
+argv.push(CString::new("--bind=/sys").unwrap());
+if !opts.minimal && !opts.isolated {
+argv.push(CString::new("--bind=/system").unwrap());
+argv.push(CString::new("--bind=/apex").unwrap());
+argv.push(CString::new("--bind=/storage").unwrap());
+}
+// Hostname: fake /etc/hostname (create target if missing) + /proc entry
+let host_home_path = if opts.shared_home && !termux_detected {
+Some(PathBuf::from("/data/data/app.xodos2/files/home"))
+} else { None };
+let guest_etc_hostname = rootfs.join("etc/hostname");
+if !guest_etc_hostname.exists() {
+let _ = fs::create_dir_all(guest_etc_hostname.parent().unwrap_or(Path::new("/")));
+let _ = fs::write(&guest_etc_hostname, "\n");
+}
+let fake_hn = write_fake_hostname(&ctx.data_dir, cid, &opts.hostname);
+argv.push(CString::new(format!(
+"--bind={}:/etc/hostname", fake_hn.display()
+))?);
+argv.push(CString::new(format!(
+"--bind={}:/proc/sys/kernel/hostname", fake_hn.display()
+))?);
+// Install dynamic hostname snippet everywhere the shell might source
+inject_hostname_profile(
+rootfs,
+&effective_user,
+host_home_path.as_deref(),
+);
+// Home bind — ONLY when shared_home=true (fixes the "always bound" bug)
+if termux_detected {
+if opts.shared_home {
+let host_home = Path::new("/data/data/app.xodos2/files/home");
+if host_home.exists() {
+argv.push(CString::new(format!(
+"--bind={}:/data/data/com.termux/files/home",
+host_home.display()
+))?);
+}
+}
+} else if opts.shared_home {
+let host_home = Path::new("/data/data/app.xodos2/files/home");
+let _ = fs::create_dir_all(host_home);
+let guest_home = if effective_user == "root" { "/root".to_string() }
+else { format!("/home/{}", effective_user) };
+argv.push(CString::new(format!(
+"--bind={}:{}", host_home.display(), guest_home
+))?);
+}
+// GPU
+if Path::new("/dev/kgsl-3d0").exists() {
+argv.push(CString::new("--bind=/dev/kgsl-3d0:/dev/kgsl-3d0").unwrap());
+}
+if Path::new("/dev/dri").exists() && File::open("/dev/dri").is_ok() {
+argv.push(CString::new("--bind=/dev/dri:/dev/dri").unwrap());
+}
+// Wayland/X11/VirGL/Pulse
+if !opts.minimal {
+let wayland_rt = ctx.data_dir.join("usr/tmp");
+let _ = fs::create_dir_all(&wayland_rt);
+let _ = fs::set_permissions(&wayland_rt, PermissionsExt::from_mode(0o700));
+let host_x11 = ctx.data_dir.join("usr/tmp/.X11-unix");
+let guest_x11 = rootfs.join("tmp/.X11-unix");
+let _ = fs::create_dir_all(&host_x11);
+let _ = fs::create_dir_all(&guest_x11);
+let _ = fs::set_permissions(&host_x11, PermissionsExt::from_mode(0o1777));
+let _ = fs::set_permissions(&guest_x11, PermissionsExt::from_mode(0o1777));
+argv.push(CString::new(format!("--bind={}:/run/user/0", wayland_rt.display()))?);
+argv.push(CString::new(format!("--bind={}:/tmp/.X11-unix", host_x11.display()))?);
+let virgl_rt = ctx.data_dir.join("virgl-run");
+let _ = fs::create_dir_all(&virgl_rt);
+argv.push(CString::new(format!("--bind={}:/run/xodos2-virgl", virgl_rt.display()))?);
+let pulse_rt = host_pulse_runtime_dir(&ctx.data_dir);
+let _ = fs::create_dir_all(&pulse_rt);
+argv.push(CString::new(format!(
+"--bind={}:{}", pulse_rt.display(), GUEST_PULSE_RUNTIME_MOUNT
+))?);
+let pulse_frag = write_pulse_guest_client_fragment(&ctx.data_dir);
+argv.push(CString::new(format!(
+"--bind={}:/etc/pulse/client.conf.d/99-xodos2-noshm.conf",
+pulse_frag.display()
+))?);
+let profile_frag = write_guest_profile_fragment(&ctx.data_dir);
+argv.push(CString::new(format!(
+"--bind={}:/etc/profile.d/99-xodos2-runtime.sh",
+profile_frag.display()
+))?);
+}
+// /dev/shm
+argv.push(CString::new(format!("--bind={}/tmp:/dev/shm", rootfs.display()))?);
+// FORCED shared /tmp
+let host_tmp = ctx.data_dir.join("usr/tmp");
+let _ = fs::create_dir_all(&host_tmp);
+let _ = fs::set_permissions(&host_tmp, PermissionsExt::from_mode(0o1777));
+argv.push(CString::new(format!("--bind={}:/tmp", host_tmp.display()))?);
+// SD card
+if !opts.isolated && !opts.minimal {
+if let Some(ref sd) = ctx.external_storage_path {
+if sd.exists() {
+for guest in ["/android", "/root/android", "/sdcard", "/root/sdcard"] {
+argv.push(CString::new(format!("--bind={}:{}", sd.display(), guest))?);
+}
+}
+}
+}
+// Standard fds
+for (a, b) in [
+("/dev/urandom", "/dev/random"),
+("/proc/self/fd", "/dev/fd"),
+("/proc/self/fd/0", "/dev/stdin"),
+("/proc/self/fd/1", "/dev/stdout"),
+("/proc/self/fd/2", "/dev/stderr"),
+] {
+argv.push(CString::new(format!("--bind={}:{}", a, b)).unwrap());
+}
+// Fake proc + SELinux
+if !opts.minimal {
+for b in fake_proc_bindings(&sysdata_dir)? { argv.push(b); }
+argv.push(CString::new(format!(
+"--bind={}/sys/.empty:/sys/fs/selinux", rootfs.display()
+))?);
+}
+// Extra Android dirs
+if !opts.isolated && !opts.minimal {
+for p in [
+"/vendor", "/odm", "/product", "/system_ext",
+"/linkerconfig/ld.config.txt", "/plat_property_contexts", "/property_contexts",
+] {
+if Path::new(p).exists() {
+argv.push(CString::new(format!("--bind={}", p)).unwrap());
+}
+}
+}
+// User binds
+for b in &opts.binds {
+let b = b.trim();
+if b.is_empty() { continue; }
+argv.push(CString::new(format!("--bind={}", b))?);
+}
+// resolv.conf + hosts
+let resolv = rootfs.join("etc/resolv.conf");
+if !resolv.exists() {
+let _ = fs::create_dir_all(resolv.parent().unwrap_or(Path::new("/")));
+let _ = fs::write(&resolv, "nameserver 8.8.8.8\nnameserver 1.1.1.1\n");
+}
+let hosts = rootfs.join("etc/hosts");
+if !hosts.exists() {
+let _ = fs::create_dir_all(hosts.parent().unwrap_or(Path::new("/")));
+let _ = fs::write(&hosts,
+"127.0.0.1 localhost.localdomain localhost\n
+::1 localhost.localdomain localhost ip6-localhost ip6-loopback\n");
+}
+// cwd
+let default_cwd = if effective_user == "root" { "/root".to_string() }
+else { format!("/home/{}", effective_user) };
+let cwd = if opts.cwd.trim().is_empty() { default_cwd } else { opts.cwd.trim().to_string() };
+argv.push(CString::new(format!("--cwd={}", cwd))?);
+// Shell
+if is_busybox {
+argv.push(CString::new(shell_binary).unwrap());
+argv.push(CString::new("sh").unwrap());
+argv.push(CString::new("-i").unwrap());
+} else {
+argv.push(CString::new(shell_binary).unwrap());
+argv.push(CString::new("-l").unwrap());
+argv.push(CString::new("-i").unwrap());
+}
+// Env
+let mut env: Vec = Vec::new();
+env.push(CString::new(format!("PROOT_LOADER={}", loader.to_string_lossy()))?);
+env.push(CString::new(format!("PROOT_TMP_DIR={}", ctx.cache_dir.display()))?);
+let home_dir = if termux_detected {
+"/data/data/com.termux/files/home".to_string()
+} else if effective_user == "root" {
+"/root".to_string()
+} else {
+format!("/home/{}", effective_user)
+};
+env.push(CString::new(format!("HOME={}", home_dir))?);
+env.push(CString::new(format!("USER={}", effective_user))?);
+env.push(CString::new(format!("LOGNAME={}", effective_user))?);
+env.push(CString::new(format!("HOSTNAME={}", opts.hostname.trim()))?);
+env.push(CString::new(format!(
+"PATH={}", if termux_detected {
+"/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin"
+} else {
+"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/data/data/app.xodos2/files/usr/bin"
+}
+))?);
+env.push(CString::new("TERM=xterm-256color").unwrap());
+env.push(CString::new("LANG=C.UTF-8").unwrap());
+env.push(CString::new(format!("SHELL={}", shell_binary)).unwrap());
+env.push(CString::new("TMPDIR=/tmp").unwrap());
+env.push(CString::new("XDG_RUNTIME_DIR=/run/user/0").unwrap());
+env.push(CString::new("WAYLAND_DISPLAY=wayland-xodos2").unwrap());
+env.push(CString::new("XDG_SESSION_TYPE=wayland").unwrap());
+env.push(CString::new("QT_QPA_PLATFORM=wayland").unwrap());
+env.push(CString::new("QT_QUICK_BACKEND=software").unwrap());
+env.push(CString::new("VTEST_SOCKET_NAME=/run/xodos2-virgl/vtest.sock").unwrap());
+env.push(CString::new(format!("PULSE_SERVER={}", guest_pulse_server_env()))?);
+if rootfs.join("nix/store").is_dir() {
+env.push(CString::new("ENV=/root/.bashrc").unwrap());
+}
+for e in &opts.envs {
+let e = e.trim();
+if e.is_empty() || !e.contains('=') { continue; }
+env.push(CString::new(e)?);
+}
+Ok((argv, env))
+}
 // ==========================================================================
 // Dispatcher
 // ==========================================================================
-
 pub(super) fn build_exec_args(
-    rootfs: &Path,
-    opts: &ProotOptions,
-) -> Result<(Vec<CString>, Vec<CString>)> {
-    if is_proot_compatible(rootfs) {
-        if let Some((shell, busybox)) = find_shell_in_rootfs(rootfs) {
-            return build_proot_args(rootfs, shell, busybox, opts);
-        }
-    }
-    build_native_args()
+rootfs: &Path,
+opts: &ProotOptions,
+) -> Result<(Vec, Vec)> {
+if is_proot_compatible(rootfs) {
+if let Some((shell, busybox)) = find_shell_in_rootfs(rootfs) {
+return build_proot_args(rootfs, shell, busybox, opts);
 }
-
+}
+build_native_args()
+}
 pub struct ChildProcess { pub pid: Pid }
 impl Drop for ChildProcess {
-    fn drop(&mut self) {
-        let _ = nix::sys::signal::kill(self.pid, nix::sys::signal::Signal::SIGTERM);
-    }
+fn drop(&mut self) {
+let _ = nix::sys::signal::kill(self.pid, nix::sys::signal::Signal::SIGTERM);
 }
-
+}
 fn fork_pty_with_argv(
-    argv: Vec<CString>, env: Vec<CString>, rows: u16, cols: u16,
+argv: Vec, env: Vec, rows: u16, cols: u16,
 ) -> Result<(ChildProcess, File, Box<dyn Write + Send>, RawFd)> {
-    let a: Vec<&CStr> = argv.iter().map(|s| s.as_c_str()).collect();
-    let e: Vec<&CStr> = env.iter().map(|s| s.as_c_str()).collect();
-    let ws = Winsize { ws_row: rows.max(1), ws_col: cols.max(1), ws_xpixel: 0, ws_ypixel: 0 };
-    let r = unsafe { forkpty(Some(&ws), None).context("forkpty failed")? };
-    match r {
-        ForkptyResult::Child => {
-            // If execve fails, write a visible error to the PTY (stderr is
-            // the slave) BEFORE exiting, so the terminal shows why it died.
-            if let Err(err) = execve(argv[0].as_c_str(), &a, &e) {
-                use std::io::Write as _;
-                let msg = format!(
-                    "\r\n[xodos2] execve failed: {}\r\n  argv[0]={:?}\r\n  errno={}\r\n",
-                    err,
-                    argv[0],
-                    std::io::Error::last_os_error(),
-                );
-                let _ = std::io::stderr().write_all(msg.as_bytes());
-                let _ = std::io::stderr().flush();
-                // Give the PTY a moment to flush before we exit.
-                std::thread::sleep(std::time::Duration::from_millis(80));
-                unsafe { nix::libc::_exit(1) };
-            }
-            unreachable!();
-        }
-        ForkptyResult::Parent { child, master } => {
-            let rd_fd = dup(&master).context("dup")?.into_raw_fd();
-            let wr_fd = master.into_raw_fd();
-            let rd = unsafe { File::from_raw_fd(rd_fd) };
-            let wr = unsafe { File::from_raw_fd(wr_fd) };
-            Ok((ChildProcess { pid: child }, rd, Box::new(wr), wr_fd))
-        }
-    }
+let a: Vec<&CStr> = argv.iter().map(|s| s.as_c_str()).collect();
+let e: Vec<&CStr> = env.iter().map(|s| s.as_c_str()).collect();
+let ws = Winsize { ws_row: rows.max(1), ws_col: cols.max(1), ws_xpixel: 0, ws_ypixel: 0 };
+let r = unsafe { forkpty(Some(&ws), None).context("forkpty failed")? };
+match r {
+ForkptyResult::Child => {
+// If execve fails, write a visible error to the PTY (stderr is
+// the slave) BEFORE exiting, so the terminal shows why it died.
+if let Err(err) = execve(argv[0].as_c_str(), &a, &e) {
+use std::io::Write as _;
+let msg = format!(
+"\r\n[xodos2] execve failed: {}\r\n  argv[0]={:?}\r\n  errno={}\r\n",
+err,
+argv[0],
+std::io::Error::last_os_error(),
+);
+let _ = std::io::stderr().write_all(msg.as_bytes());
+let _ = std::io::stderr().flush();
+// Give the PTY a moment to flush before we exit.
+std::thread::sleep(std::time::Duration::from_millis(80));
+unsafe { nix::libc::_exit(1) };
 }
-
+unreachable!();
+}
+ForkptyResult::Parent { child, master } => {
+let rd_fd = dup(&master).context("dup")?.into_raw_fd();
+let wr_fd = master.into_raw_fd();
+let rd = unsafe { File::from_raw_fd(rd_fd) };
+let wr = unsafe { File::from_raw_fd(wr_fd) };
+Ok((ChildProcess { pid: child }, rd, Box::new(wr), wr_fd))
+}
+}
+}
 pub fn fork_pty_shell_in_rootfs(
-    rootfs: &Path, rows: u16, cols: u16,
+rootfs: &Path, rows: u16, cols: u16,
 ) -> Result<(ChildProcess, File, Box<dyn Write + Send>, RawFd)> {
-    let opts = load_proot_options_for(rootfs);
-    let (argv, env) = build_exec_args(rootfs, &opts)?;
-    fork_pty_with_argv(argv, env, rows, cols)
+let opts = load_proot_options_for(rootfs);
+let (argv, env) = build_exec_args(rootfs, &opts)?;
+fork_pty_with_argv(argv, env, rows, cols)
 }
-
 pub fn fork_pty_native_shell(
-    rows: u16, cols: u16,
+rows: u16, cols: u16,
 ) -> Result<(ChildProcess, File, Box<dyn Write + Send>, RawFd)> {
-    let (argv, env) = build_native_args()?;
-    fork_pty_with_argv(argv, env, rows, cols)
+let (argv, env) = build_native_args()?;
+fork_pty_with_argv(argv, env, rows, cols)
+}
+pub(super) fn path_exists_in_rootfs(rootfs: &Path, rel: &str) -> bool {
+let full = rootfs.join(rel.trim_start_matches('/'));
+if full.exists() { return true; }
+if full.is_symlink() {
+if let Ok(t) = fs::read_link(&full) {
+let r = if t.is_relative() {
+full.parent().unwrap_or(Path::new("/")).join(t)
+} else {
+let ts = t.to_string_lossy();
+rootfs.join(if ts.starts_with('/') { &ts[1..] } else { ts.as_ref() })
+};
+return r.exists();
+}
+}
+false
 }
 
-pub(super) fn path_exists_in_rootfs(rootfs: &Path, rel: &str) -> bool {
-    let full = rootfs.join(rel.trim_start_matches('/'));
-    if full.exists() { return true; }
-    if full.is_symlink() {
-        if let Ok(t) = fs::read_link(&full) {
-            let r = if t.is_relative() {
-                full.parent().unwrap_or(Path::new("/")).join(t)
-            } else {
-                let ts = t.to_string_lossy();
-                rootfs.join(if ts.starts_with('/') { &ts[1..] } else { ts.as_ref() })
-            };
-            return r.exists();
-        }
-    }
-    false
-}
