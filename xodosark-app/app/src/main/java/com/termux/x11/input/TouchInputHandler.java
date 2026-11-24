@@ -397,12 +397,17 @@ public class TouchInputHandler {
             mInputStrategy = new InputStrategyInterface.TrackpadInputStrategy(mInjector);
     }
 
+private static boolean hasPointerCapture(View view) {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && view.hasPointerCapture();
+    }
+
     public void setCapturingEnabled(boolean enabled) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         if (mInjector.pointerCapture && enabled)
             mActivity.getLorieView().requestPointerCapture();
         else
             mActivity.getLorieView().releasePointerCapture();
-
+}
         if (mInjector.pauseKeyInterceptingWithEsc) {
             if (mInjector.dexMetaKeyCapture)
                 SamsungDexUtils.dexMetaKeyCapture(mActivity, enabled);

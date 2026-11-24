@@ -421,6 +421,12 @@ fn run_until_exit(
         Command::new(&exe)
     };
 
+        let sink_mod = if android_api_level() >= 26 {
+        "module-aaudio-sink"
+    } else {
+        "module-sles-sink"
+    };
+
     cmd.arg("-n")
         .arg("--use-pid-file=no")
         .arg("--disable-shm=yes")
@@ -429,7 +435,7 @@ fn run_until_exit(
         .arg("--log-target=stderr")
         .arg("--log-level=debug")
         .arg("-L")
-        .arg("module-aaudio-sink sink_name=xodosark-out")
+        .arg(format!("{} sink_name=xodosark-out", sink_mod))
         .arg("-L")
         .arg("module-null-sink sink_name=xodosark-mix")
         .arg("-L")
@@ -443,7 +449,8 @@ fn run_until_exit(
             port
         ))
         .arg("-L")
-        .arg("module-aaudio-sink sink_name=xodos2-out");
+        .arg(format!("{} sink_name=xodos2-out", sink_mod));
+
 
     // ── NEW: conditionally load the mic source ──
     // The flag is written/deleted by MicManager on the Kotlin side.

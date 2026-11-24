@@ -1,6 +1,7 @@
 package com.termux.x11;
 
 // 
+import androidx.annotation.RequiresApi;
 import com.termux.x11.ipc.GamepadIpc;
 import com.termux.x11.input.GamepadInputHandler;
 import android.net.Uri;
@@ -1133,6 +1134,7 @@ if (!sdlEnabled && !isIgnoredDevice(dev) && isGamepadConnected()) {
         });
         lorieParent.setOnHoverListener((v, e) -> mInputHandler.handleTouchEvent(lorieParent, lorieView, e));
         lorieParent.setOnGenericMotionListener((v, e) -> mInputHandler.handleTouchEvent(lorieParent, lorieView, e));
+        if (SDK_INT >= VERSION_CODES.O) {
         lorieView.setOnCapturedPointerListener((v, e) -> {
     if (drawerLayout != null && drawerLayout.isDrawerOpen(GravityCompat.START)) {
         return false;
@@ -1140,6 +1142,7 @@ if (!sdlEnabled && !isIgnoredDevice(dev) && isGamepadConnected()) {
     return mInputHandler.handleTouchEvent(lorieView, lorieView, e);
 });
         lorieParent.setOnCapturedPointerListener((v, e) -> mInputHandler.handleTouchEvent(lorieView, lorieView, e));
+        }
         lorieView.setOnKeyListener(mLorieKeyListener);
 
         lorieView.setCallback((screenWidth, screenHeight, inputTransform) ->
@@ -1269,11 +1272,22 @@ if (!sdlEnabled && !isIgnoredDevice(dev) && isGamepadConnected()) {
         
         //=====================
         
-        registerReceiver(receiver, new IntentFilter(ACTION_START) {{
-            addAction(ACTION_PREFERENCES_CHANGED);
-            addAction(ACTION_STOP);
-            addAction(ACTION_CUSTOM);
-        }}, SDK_INT >= VERSION_CODES.TIRAMISU ? RECEIVER_EXPORTED : 0);
+        IntentFilter filter = new IntentFilter(ACTION_START);
+filter.addAction(ACTION_PREFERENCES_CHANGED);
+filter.addAction(ACTION_STOP);
+filter.addAction(ACTION_CUSTOM);
+
+if (SDK_INT >= VERSION_CODES.O) {
+    // 3-arg overload exists from O onwards; flag semantics for external senders (Termux app)
+    // require EXPORTED, and NOT_EXPORTED isn't accepted below TIRAMISU.
+    registerReceiver(receiver, filter,
+            SDK_INT >= VERSION_CODES.TIRAMISU ? RECEIVER_NOT_EXPORTED : 0);
+} else {
+    // API 24 / 25 (Nougat) — only the 2-arg overload exists.
+    registerReceiver(receiver, filter);
+}
+
+
 
         inputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
 
@@ -1379,7 +1393,9 @@ private void setupInputController() {
         overlay.setOnTouchListener((v, e) -> true);
         overlay.setOnHoverListener((v, e) -> true);
         overlay.setOnGenericMotionListener((v, e) -> true);
+        if (SDK_INT >= VERSION_CODES.O)
         overlay.setOnCapturedPointerListener((v, e) -> true);
+        
         overlay.setVisibility(stylusMenuEnabled ? View.VISIBLE : View.GONE);
         View.OnClickListener listener = view -> {
             TouchInputHandler.STYLUS_INPUT_HELPER_MODE = (view.equals(left) ? 1 : (view.equals(middle) ? 2 : (view.equals(right) ? 4 : 0)));
@@ -1899,13 +1915,16 @@ protected boolean isSettingsActivity() {
     private String getNotificationChannel(NotificationManager notificationManager){
         String channelId = getResources().getString(R.string.lorie_app_name);
         String channelName = getResources().getString(R.string.lorie_app_name);
+        if (SDK_INT >= VERSION_CODES.O) {
         NotificationChannel channel = new NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_HIGH);
         channel.setImportance(NotificationManager.IMPORTANCE_HIGH);
         channel.setLockscreenVisibility(Notification.VISIBILITY_SECRET);
         if (SDK_INT >= VERSION_CODES.Q)
             channel.setAllowBubbles(false);
         notificationManager.createNotificationChannel(channel);
-        return channelId;
+        
+    }
+    return channelId;
     }
 
         int orientation, densityDpi; 
@@ -2047,8 +2066,10 @@ setWindowFlag(FLAG_KEEP_SCREEN_ON, "never".equals(prefs.screenIdleTimeout.get())
             return appOpsManager.checkOpNoThrow(AppOpsManager.OPSTR_PICTURE_IN_PICTURE, android.os.Process.myUid(), context.getPackageName()) == AppOpsManager.MODE_ALLOWED;
     }
 
+    @RequiresApi(api = VERSION_CODES.O)
     @Override
     public void onUserLeaveHint() {
+   // if (SDK_INT < VERSION_CODES.O) return;  
         if (!prefs.PIP.get() || !hasPipPermission(this) || !LorieView.connected())
             return;
 

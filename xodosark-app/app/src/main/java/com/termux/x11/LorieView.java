@@ -731,16 +731,19 @@ public void regenerate() {
 
     public void checkForClipboardChange() {
         ClipDescription desc = clipboard.getPrimaryClipDescription();
+        // Below API 26 the clipboard carries no timestamp, so every change looks like a new one.
+        long timestamp = desc == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O ? lastClipboardTimestamp + 1 : desc.getTimestamp();
         if (clipboardSyncEnabled && desc != null &&
-                lastClipboardTimestamp < desc.getTimestamp() &&
+                lastClipboardTimestamp < timestamp &&
                 desc.getMimeTypeCount() == 1 &&
                 (desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) ||
                         desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML))) {
-            lastClipboardTimestamp = desc.getTimestamp();
-            sendClipboardAnnounce();
+            lastClipboardTimestamp = timestamp;
+            sendClipboardAnnounce(mNativeContext);
             Log.d("CLIP", "sending clipboard announce");
         }
     }
+
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {

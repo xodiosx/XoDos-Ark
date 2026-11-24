@@ -205,12 +205,15 @@ protected boolean isSettingsActivity() {
 
 
 
-    @SuppressLint("WrongConstant")
+     @SuppressLint("WrongConstant")
     @Override
     protected void onResume() {
         super.onResume();
         IntentFilter filter = new IntentFilter(ACTION_PREFERENCES_CHANGED);
-        registerReceiver(receiver, filter, SDK_INT >= Build.VERSION_CODES.TIRAMISU ? RECEIVER_NOT_EXPORTED : 0);
+        if (SDK_INT >= Build.VERSION_CODES.O)
+            registerReceiver(receiver, filter, SDK_INT >= Build.VERSION_CODES.TIRAMISU ? RECEIVER_NOT_EXPORTED : 0);
+        else
+            registerReceiver(receiver, filter);
     }
 
     @Override
@@ -351,6 +354,13 @@ protected boolean isSettingsActivity() {
 
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P)
                 setVisible("hideCutout", false);
+                
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                setVisible("pointerCapture", false);
+                setVisible("transformCapturedPointer", false);
+                setVisible("capturedPointerSpeedFactor", false);
+            }
+            
 
             boolean stylusAvailable = Arrays.stream(InputDevice.getDeviceIds())
                     .mapToObj(InputDevice::getDevice)
