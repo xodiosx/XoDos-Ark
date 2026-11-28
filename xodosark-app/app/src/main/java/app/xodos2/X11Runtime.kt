@@ -101,6 +101,7 @@ object X11Runtime {
                 @Suppress("DEPRECATION")
                 appCtx.startService(it)
             }
+            Log.i(TAG, "startService(X11ServerService) called, SDK=${Build.VERSION.SDK_INT}, ctx=${appCtx.packageName}")
         } catch (e: Exception) {
             Log.e(TAG, "start X11ServerService", e)
         }

@@ -94,10 +94,16 @@ public class Pointer {
     }
 
     private boolean screenPointLiesOutsideImageBoundaryX(float screenX) {
+//        float scaledX = (screenX-xServer.screenInfo.offsetX) * xServer.screenInfo.scale.x;
+//        float imageWidth = (float) xServer.screenInfo.imageWidth + EPSILON;
+//        Log.d("OutsideBoundaryX", "screenX: " + screenX + ", scaledX:" + scaledX + ", imageWidth: " + imageWidth);
         return screenX < xServer.screenInfo.offsetX || screenX > xServer.screenInfo.imageWidth + xServer.screenInfo.offsetX;
     }
 
     private boolean screenPointLiesOutsideImageBoundaryY(float screenY) {
+//        float scaledY = (screenY-xServer.screenInfo.offsetY) * xServer.screenInfo.scale.y;
+//        float imageHeight = (float) xServer.screenInfo.imageHeight + EPSILON;
+//        Log.d("OutsideBoundaryX","screenY: "+screenY+", scaledY:"+scaledY+", imageHeight: "+imageHeight);
         return screenY < xServer.screenInfo.offsetY || screenY > xServer.screenInfo.imageHeight + xServer.screenInfo.offsetY;
     }
 

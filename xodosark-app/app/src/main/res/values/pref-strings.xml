@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+<!-- ===================================================================
+     Aliases so upstream LoriePreferences.java (which expects the
+     "lorie_pref_" prefix) resolves against our unprefixed strings.
+     Do not edit LoriePreferences.java — keep the prefix here.
+     =================================================================== -->
+
+<!-- The 5 direct references -->
+<string name="lorie_pref_summary_requiresExactOrCustom">require exact or custom resoli</string>
+    <string name="displays_button_text">Displays</string>
+    <string name="displays_dialog_title">Displays</string>
+    <string name="displays_dialog_empty">No other displays are open</string>
+<string name="no_server_signal">no signal</string>
+<string name="lorie_pref_summary_requiresIntercepting">it requires Intercepting</string>
+<string name="lorie_pref_summary_requiresTrackpadAndNative">it requires Trackpad And Native</string>
+
+<!-- These two are newer upstream additions — if you don't already have
+     the underlying strings, just inline the text here instead of … -->
+<string name="lorie_pref_screenIdleTimeoutSystem">System (as phone settings)</string>
+<string name="lorie_pref_summary_screenIdleTimeoutConflict">System screen-off timeout (%1$s) is longer than this; the display may sleep earlier than expected.</string>
+<string name="lorie_pref_timeoutSystem">system default</string>
+
+<!-- Dynamic ones — one per key used in preferences.xml.
+     Duplicate/trim to match whatever keys YOUR preferences.xml has. -->
+
+<string name="lorie_pref_touchMode">Touch mode</string>
+<string name="lorie_pref_showAdditionalKbd">Show additional keyboard</string>
+<string name="lorie_pref_showAdditionalKbd_summary">show additional keyboard</string>
+<string name="lorie_pref_additionalKbdVisible">Additional keyboard visible</string>
+<string name="lorie_pref_displayResolutionMode">Display resolution</string>
+<string name="lorie_pref_displayScale">Display scale</string>
+<string name="lorie_pref_displayResolutionExact">Exact resolution</string>
+<string name="lorie_pref_displayResolutionCustom">Custom resolution</string>
+<string name="lorie_pref_displayStretch">Stretch display</string>
+<string name="lorie_pref_adjustResolution">Adjust resolution</string>
+<string name="lorie_pref_fullscreen">Fullscreen</string>
+<string name="lorie_pref_hideCutout">Hide display cutout</string>
+<string name="lorie_pref_forceOrientation">Force orientation</string>
+<string name="lorie_pref_screenIdleTimeout">Screen idle timeout</string>
+<string name="lorie_pref_Reseed">Reseed on soft keyboard</string>
+<string name="lorie_pref_adjustHeightForEK">Adjust height for extra keys</string>
+<string name="lorie_pref_opacityEKBar">Extra keys bar opacity</string>
+<string name="lorie_pref_ekbarPosition">Extra keys bar position</string>
+<string name="lorie_pref_ekbarPositionIgnoreOrientation">Ignore orientation for bar position</string>
+<string name="lorie_pref_showMouseHelper">Show mouse helper</string>
+<string name="lorie_pref_showStylusClickOverride">Show stylus click override</string>
+<string name="lorie_pref_stylusIsMouse">Treat stylus as mouse</string>
+<string name="lorie_pref_stylusButtonContactModifierMode">Stylus button modifier</string>
+<string name="lorie_pref_touch_sensitivity">Touch sensitivity</string>
+<string name="lorie_pref_scaleTouchpad">Scale touchpad</string>
+<string name="lorie_pref_filterOutWinkey">Filter out Win key</string>
+<string name="lorie_pref_enableAccessibilityServiceAutomatically">Enable accessibility service automatically</string>
+<string name="lorie_pref_dexMetaKeyCapture">Capture Meta key on DeX</string>
+<string name="lorie_pref_pauseKeyInterceptingWithEsc">Pause key intercepting with Esc</string>
+<string name="lorie_pref_volumeDownAction">Volume down action</string>
+<string name="lorie_pref_volumeUpAction">Volume up action</string>
+<string name="lorie_pref_mediaKeysAction">Media keys action</string>
+<string name="lorie_pref_PIP">Picture-in-picture</string>
+<string name="lorie_pref_keepScreenOn">Keep screen on</string>
+<string name="lorie_pref_extra_keys_config">Extra keys config</string>
+<string name="lorie_pref_useTermuxEKBarBehaviour">Use Termux extra keys bar behaviour</string>
+<string name="lorie_pref_showIMEWhileExternalConnected">Show soft keyboard with hardware keyboard</string>
+<string name="lorie_pref_requestNotificationPermission">Request notification permission</string>
+
+<string name="lorie_pref_storeSecondaryDisplayPreferencesSeparately">Store secondary display preferences separately</string>
+
+</resources>

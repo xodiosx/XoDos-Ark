@@ -1,82 +1,91 @@
 package com.termux.x11;
 
-
-
-
-//////// new
+////////
 import android.view.MotionEvent;
 import android.view.InputDevice;
+//import android.widget.Toast;
 import static android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC;
 import static android.view.KeyEvent.KEYCODE_BACK;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import android.app.Activity;
+import android.content.ContextWrapper;
+import android.os.Bundle;
+import android.os.CancellationSignal;
 import android.view.InputDevice;
+import android.view.inputmethod.CompletionInfo;
+import android.view.inputmethod.CorrectionInfo;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
+import android.view.inputmethod.HandwritingGesture;
+import android.view.inputmethod.InputContentInfo;
+import android.view.inputmethod.PreviewableHandwritingGesture;
+import android.view.inputmethod.TextAttribute;
+import android.view.inputmethod.TextBoundsInfoResult;
+import android.view.inputmethod.TextSnapshot;
 import com.termux.x11.controller.core.CursorLocker;
 import com.termux.x11.controller.winhandler.WinHandler;
 import com.termux.x11.controller.xserver.InputDeviceManager;
 import com.termux.x11.controller.xserver.Keyboard;
 import com.termux.x11.controller.xserver.Pointer;
 import com.termux.x11.controller.xserver.XKeycode;
+import com.termux.x11.input.TouchInputHandler;
+import java.util.concurrent.Executor;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+
+
 
 import android.annotation.SuppressLint;
-import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipDescription;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.content.ContextWrapper;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.PixelFormat;
 import android.graphics.Point;
+import android.graphics.PointF;
+import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.RectF;
+import android.graphics.Region;
 import android.graphics.drawable.ColorDrawable;
 import android.opengl.GLES20;
 import android.os.Build;
-import android.os.Bundle;
-import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.text.Editable;
 import android.text.InputType;
-import android.text.Selection;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.Rational;
+import android.view.Choreographer;
 import android.view.KeyEvent;
 import android.view.Display;
 import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.view.inputmethod.BaseInputConnection;
-import android.view.inputmethod.CompletionInfo;
-import android.view.inputmethod.CorrectionInfo;
 import android.view.inputmethod.CursorAnchorInfo;
 import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.ExtractedText;
-import android.view.inputmethod.ExtractedTextRequest;
-import android.view.inputmethod.HandwritingGesture;
 import android.view.inputmethod.InputConnection;
-import android.view.inputmethod.InputContentInfo;
 import android.view.inputmethod.InputMethodManager;
-import android.view.inputmethod.PreviewableHandwritingGesture;
 import android.view.inputmethod.SurroundingText;
-import android.view.inputmethod.TextAttribute;
-import android.view.inputmethod.TextBoundsInfoResult;
-import android.view.inputmethod.TextSnapshot;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
+import android.widget.FrameLayout;
+
 import androidx.core.math.MathUtils;
 
 import com.termux.x11.input.InputStub;
-import com.termux.x11.input.TouchInputHandler;
 import com.termux.x11.utils.SamsungDexUtils;
 
 import java.util.Set;
-import java.util.concurrent.Executor;
-import java.util.function.Consumer;
-import java.util.function.IntConsumer;
 import java.util.regex.PatternSyntaxException;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -86,84 +95,119 @@ import dalvik.annotation.optimization.FastNative;
 
 @Keep @SuppressLint("WrongConstant")
 @SuppressWarnings("deprecation")
-public class LorieView extends SurfaceView implements InputStub {
-    private static int rendererZoom = 100;
-    private static final Rect NO_INSETS = new Rect();
-    private int obscuredBottom = 0;   
-    private long mNativeContext = 0;
+public class LorieView extends FrameLayout implements InputStub {
+
+
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Winlator-compat fields (needed by controller/**)
+    // ─────────────────────────────────────────────────────────────────────
     public final Keyboard keyboard = Keyboard.createKeyboard(this);
     public final Pointer pointer = new Pointer(this);
-    final public InputDeviceManager inputDeviceManager = new InputDeviceManager(this);
-    public ScreenInfo screenInfo;
-    public CursorLocker cursorLocker;
+    public final InputDeviceManager inputDeviceManager = new InputDeviceManager(this);
+    public final ScreenInfo screenInfo = new ScreenInfo(this);
+        public CursorLocker cursorLocker;
     public WinHandler winHandler;
 
-// new
-    public void setWinHandler(WinHandler handler) {
-        this.winHandler = handler;
-    }
+    public void setWinHandler(WinHandler handler) { this.winHandler = handler; }
+    public WinHandler getWinHandler() { return winHandler; }
 
-    public WinHandler getWinHandler() {
-        return winHandler;
-    }
+    public boolean isFullscreen() { return true; }
+public int getScreenWidth()  { return p.x; }
+public int getScreenHeight() { return p.y; }
 
-
-@Override
-public boolean onGenericMotionEvent(MotionEvent event) {
-    if ((event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != 0) {
-        float vScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
-        float hScroll = event.getAxisValue(MotionEvent.AXIS_HSCROLL);
-
-        if (vScroll != 0 || hScroll != 0) {
-            if (vScroll > 0) {
-                injectPointerButtonPress(Pointer.Button.BUTTON_SCROLL_UP);
-                injectPointerButtonRelease(Pointer.Button.BUTTON_SCROLL_UP);
-            } else if (vScroll < 0) {
-                injectPointerButtonPress(Pointer.Button.BUTTON_SCROLL_DOWN);
-                injectPointerButtonRelease(Pointer.Button.BUTTON_SCROLL_DOWN);
-            }
-
-            if (hScroll > 0) {
-                injectPointerButtonPress(Pointer.Button.BUTTON_SCROLL_CLICK_RIGHT);
-                injectPointerButtonRelease(Pointer.Button.BUTTON_SCROLL_CLICK_RIGHT);
-            } else if (hScroll < 0) {
-                injectPointerButtonPress(Pointer.Button.BUTTON_SCROLL_CLICK_LEFT);
-                injectPointerButtonRelease(Pointer.Button.BUTTON_SCROLL_CLICK_LEFT);
-            }
-
-            return true;
-        }
-    }
-
-    return super.onGenericMotionEvent(event);
+/** Public bridge for external callers (EmbeddedX11Controller) that need to
+ *  fire a window-change with an explicit size rather than the current one. */
+public void sendWindowChangeExternal(int width, int height, int framerate, String name) {
+    sendWindowChange(mNativeContext, width, height, framerate, name);
 }
+    // ─────────────────────────────────────────────────────────────────────
+    // Winlator-compat injection API (called by controller/** and by
+    // InputControlsView via Controls.dispatchGamepad*)
+    // ─────────────────────────────────────────────────────────────────────
+    public void injectPointerMove(int x, int y)                    { pointer.moveTo(x, y); }
+    public void injectPointerMoveDelta(int dx, int dy)             { pointer.moveDelta(dx, dy); }
+    public void injectPointerButtonPress(Pointer.Button b)         { pointer.setButton(b, true); }
+    public void injectPointerButtonRelease(Pointer.Button b)       { pointer.setButton(b, false); }
 
+    public void injectKeyPress(XKeycode xKeycode)                  { injectKeyPress(xKeycode, 0); }
+    public void injectKeyPress(XKeycode xKeycode, int keysym)      { keyboard.setKeyPress(xKeycode.id, keysym); }
+    public void injectKeyRelease(XKeycode xKeycode)                { keyboard.setKeyRelease(xKeycode.id); }
+
+    public void injectText(String text) {
+        if (text == null || text.isEmpty()) return;
+        sendTextEvent(text.getBytes(UTF_8));
+    }
+
+    /** Mouse-wheel / gamepad-trigger scroll → X11 buttons 4/5/6/7. */
+    @Override
+    public boolean onGenericMotionEvent(MotionEvent event) {
+        if ((event.getSource() & InputDevice.SOURCE_CLASS_POINTER) != 0) {
+            float v = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
+            float h = event.getAxisValue(MotionEvent.AXIS_HSCROLL);
+            if (v != 0 || h != 0) {
+                if (v > 0) {
+                    injectPointerButtonPress(Pointer.Button.BUTTON_SCROLL_UP);
+                    injectPointerButtonRelease(Pointer.Button.BUTTON_SCROLL_UP);
+                } else if (v < 0) {
+                    injectPointerButtonPress(Pointer.Button.BUTTON_SCROLL_DOWN);
+                    injectPointerButtonRelease(Pointer.Button.BUTTON_SCROLL_DOWN);
+                }
+                if (h > 0) {
+                    injectPointerButtonPress(Pointer.Button.BUTTON_SCROLL_CLICK_RIGHT);
+                    injectPointerButtonRelease(Pointer.Button.BUTTON_SCROLL_CLICK_RIGHT);
+                } else if (h < 0) {
+                    injectPointerButtonPress(Pointer.Button.BUTTON_SCROLL_CLICK_LEFT);
+                    injectPointerButtonRelease(Pointer.Button.BUTTON_SCROLL_CLICK_LEFT);
+                }
+                return true;
+            }
+        }
+        return super.onGenericMotionEvent(event);
+    }
+
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Current upstream LorieView (below is verbatim upstream, with the
+    // additions above)
+ 
+
+    private float rendererZoom = 100f;
+    private static final Rect NO_INSETS = new Rect();
 
     public interface Callback {
         void inputTransformChanged(int screenWidth, int screenHeight, Matrix inputTransform);
     }
 
-    interface PixelFormat {
-        int BGRA_8888 = 5; // Stands for HAL_PIXEL_FORMAT_BGRA_8888
-    }
-
     private ClipboardManager clipboard;
     private long lastClipboardTimestamp = System.currentTimeMillis();
-    private static boolean clipboardSyncEnabled = false;
-    private static boolean hardwareKbdScancodesWorkaround = false;
+    private long mNativeContext;
+    private boolean clipboardSyncEnabled = false;
+    private boolean hardwareKbdScancodesWorkaround = false;
     private final InputMethodManager mIMM = (InputMethodManager)getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+    private final MainActivity activity = MainActivity.findActivity(getContext());
+    
+        private Prefs getPrefsSafe() {
+        if (activity != null && activity.prefs != null) {
+            return activity.prefs;
+        }
+        LorieApp app = LorieApp.getInstance();
+        return app != null ? app.getPrefs(getContext()) : null;
+    }
+
     private Callback mCallback;
-    public final Point p = new Point();
+    private final Point p = new Point();
     private final Rect contentInsets = new Rect();
+    private final Rect availableRect = new Rect();
     private final Rect viewport = new Rect();
     private final Rect inputViewport = new Rect();
+    private int obscuredBottom = 0;
     private final Matrix inputTransform = new Matrix();
     private float inputSourceLeft = 0.f, inputSourceTop = 0.f;
     private float inputSourceWidth = 0.f, inputSourceHeight = 0.f;
     private boolean dimensionsFrozen = false;
     boolean commitedText = false;
     private final InputConnection mConnection = new BaseInputConnection(this, false) {
-        private final MainActivity a = MainActivity.getInstance();
         private CharSequence currentComposingText = null;
 
         // We can not inspect X windows and get currently edited text
@@ -243,6 +287,13 @@ public boolean onGenericMotionEvent(MotionEvent event) {
             LorieView.this.sendKeyEvent(0, k, false);
         }
 
+       void sendKeysWithoutCtrlAlt(Runnable keys) {
+    if (activity != null && activity.mExtraKeys != null)
+        activity.mExtraKeys.withoutCtrlAlt(keys);
+    else
+        keys.run();
+}
+
         @Override public boolean deleteSurroundingText(int beforeLength, int afterLength) {
             if (requestedPos != -1 && requestedPos > currentPos && beforeLength > 0) {
                 // sometimes gboard sees following whitespace and wants to remove it.
@@ -259,16 +310,22 @@ public boolean onGenericMotionEvent(MotionEvent event) {
                 keyReleaseHandler.removeMessages(KeyEvent.KEYCODE_DEL);
             }
 
-            for (int i=0; i<beforeLength; i++)
-                sendKey(KeyEvent.KEYCODE_DEL);
-            for (int i=0; i<afterLength; i++)
-                sendKey(KeyEvent.KEYCODE_FORWARD_DEL);
+            sendKeysWithoutCtrlAlt(() -> {
+                for (int i=0; i<beforeLength; i++)
+                    sendKey(KeyEvent.KEYCODE_DEL);
+                for (int i=0; i<afterLength; i++)
+                    sendKey(KeyEvent.KEYCODE_FORWARD_DEL);
+            });
 
             currentPos -= beforeLength;
             if (currentPos <= 1)
                 resetCursorPosition = true;
 
             return true;
+        }
+
+        @Override public boolean deleteSurroundingTextInCodePoints(int beforeLength, int afterLength) {
+            return deleteSurroundingText(beforeLength, afterLength);
         }
 
         /**
@@ -283,19 +340,20 @@ public boolean onGenericMotionEvent(MotionEvent event) {
                     || newText.toString().startsWith(currentComposingText.toString()))) {
                 for (int i=0; i < oldLen - newLen; i++)
                     sendKey(KeyEvent.KEYCODE_DEL);
-                for (int i=oldLen; i<newLen; i++)
-                    sendTextEvent(mNativeContext, String.valueOf(newText.charAt(i)).getBytes(UTF_8));
+                if (newLen > oldLen)
+                    sendTextEvent(newText.subSequence(oldLen, newLen).toString().getBytes(UTF_8));
             } else {
                 for (int i = 0; i < oldLen; i++)
                     sendKey(KeyEvent.KEYCODE_DEL);
                 if (newText != null)
-                    sendTextEvent(mNativeContext, newText.toString().getBytes(UTF_8));
+                    sendTextEvent(newText.toString().getBytes(UTF_8));
             }
 
             currentComposingText = reuse ? newText : null;
 
-            if (a.useTermuxEKBarBehaviour && a.mExtraKeys != null)
-                a.mExtraKeys.unsetSpecialKeys();
+          
+                if (activity != null && activity.useTermuxEKBarBehaviour && activity.mExtraKeys != null)
+    activity.mExtraKeys.unsetSpecialKeys();
             commitedText = true;
             return true;
         }
@@ -306,9 +364,9 @@ public boolean onGenericMotionEvent(MotionEvent event) {
             if (mBatchEditNesting == 0) { // outside of batchedit so most likely cursor control
                 if (start == end) {
                     if (start < 1)
-                        sendKey(KeyEvent.KEYCODE_DPAD_LEFT);
+                        sendKeysWithoutCtrlAlt(() -> sendKey(KeyEvent.KEYCODE_DPAD_LEFT));
                     else if (start > 1)
-                        sendKey(KeyEvent.KEYCODE_DPAD_RIGHT);
+                        sendKeysWithoutCtrlAlt(() -> sendKey(KeyEvent.KEYCODE_DPAD_RIGHT));
                 }
 
                 mIMM.updateSelection(LorieView.this, -1, -1, -1, -1);
@@ -365,13 +423,61 @@ public boolean onGenericMotionEvent(MotionEvent event) {
             return requestCursorUpdates(cursorUpdateMode);
         }
     };
-    private final SurfaceHolder.Callback mSurfaceCallback = new SurfaceHolder.Callback() {
-        @Override public void surfaceCreated(@NonNull SurfaceHolder holder) {
-            holder.setFormat(PixelFormat.BGRA_8888);
+    @SuppressLint({"MissingSuperCall", "ViewConstructor"})
+    private static class HoleSurfaceView extends SurfaceView {
+        private final Rect hole = new Rect();
+        private final int[] location = new int[2];
+
+        HoleSurfaceView(Context context) { super(context); }
+
+        void setHole(Rect rect) {
+            if (hole.equals(rect))
+                return;
+
+            hole.set(rect);
+            invalidate();
         }
 
+        private void punchHole(Canvas canvas) {
+            if (hole.isEmpty())
+                return;
+
+            canvas.save();
+            canvas.clipRect(hole);
+            canvas.drawColor(0, PorterDuff.Mode.CLEAR);
+            canvas.restore();
+        }
+
+        @Override public void draw(Canvas canvas) { punchHole(canvas); }
+        @Override protected void dispatchDraw(Canvas canvas) { punchHole(canvas); }
+
+        @Override
+        public boolean gatherTransparentRegion(Region region) {
+            if (region != null && !hole.isEmpty()) {
+                getLocationInWindow(location);
+                region.op(location[0] + hole.left, location[1] + hole.top, location[0] + hole.right, location[1] + hole.bottom, Region.Op.UNION);
+            }
+            return true;
+        }
+    }
+
+    private final HoleSurfaceView pictureView = new HoleSurfaceView(getContext());
+    private final HoleSurfaceView cursorView = new HoleSurfaceView(getContext());
+    private final int[] cursorState = new int[6];
+    private final Choreographer.FrameCallback cursorPlacer = new Choreographer.FrameCallback() {
+        @Override public void doFrame(long frameTimeNanos) {
+            placeCursor();
+            Choreographer.getInstance().postFrameCallback(this);
+        }
+    };
+
+    private final SurfaceHolder.Callback mSurfaceCallback = new SurfaceHolder.Callback() {
+        @Override public void surfaceCreated(@NonNull SurfaceHolder holder) {}
+
         @Override public void surfaceChanged(@NonNull SurfaceHolder holder, int f, int width, int height) {
-            LorieView.this.surfaceChanged(mNativeContext, holder.getSurface());
+            if (activity != null) activity.windowChanged(holder.getSurface());
+           else X11ActivityBridge.windowChanged(holder.getSurface());
+          
             width = getMeasuredWidth();
             height = getMeasuredHeight();
 
@@ -379,24 +485,44 @@ public boolean onGenericMotionEvent(MotionEvent event) {
             updateViewport();
         }
 
+             @Override public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
+            if (activity != null) activity.windowChanged(null);
+            else X11ActivityBridge.windowChanged(null);
+        
+        }
+
+    };
+    private final SurfaceHolder.Callback mCursorSurfaceCallback = new SurfaceHolder.Callback() {
+        @Override public void surfaceCreated(@NonNull SurfaceHolder holder) {}
+
+        @Override public void surfaceChanged(@NonNull SurfaceHolder holder, int f, int width, int height) {
+            if (activity != null) activity.cursorWindowChanged(holder.getSurface());
+            else X11ActivityBridge.cursorWindowChanged(holder.getSurface());
+      
+     
+        }
+
         @Override public void surfaceDestroyed(@NonNull SurfaceHolder holder) {
-            LorieView.this.surfaceChanged(mNativeContext, null);
+            if (activity != null) activity.cursorWindowChanged(null);
+            else X11ActivityBridge.cursorWindowChanged(null);
+     
+      
         }
     };
 
-    public LorieView(Context context) { super(context); init(); }
-    public LorieView(Context context, AttributeSet attrs) { super(context, attrs); init(); }
-    public LorieView(Context context, AttributeSet attrs, int defStyleAttr) { super(context, attrs, defStyleAttr); init(); }
-    @SuppressWarnings("unused")
-    public LorieView(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) { super(context, attrs, defStyleAttr, defStyleRes); init(); }
+    public LorieView(Context context, AttributeSet attrs) { super(context, attrs); }
 
-    private void init() {
-        getHolder().addCallback(mSurfaceCallback);
+    {
+        pictureView.getHolder().addCallback(mSurfaceCallback);
+        cursorView.getHolder().addCallback(mCursorSurfaceCallback);
+        cursorView.getHolder().setFormat(PixelFormat.TRANSLUCENT);
+        cursorView.setZOrderMediaOverlay(true);
+        addView(pictureView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        addView(cursorView, new LayoutParams(32, 32));
         clipboard = (ClipboardManager) getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+        if (cursorLocker == null) cursorLocker = new CursorLocker(this);  
         mNativeContext = nativeInit();
-        sViews.add(this);    
-       screenInfo = new ScreenInfo(this);
-        cursorLocker = new CursorLocker(this);
+
         setFocusable(true);
         setFocusableInTouchMode(true);
 
@@ -410,9 +536,57 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         });
     }
 
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        Choreographer.getInstance().postFrameCallback(cursorPlacer);
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        Choreographer.getInstance().removeFrameCallback(cursorPlacer);
+        nativeDestroy(mNativeContext);
+        mNativeContext = 0;
+    }
+
     public void setCallback(Callback callback) {
         mCallback = callback;
         triggerCallback();
+    }
+
+    /** Hands the surface over to the X server that has missed it. */
+        void sendSurface() {
+        Surface surface = pictureView.getHolder().getSurface();
+        Surface cursorSurface = cursorView.getHolder().getSurface();
+        Surface validPic = (surface != null && surface.isValid()) ? surface : null;
+        Surface validCur = (cursorSurface != null && cursorSurface.isValid()) ? cursorSurface : null;
+        if (activity != null) {
+            activity.windowChanged(validPic);
+            activity.cursorWindowChanged(validCur);
+        } else {
+            X11ActivityBridge.windowChanged(validPic);
+            X11ActivityBridge.cursorWindowChanged(validCur);
+        }
+        updateViewport();
+    }
+
+
+    private void placeCursor() {
+        if (mNativeContext == 0 || inputSourceWidth <= 0.f || inputSourceHeight <= 0.f || !getCursorState(mNativeContext, cursorState))
+            return;
+
+        float scaleX = inputViewport.width() / inputSourceWidth, scaleY = inputViewport.height() / inputSourceHeight;
+        int w = Math.max(32, (Math.round(cursorState[4] * scaleX) + 31) / 32 * 32);
+        int h = Math.max(32, (Math.round(cursorState[5] * scaleY) + 31) / 32 * 32);
+        ViewGroup.LayoutParams params = cursorView.getLayoutParams();
+        if (params.width != w || params.height != h) {
+            params.width = w;
+            params.height = h;
+            cursorView.setLayoutParams(params);
+        }
+        cursorView.setTranslationX(Math.round(inputViewport.left + (cursorState[0] - cursorState[2] - inputSourceLeft) * scaleX));
+        cursorView.setTranslationY(Math.round(inputViewport.top + (cursorState[1] - cursorState[3] - inputSourceTop) * scaleY));
     }
 
     public void triggerCallback() {
@@ -420,8 +594,31 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         updateViewport();
     }
 
+    /** Shows or hides the soft keyboard for this view, the same way focusing an editable field would. */
+    public void setKeyboardVisible(boolean visible) {
+        if (visible) {
+            requestFocus();
+            mIMM.showSoftInput(this, 0);
+        } else
+            mIMM.hideSoftInputFromWindow(getWindowToken(), 0);
+    }
+
+    public void toggleKeyboardVisible() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            WindowInsets insets = getRootWindowInsets();
+            setKeyboardVisible(insets == null || !insets.isVisible(WindowInsets.Type.ime()));
+        } else {
+            requestFocus();
+            mIMM.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+        }
+    }
+
     void getDimensionsFromSettings(int width, int height) {
-        Prefs prefs = MainActivity.getPrefs();
+        Prefs prefs = getPrefsSafe();
+        if (prefs == null) {
+            setCvtDimensions(width, height);
+            return;
+            }
         int w = width;
         int h = height;
         switch(prefs.displayResolutionMode.get()) {
@@ -464,6 +661,10 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         int rounded = Math.max(granularity, width - width % granularity);
         // 1366 is not a multiple of it, and libxcvt makes an exception for exactly this size.
         p.set(rounded == 1360 && height == 768 ? 1366 : rounded, height);
+        // screen info
+                screenInfo.screenWidth = p.x;
+        screenInfo.screenHeight = p.y;
+        
     }
 
     private Matrix getInputTransform() {
@@ -475,17 +676,18 @@ public boolean onGenericMotionEvent(MotionEvent event) {
     }
 
     private void updateInputTransform() {
+        pictureView.setHole(inputViewport);
         if (mCallback != null)
             mCallback.inputTransformChanged(p.x, p.y, getInputTransform());
     }
 
-    private void sendWindowChange() {
+    public void sendWindowChange() {
         String name;
         int framerate = (int) (getDisplay() != null ? getDisplay().getRefreshRate() : 30);
 
         if (getDisplay() == null || getDisplay().getDisplayId() == Display.DEFAULT_DISPLAY)
             name = "builtin";
-        else if (SamsungDexUtils.checkDeXEnabled(MainActivity.getInstance()))
+        else if (activity != null && SamsungDexUtils.checkDeXEnabled(activity))
             name = "dex";
         else
             name = "external";
@@ -495,22 +697,18 @@ public boolean onGenericMotionEvent(MotionEvent event) {
 
     @Keep
     @SuppressWarnings("unused")
-    private static void setRendererViewport(int viewportLeft, int viewportTop, int viewportWidth, int viewportHeight,
-                                            float sourceLeft, float sourceTop, float sourceWidth, float sourceHeight) {
+    protected void setRendererViewport(int viewportLeft, int viewportTop, int viewportWidth, int viewportHeight,
+                                       float sourceLeft, float sourceTop, float sourceWidth, float sourceHeight) {
         MainActivity.handler.post(() -> {
-            MainActivity activity = MainActivity.getInstance();
-            if (activity == null)
-                return;
-
-            LorieView view = activity.getLorieView();
-            view.inputViewport.set(viewportLeft, viewportTop, viewportLeft + viewportWidth, viewportTop + viewportHeight);
-            view.inputSourceLeft = sourceLeft;
-            view.inputSourceTop = sourceTop;
-            view.inputSourceWidth = sourceWidth;
-            view.inputSourceHeight = sourceHeight;
-            view.updateInputTransform();
+            inputViewport.set(viewportLeft, viewportTop, viewportLeft + viewportWidth, viewportTop + viewportHeight);
+            inputSourceLeft = sourceLeft;
+            inputSourceTop = sourceTop;
+            inputSourceWidth = sourceWidth;
+            inputSourceHeight = sourceHeight;
+            updateInputTransform();
         });
     }
+
 
     /** Keeps the X screen size while the window is floating, the picture is scaled instead. */
     public void freezeDimensions(boolean freeze) {
@@ -526,14 +724,19 @@ public boolean onGenericMotionEvent(MotionEvent event) {
     public Rational getScreenAspectRatio() {
         return p.x == 0 || p.y == 0 ? null : new Rational(p.x, p.y);
     }
-    
-        /** Height of the picture the soft keyboard covers instead of the picture being shrunk for it. */
+
+    /** Height of the picture the soft keyboard covers instead of the picture being shrunk for it. */
     public void setObscuredBottom(int height) {
         if (obscuredBottom == height)
             return;
 
         obscuredBottom = height;
         updateViewport();
+    }
+
+    /** Drawable area, in this view's own local coordinates, with insets already excluded. */
+    public Rect getAvailableRect() {
+        return new Rect(availableRect);
     }
 
     public void setContentInsets(int left, int top, int right, int bottom) {
@@ -545,7 +748,7 @@ public boolean onGenericMotionEvent(MotionEvent event) {
     }
 
     private void updateViewport() {
-        Prefs prefs = MainActivity.getPrefs();
+        Prefs prefs = getPrefsSafe();
 
         int surfaceW = getMeasuredWidth(), surfaceH = getMeasuredHeight();
         // Views the insets reserve room for are hidden while the dimensions are frozen.
@@ -553,6 +756,8 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         int availableLeft = insets.left, availableTop = insets.top;
         int availableW = Math.max(0, surfaceW - insets.left - insets.right);
         int availableH = Math.max(0, surfaceH - insets.top - insets.bottom);
+
+        availableRect.set(availableLeft, availableTop, availableLeft + availableW, availableTop + availableH);
 
         if (availableW == 0 || availableH == 0)
             return;
@@ -564,12 +769,13 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         int drawH = availableH;
 
         // A floating window is given the aspect ratio of the picture, stretching it there is pointless.
-        if (dimensionsFrozen || !prefs.displayStretch.get()) {
+        if (dimensionsFrozen || prefs == null || !prefs.displayStretch.get()) {
             if (drawW > drawH * p.x / p.y)
                 drawW = drawH * p.x / p.y;
             else
                 drawH = drawW * p.y / p.x;
         }
+
         // The picture keeps its size when the soft keyboard covers the bottom, it is just centered
         // in what is left visible, and only what still does not fit there is left to be scrolled.
         int visibleH = Math.max(0, availableH - obscuredBottom);
@@ -585,6 +791,13 @@ public boolean onGenericMotionEvent(MotionEvent event) {
             inputSourceHeight = p.y;
         }
         setViewport(mNativeContext, viewport.left, viewport.top, viewport.width(), viewport.height(), p.x, p.y, hiddenBottom);
+        
+                screenInfo.imageWidth = viewport.width();
+        screenInfo.imageHeight = viewport.height();
+        if (viewport.width() > 0 && viewport.height() > 0) {
+            screenInfo.scale.set((float) p.x / viewport.width(), (float) p.y / viewport.height());
+        }
+        
 
         updateInputTransform();
         if (!dimensionsFrozen)
@@ -599,7 +812,7 @@ public boolean onGenericMotionEvent(MotionEvent event) {
 
     @Override
     public void sendMouseWheelEvent(float deltaX, float deltaY) {
-        sendMouseEvent(mNativeContext, deltaX, deltaY, BUTTON_SCROLL, false, true);
+        sendMouseEvent(deltaX, deltaY, BUTTON_SCROLL, false, true);
     }
 
     static final Set<Integer> imeBuggyKeys = Set.of(
@@ -617,23 +830,21 @@ public boolean onGenericMotionEvent(MotionEvent event) {
         }
     };
 
-    @Override
-    public boolean dispatchKeyEventPreIme(KeyEvent event) {
-        if (imeBuggyKeys.contains(event.getKeyCode())) {
-            // IME does not handle/send events for some keys correctly correctly.
-            // So we should send key release manually in the case if IME will not send it...
-            // I.e. in the case of CTRL+Backspace IME does not send Backspace release event.
-            int action = event.getAction();
-            if (action == KeyEvent.ACTION_UP)
-                keyReleaseHandler.sendEmptyMessageDelayed(event.getKeyCode(), 50);
-        }
-
-        if (hardwareKbdScancodesWorkaround)
-            return false;
-
-        return MainActivity.getInstance().handleKey(event);
+ @Override
+public boolean dispatchKeyEventPreIme(KeyEvent event) {
+    if (imeBuggyKeys.contains(event.getKeyCode())) {
+        int action = event.getAction();
+        if (action == KeyEvent.ACTION_UP)
+            keyReleaseHandler.sendEmptyMessageDelayed(event.getKeyCode(), 50);
     }
 
+    if (hardwareKbdScancodesWorkaround)
+        return false;
+
+    if (activity != null)                                       // ← add guard
+        return activity.handleKey(event);
+    return false;         
+}
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (imeBuggyKeys.contains(event.getKeyCode())) {
@@ -649,56 +860,15 @@ public boolean onGenericMotionEvent(MotionEvent event) {
     ClipboardManager.OnPrimaryClipChangedListener clipboardListener = this::handleClipboardChange;
 
     public void reloadPreferences(Prefs p) {
-        String filtering = p.displayFilteringMode.get();
-        setFiltering(mNativeContext, "nearest".equals(filtering) ? GLES20.GL_NEAREST : GLES20.GL_LINEAR);
-        hardwareKbdScancodesWorkaround = p.hardwareKbdScancodesWorkaround.get();
-        clipboardSyncEnabled = p.clipboardEnable.get();
-        setClipboardSyncEnabled(mNativeContext, clipboardSyncEnabled, clipboardSyncEnabled);
-        TouchInputHandler.refreshInputDevices();
-    }
-
-///  touch controls 
-public void injectPointerMove(int x, int y) {
-    pointer.moveTo(x, y);
+    String filtering = p.displayFilteringMode.get();
+    setFiltering(mNativeContext, "nearest".equals(filtering) ? GLES20.GL_NEAREST : GLES20.GL_LINEAR);
+    setFollowCursorPan(mNativeContext, p.zoomFollowsCursor.get());
+    hardwareKbdScancodesWorkaround = p.hardwareKbdScancodesWorkaround.get();
+    clipboardSyncEnabled = p.clipboardEnable.get();
+    setClipboardSyncEnabled(mNativeContext, clipboardSyncEnabled, clipboardSyncEnabled);
+    if (activity != null && activity.mInputHandler != null)     // ← add guard
+        activity.mInputHandler.refreshInputDevices();
 }
-
-public void injectPointerMoveDelta(int dx, int dy) {
-    pointer.moveDelta(dx, dy);
-}
-
-public void injectPointerButtonPress(Pointer.Button buttonCode) {
-    pointer.setButton(buttonCode, true);
-}
-
-public void injectPointerButtonRelease(Pointer.Button buttonCode) {
-    pointer.setButton(buttonCode, false);
-}
-
-public void injectKeyPress(XKeycode xKeycode) {
-    injectKeyPress(xKeycode, 0);
-}
-
-public void injectKeyPress(XKeycode xKeycode, int keysym) {
-    keyboard.setKeyPress(xKeycode.id, keysym);
-}
-
-public void injectKeyRelease(XKeycode xKeycode) {
-    keyboard.setKeyRelease(xKeycode.id);
-}
-
-public void injectText(String text) {
-    if (text.isEmpty()) return;
-    sendTextEvent(mNativeContext, text.getBytes());
-}
-
-public boolean isFullscreen() {
-    return MainActivity.getPrefs().fullscreen.get();
-}
-
-public void regenerate() {
-    updateViewport();
-}
-
 
     // It is used in native code
     void setClipboardText(String text) {
@@ -712,17 +882,16 @@ public void regenerate() {
 
     /** @noinspection unused*/ // It is used in native code
     void requestClipboard() {
-        if (!clipboardSyncEnabled) {
-            sendClipboardEvent(mNativeContext, "".getBytes(UTF_8));
-            return;
-        }
+        ClipDescription desc = clipboardSyncEnabled ? clipboard.getPrimaryClipDescription() : null;
+        boolean isText = desc != null && (desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_PLAIN) || desc.hasMimeType(ClipDescription.MIMETYPE_TEXT_HTML));
+        CharSequence clip = isText ? clipboard.getText() : null;
+        String text = clip != null ? clip.toString() : "";
 
-        CharSequence clip = clipboard.getText();
-        if (clip != null) {
-            String text = String.valueOf(clipboard.getText());
-            sendClipboardEvent(mNativeContext, text.getBytes(UTF_8));
+        // A requesting X11 client blocks on a SelectionNotify, so this must always answer, even
+        // with an empty string, or the request is left unresolved.
+        sendClipboardEvent(mNativeContext, text.getBytes(UTF_8));
+        if (!text.isEmpty())
             Log.d("CLIP", "sending clipboard contents: " + text);
-        }
     }
 
     public void handleClipboardChange() {
@@ -744,34 +913,36 @@ public void regenerate() {
         }
     }
 
+  @Override
+public void onWindowFocusChanged(boolean hasFocus) {
+    super.onWindowFocusChanged(hasFocus);
+    requestFocus();
 
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
+    if (clipboardSyncEnabled && hasFocus) {
+        clipboard.addPrimaryClipChangedListener(clipboardListener);
+        checkForClipboardChange();
+    } else
+        clipboard.removePrimaryClipChangedListener(clipboardListener);
 
-        requestFocus();
+    if (activity != null && activity.mInputHandler != null)     // ← add guard
+        activity.mInputHandler.refreshInputDevices();
+}
 
-        if (clipboardSyncEnabled && hasFocus) {
-            clipboard.addPrimaryClipChangedListener(clipboardListener);
-            checkForClipboardChange();
-        } else
-            clipboard.removePrimaryClipChangedListener(clipboardListener);
+   @Override
+public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
+    Prefs p = getPrefsSafe();                                   // ← use the safe getter
+    if (p != null && p.enforceCharBasedInput.get())
+        outAttrs.inputType = InputType.TYPE_NULL;
+    else
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                | InputType.TYPE_TEXT_VARIATION_NORMAL;
+    outAttrs.actionLabel = "↵";
+    outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN;
+    return mConnection;
+}
 
-        TouchInputHandler.refreshInputDevices();
-    }
 
-    @Override
-    public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-        if (MainActivity.getPrefs().enforceCharBasedInput.get())
-            outAttrs.inputType = InputType.TYPE_NULL;
-        else
-            outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_NORMAL;
-        outAttrs.actionLabel = "↵";
-        // Note that IME_ACTION_NONE cannot be used as that makes it impossible to input newlines using the on-screen
-        // keyboard on Android TV (see https://github.com/termux/termux-app/issues/221).
-        outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN;
-        return mConnection;
-    }
 
     /**
      * Unfortunately there is no direct way to focus inside X windows.
@@ -792,194 +963,130 @@ public void regenerate() {
                 mIMM.restartInput(this);
         }, 10);
     }
-    
-
-public void sendGamepadEvent(int button, boolean pressed,
-                             float axisX, float axisY, int axisID) {
-    if (mNativeContext != 0)
-        sendGamepadEvent(mNativeContext, button, pressed, axisX, axisY, axisID);
-}
-@FastNative private native void sendGamepadEvent(long ptr, int button, boolean pressed,
-        float axisX, float axisY, int axisID);
-
-public void sendGamepadDevice(int deviceId, boolean present, int vendorId,
-                              int productId, int inputMode,
-                              boolean hasRumble, String name) {
-    if (mNativeContext != 0)
-        sendGamepadDevice(mNativeContext, deviceId, present, vendorId, productId,
-                          inputMode, hasRumble, name);
-}
-@FastNative private native void sendGamepadDevice(long ptr, int deviceId, boolean present,
-        int vendorId, int productId, int inputMode, boolean hasRumble, String name);
-
 
     @FastNative private native long nativeInit();
-    @FastNative private native void surfaceChanged(long ptr, Surface surface);
+    @FastNative private native void nativeDestroy(long ptr);
     @FastNative private native void setFiltering(long ptr, int filtering);
- //   @FastNative static native void connect(int fd);
-   // @CriticalNative static native boolean connected();
-    
-    public static void connect(int fd) {
-    long ctx = primaryCtx();
-    if (ctx != 0) connect(ctx, fd);
-}
-@FastNative private static native void connect(long ptr, int fd);
-
-    
-    /** Any-view semantics — closest match to the global conn_fd of the old .so. */
-public static boolean connected() {
-    synchronized (sViews) {
-        for (LorieView v : sViews) {
-            if (v.mNativeContext != 0 && connected(v.mNativeContext)) return true;
-        }
-    }
-    return false;
-}
-@CriticalNative private static native boolean connected(long ptr);
-    
-// --- registry so static callers can find "some connected view" ---
-private static final java.util.List<LorieView> sViews =
-        java.util.Collections.synchronizedList(new java.util.ArrayList<>());
-
-private static long primaryCtx() {
-    MainActivity a = MainActivity.getInstance();
-    if (a != null) {
-        LorieView v = a.getLorieView();
-        if (v != null && v.mNativeContext != 0) return v.mNativeContext;
-    }
-    synchronized (sViews) {
-        for (LorieView v : sViews) if (v.mNativeContext != 0) return v.mNativeContext;
-    }
-    return 0;
-}
-/** Public accessor for {@link #connected()}. */
-public static boolean isConnected() {
-    return connected();
-}
-//    @FastNative static native void startLogcat(int fd);
-
-public static void startLogcat(int fd) {
-    long ctx = primaryCtx();
-    if (ctx != 0) startLogcat(ctx, fd);
-}
-@FastNative private static native void startLogcat(long ptr, int fd);
     @FastNative private native void setClipboardSyncEnabled(long ptr, boolean enabled, boolean ignored);
- void sendClipboardAnnounce() {
-    if (mNativeContext != 0) sendClipboardAnnounce(mNativeContext);
-}
-@FastNative private native void sendClipboardAnnounce(long ptr);
-    @FastNative public native void sendClipboardEvent(long ptr, byte[] text);
+    @FastNative private native void sendClipboardAnnounce(long ptr);
+    @FastNative private native void sendClipboardEvent(long ptr, byte[] text);
     @FastNative private native void sendWindowChange(long ptr, int width, int height, int framerate, String name);
-    /**
- * Static bridge for callers that don't hold a LorieView reference
- * (e.g. EmbeddedX11Controller). Prefers the primary activity's view,
- * falls back to the first connected view in the registry.
- */
-public static void sendWindowChange(int width, int height, int framerate, String name) {
-    MainActivity a = MainActivity.getInstance();
-    LorieView primary = (a != null) ? a.getLorieView() : null;
-    if (primary != null && primary.mNativeContext != 0) {
-        primary.sendWindowChange(primary.mNativeContext, width, height, framerate, name);
-        return;
-    }
-    synchronized (sViews) {
-        for (LorieView v : sViews) {
-            if (v.mNativeContext != 0) {
-                v.sendWindowChange(v.mNativeContext, width, height, framerate, name);
-                return;
-            }
-        }
-    }
-}
     @FastNative private native void setViewport(long ptr, int x, int y, int width, int height, int expectedWidth, int expectedHeight, int hiddenBottom);
     @FastNative private native void setRendererZoom(long ptr, int percent);
+    @FastNative private native void setZoomAnchor(long ptr, float sourceX, float sourceY, float fracX, float fracY);
+    @FastNative private native void clearZoomAnchor(long ptr);
+    @FastNative private native void setFollowCursorPan(long ptr, boolean enabled);
+    @FastNative private native long getCursorPosition(long ptr);
+    @FastNative private native boolean getCursorState(long ptr, int[] state);
+    @FastNative private native void sendSync(long ptr, int serial);
+
+    // Public API stays free of the native pointer; it's threaded through to an overload below.
+    public void connect(int fd) { connect(mNativeContext, fd); }
+    @FastNative private static native void connect(long ptr, int fd);
+
+    public boolean connected() { return connected(mNativeContext); }
+    @CriticalNative private static native boolean connected(long ptr);
+
+    public void startLogcat(int fd) { startLogcat(mNativeContext, fd); }
+    @FastNative private static native void startLogcat(long ptr, int fd);
 
     public void adjustRendererZoom(int delta) {
         rendererZoom = MathUtils.clamp(rendererZoom + delta, 100, 400);
-        setRendererZoom(mNativeContext, rendererZoom);
+        setRendererZoom(mNativeContext, Math.round(rendererZoom));
+    }
+
+    /** Multiplies the current zoom by {@code factor}; returns the resulting percentage (100-400). */
+    public int adjustRendererZoomByFactor(float factor) {
+        rendererZoom = MathUtils.clamp(rendererZoom * factor, 100f, 400f);
+        setRendererZoom(mNativeContext, Math.round(rendererZoom));
+        return Math.round(rendererZoom);
+    }
+
+    /** Pins a source point to a fraction of the viewport, so pan follows a pinch instead of the cursor. */
+    public void setPinchZoomFocus(float sourceX, float sourceY, float fracX, float fracY) {
+        setZoomAnchor(mNativeContext, sourceX, sourceY, fracX, fracY);
+    }
+
+    /** Resumes normal cursor-following pan once a pinch ends. */
+    public void clearPinchZoomFocus() {
+        clearZoomAnchor(mNativeContext);
+    }
+
+    /** The real X11 pointer position - unlike RenderData's copy, always accurate in trackpad mode. */
+    public PointF getRealCursorPosition() {
+        long packed = getCursorPosition(mNativeContext);
+        return new PointF((float) (packed >>> 32), (float) (packed & 0xFFFFFFFFL));
+    }
+
+    public interface SyncListener { void onSyncReply(int serial); }
+    private SyncListener mSyncListener;
+
+    /** Notifies {@code listener} once a barrier sent via {@link #sendSync} has been applied server-side. */
+    public void setSyncListener(SyncListener listener) {
+        mSyncListener = listener;
+    }
+
+    /** Asks the X server to echo {@code serial} back once every event sent before this one has actually been applied. */
+    public void sendSync(int serial) {
+        sendSync(mNativeContext, serial);
+    }
+
+    @Keep
+    @SuppressWarnings("unused")
+    private void onSyncReply(int serial) {
+        if (mSyncListener != null)
+            mSyncListener.onSyncReply(serial);
+    }
+
+    /** The portion of the X11 screen currently visible, in X11 screen coordinates. */
+    public RectF getInputSourceRect() {
+        return new RectF(inputSourceLeft, inputSourceTop, inputSourceLeft + inputSourceWidth, inputSourceTop + inputSourceHeight);
+    }
+
+    /** The on-screen rect the picture is drawn into; stable across pan/zoom, unlike getInputSourceRect(). */
+    public Rect getInputViewport() {
+        return new Rect(inputViewport);
     }
 
     public void resetRendererZoom() {
-        rendererZoom = 100;
-        setRendererZoom(mNativeContext, rendererZoom);
+        rendererZoom = 100f;
+        setRendererZoom(mNativeContext, Math.round(rendererZoom));
     }
 
     public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode) {
         freezeDimensions(isInPictureInPictureMode);
         // Zooming a floating window makes no sense, but the zoom is restored along with the size.
-        setRendererZoom(mNativeContext, isInPictureInPictureMode ? 100 : rendererZoom);
+        setRendererZoom(mNativeContext, isInPictureInPictureMode ? 100 : Math.round(rendererZoom));
     }
 
-@Override public void sendMouseEvent(float x, float y, int whichButton, boolean buttonDown, boolean relative) {
-    if (mNativeContext != 0) sendMouseEvent(mNativeContext, x, y, whichButton, buttonDown, relative);
-}
-@FastNative private native void sendMouseEvent(long ptr, float x, float y, int whichButton, boolean buttonDown, boolean relative);
-@Override public void sendTouchEvent(int action, int pointerId, int x, int y) {
-    if (mNativeContext != 0) sendTouchEvent(mNativeContext, action, pointerId, x, y);
-}
-@FastNative private native void sendTouchEvent(long ptr, int action, int id, int x, int y);
-@Override public void sendStylusEvent(float x, float y, int pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouseMode) {
-    if (mNativeContext != 0) sendStylusEvent(mNativeContext, x, y, pressure, tiltX, tiltY, orientation, buttons, eraser, mouseMode);
-}
-@FastNative private native void sendStylusEvent(long ptr, float x, float y, int pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouseMode);
+    public void sendMouseEvent(float x, float y, int whichButton, boolean buttonDown, boolean relative) { sendMouseEvent(mNativeContext, x, y, whichButton, buttonDown, relative); }
+    @FastNative private native void sendMouseEvent(long ptr, float x, float y, int whichButton, boolean buttonDown, boolean relative);
 
-    public static void requestStylusEnabled(boolean enabled) {
-    long ctx = primaryCtx();
-    if (ctx != 0) requestStylusEnabled(ctx, enabled);
-}
-@FastNative private static native void requestStylusEnabled(long ptr, boolean enabled);
-public boolean sendKeyEvent(int scanCode, int keyCode, boolean keyDown) {
-    // Workaround for the libXlorie.so you're running: its compiled
-    // android_to_linux_keycode[] still maps KEYCODE_DPAD_* to
-    // BTN_DPAD_* (gamepad codes 544–547), producing X keycodes
-    // 552–555 which the X server drops. Supplying a Linux keyboard
-    // scan code here takes the `scan_code ?: mapping` fast path in
-    // native sendKeyEvent and bypasses the mapping entirely.
-    //
-    // To verify the sendKeyEvent is being hit, uncomment the log:
-    // Log.d("KeyFix", "scan=" + scanCode + " key=" + keyCode + " down=" + keyDown);
+    public void sendTouchEvent(int action, int id, int x, int y) { sendTouchEvent(mNativeContext, action, id, x, y); }
+    @FastNative private native void sendTouchEvent(long ptr, int action, int id, int x, int y);
 
-    if (scanCode == 0) {
-        switch (keyCode) {
-            case KeyEvent.KEYCODE_DPAD_UP:    scanCode = 103; break; // KEY_UP
-            case KeyEvent.KEYCODE_DPAD_DOWN:  scanCode = 108; break; // KEY_DOWN
-            case KeyEvent.KEYCODE_DPAD_LEFT:  scanCode = 105; break; // KEY_LEFT
-            case KeyEvent.KEYCODE_DPAD_RIGHT: scanCode = 106; break; // KEY_RIGHT
-        }
-    }
-    return sendKeyEvent(mNativeContext, scanCode, keyCode, keyDown);
-}
-    
-    
-    @FastNative public native boolean sendKeyEvent(long ptr, int scanCode, int keyCode, boolean keyDown);
-@Override public void sendTextEvent(byte[] utf8Bytes) {
-    if (mNativeContext != 0) sendTextEvent(mNativeContext, utf8Bytes);
-}
-@FastNative private native void sendTextEvent(long ptr, byte[] text);
-    @FastNative private native void nativeDestroy(long ptr);
+    public void sendStylusEvent(float x, float y, int pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouseMode) { sendStylusEvent(mNativeContext, x, y, pressure, tiltX, tiltY, orientation, buttons, eraser, mouseMode); }
+    @FastNative private native void sendStylusEvent(long ptr, float x, float y, int pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouseMode);
 
-public void sendLockKeysState(int state) {
-    if (mNativeContext != 0) sendLockKeysState(mNativeContext, state);
-}
-@FastNative private native void sendLockKeysState(long ptr, int state);
+    public void requestStylusEnabled(boolean enabled) { requestStylusEnabled(mNativeContext, enabled); }
+    @FastNative private native void requestStylusEnabled(long ptr, boolean enabled);
 
-@FastNative public static native long getLastInputTimestamp();
-@FastNative public static native void markUserActivity();
-//    @CriticalNative public static native boolean requestConnection();
-public static boolean requestConnection() {
-    long ctx = primaryCtx();
-    return ctx != 0 && requestConnection(ctx);
-}
-@CriticalNative private static native boolean requestConnection(long ptr);
-@Override
-protected void onDetachedFromWindow() {
-    super.onDetachedFromWindow();
-    sViews.remove(this);
-    if (mNativeContext != 0) {
-        nativeDestroy(mNativeContext);
-        mNativeContext = 0;
-    }
-}
+    public void sendLockKeysState(int state) { sendLockKeysState(mNativeContext, state); }
+    @FastNative private native void sendLockKeysState(long ptr, int state);
+
+    public boolean sendKeyEvent(int scanCode, int keyCode, boolean keyDown) { return sendKeyEvent(mNativeContext, scanCode, keyCode, keyDown); }
+    @FastNative private native boolean sendKeyEvent(long ptr, int scanCode, int keyCode, boolean keyDown);
+
+    public void sendTextEvent(byte[] text) { sendTextEvent(mNativeContext, text); }
+    @FastNative private native void sendTextEvent(long ptr, byte[] text);
+
+    public boolean requestConnection() { return requestConnection(mNativeContext); }
+    @CriticalNative private static native boolean requestConnection(long ptr);
+
+    @CriticalNative public static native long getLastInputTimestamp();
+    @CriticalNative public static native void markUserActivity();
+
+    static class CriticalNativeProbe { @CriticalNative static native boolean probe(long value); }
 
     static {
         System.loadLibrary("Xlorie");

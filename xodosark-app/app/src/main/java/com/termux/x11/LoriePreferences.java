@@ -1,29 +1,7 @@
 package com.termux.x11;
 
-//// new 
-import android.app.Activity;
-import android.widget.CheckBox;
-import android.widget.Spinner;
-import android.widget.ArrayAdapter;
-
-import com.termux.x11.controller.contentdialog.ContentDialog;
-import com.termux.x11.controller.InputControllerActivity;
-import com.termux.x11.controller.core.Callback;
-import com.termux.x11.controller.core.DownloadProgressDialog;
-import com.termux.x11.controller.inputcontrols.ControlsProfile;
-import com.termux.x11.controller.inputcontrols.InputControlsManager;
-import com.termux.x11.controller.widget.InputControlsView;
-import com.termux.x11.controller.widget.TouchpadView;
-import com.termux.x11.controller.winhandler.ProcessInfo;
-import com.termux.x11.controller.winhandler.WinHandler;
-
-import java.util.List;
-
-// *** Replace the existing R/BuildConfig references with these ***
 import app.xodos2.R;
 import app.xodos2.BuildConfig;
-
-
 import static android.Manifest.permission.POST_NOTIFICATIONS;
 import static android.Manifest.permission.WRITE_SECURE_SETTINGS;
 import static android.content.pm.PackageManager.PERMISSION_DENIED;
@@ -59,7 +37,6 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
-import android.preference.PreferenceManager;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
@@ -73,14 +50,17 @@ import androidx.preference.PreferenceScreen;
 import androidx.preference.SeekBarPreference;
 
 import android.provider.Settings;
+import android.text.Spannable;
+import android.text.SpannableString;
+import android.text.TextUtils;
 import android.text.method.LinkMovementMethod;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
 import android.util.Log;
 import android.util.TypedValue;
-import android.view.Display;
 import android.view.InputDevice;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.WindowManager;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -104,7 +84,7 @@ import java.util.regex.PatternSyntaxException;
 @SuppressWarnings("deprecation")
 public class LoriePreferences extends AppCompatActivity implements PreferenceFragmentCompat.OnPreferenceStartFragmentCallback {
     static final String ACTION_PREFERENCES_CHANGED = "com.termux.x11.ACTION_PREFERENCES_CHANGED";
-    private static Prefs prefs = null;
+    private Prefs prefs;
 
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -145,67 +125,26 @@ public class LoriePreferences extends AppCompatActivity implements PreferenceFra
         });
     }
 
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        prefs = ((LorieApp) getApplication()).getPrefs(this);
+        super.onCreate(savedInstanceState);
+        getSupportFragmentManager().beginTransaction().replace(android.R.id.content, new LoriePreferenceFragment(null)).commit();
 
-/// new
-protected LorieView xServer;
-protected InputControlsManager inputControlsManager;
-protected InputControlsView inputControlsView;
-protected TouchpadView touchpadView;
-protected WinHandler winHandler;
-protected float globalCursorSpeed = 1.0f;
-protected TermuxActivityListener termuxActivityListener;
-
-// Used by input controls fragments / views
-public static final int OPEN_FILE_REQUEST_CODE = 102;
-protected ControlsProfile profile;
-protected DownloadProgressDialog preloaderDialog;
-protected Callback<Uri> openFileCallback;
-protected Runnable editInputControlsCallback;
-
-protected interface TermuxActivityListener {
-    void onX11PreferenceSwitchChange(boolean isOpen);
-    void releaseSlider(boolean open);
-    void onChangeOrientation(int landscape);
-    void reInstallX11StartScript(Activity activity);
-    void stopDesktop();
-    void openSoftwareKeyboard();
-    void showProcessManager();
-    void changePreference(String key);
-    List<ProcessInfo> collectProcessorInfo(String tag);
-    void onExitApp();
-}
-
-
-
-@Override
-protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    prefs = new Prefs(this);
-
-    if (isSettingsActivity()) {
-        getSupportFragmentManager().beginTransaction()
-                .replace(android.R.id.content, new LoriePreferenceFragment(null))
-                .commit();
         ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) {
             actionBar.setDisplayHomeAsUpEnabled(true);
             actionBar.setHomeButtonEnabled(true);
         }
+
+        Uri ENABLED_ACCESSIBILITY_SERVICES = Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        Uri ACCESSIBILITY_ENABLED = Settings.Secure.getUriFor(Settings.Secure.ACCESSIBILITY_ENABLED);
+
+        getContentResolver().registerContentObserver(ENABLED_ACCESSIBILITY_SERVICES, true, accessibilityObserver);
+        getContentResolver().registerContentObserver(ACCESSIBILITY_ENABLED, true, accessibilityObserver);
     }
 
-    Uri ENABLED_ACCESSIBILITY_SERVICES = Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-    Uri ACCESSIBILITY_ENABLED = Settings.Secure.getUriFor(Settings.Secure.ACCESSIBILITY_ENABLED);
-    getContentResolver().registerContentObserver(ENABLED_ACCESSIBILITY_SERVICES, true, accessibilityObserver);
-    getContentResolver().registerContentObserver(ACCESSIBILITY_ENABLED, true, accessibilityObserver);
-}
-
-protected boolean isSettingsActivity() {
-    return true;   // MainActivity overrides this to return false
-}
-
-
-
-     @SuppressLint("WrongConstant")
+    @SuppressLint("WrongConstant")
     @Override
     protected void onResume() {
         super.onResume();
@@ -220,6 +159,12 @@ protected boolean isSettingsActivity() {
     protected void onPause() {
         super.onPause();
         unregisterReceiver(receiver);
+    }
+
+    @Override
+    protected void onDestroy() {
+        getContentResolver().unregisterContentObserver(accessibilityObserver);
+        super.onDestroy();
     }
 
     @Override
@@ -240,7 +185,7 @@ protected boolean isSettingsActivity() {
 
     private void showFragment(PreferenceFragmentCompat fragment) {
         getSupportFragmentManager().beginTransaction()
-             //   .setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
+                .setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left, R.anim.slide_in_left, R.anim.slide_out_right)
                 .replace(android.R.id.content, fragment)
                 .addToBackStack(null)
                 .commit();
@@ -256,6 +201,7 @@ protected boolean isSettingsActivity() {
 
     public static class LoriePreferenceFragment extends PreferenceFragmentCompat implements OnPreferenceChangeListener {
         private final Runnable updateLayout = this::updatePreferencesLayout;
+        private Prefs prefs;
         private static final Method onSetInitialValue;
         static {
             try {
@@ -284,6 +230,16 @@ protected boolean isSettingsActivity() {
             this.root = root;
         }
 
+        private Prefs prefs() {
+            return ((LoriePreferences) getActivity()).prefs;
+        }
+
+        @Override
+        public void onAttach(@NonNull Context context) {
+            super.onAttach(context);
+            prefs = ((LoriePreferences) context).prefs;
+        }
+
         @Override
         public void onResume() {
             super.onResume();
@@ -301,16 +257,16 @@ protected boolean isSettingsActivity() {
         @SuppressLint("DiscouragedApi")
         int findId(String name) {
             //noinspection DataFlowIssue
-            return getResources().getIdentifier("pref_" + name, "string", getContext().getPackageName());
+            return getResources().getIdentifier("lorie_pref_" + name, "string", getContext().getPackageName());
         }
 
         /** @noinspection DataFlowIssue*/
         @Override @SuppressLint("ApplySharedPref")
         public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
-            getPreferenceManager().setPreferenceDataStore(prefs);
+            getPreferenceManager().setPreferenceDataStore(prefs());
 
-            if ((Integer.parseInt(prefs.touchMode.get()) - 1) > 2)
-                prefs.touchMode.put("1");
+            if ((Integer.parseInt(prefs().touchMode.get()) - 1) > 2)
+                prefs().touchMode.put("1");
 
             setPreferencesFromResource(R.xml.preferences, root == null ? "main" : root);
 
@@ -321,7 +277,7 @@ protected boolean isSettingsActivity() {
             for (int i=0; i<getPreferenceScreen().getPreferenceCount(); i++) {
                 Preference p = screen.getPreference(i);
                 p.setOnPreferenceChangeListener(this);
-                p.setPreferenceDataStore(prefs);
+                p.setPreferenceDataStore(prefs());
 
                 if ((id = findId(p.getKey())) != 0)
                     p.setTitle(getResources().getString(id));
@@ -331,12 +287,8 @@ protected boolean isSettingsActivity() {
 
                 if (p instanceof ListPreference) {
                     ListPreference list = (ListPreference) p;
-                    
-                    PrefsProto.Preference registered = prefs.keys.get(p.getKey());
-    if (registered != null) {
-        list.setEntries(registered.asList().getEntries());
-        list.setEntryValues(registered.asList().getValues());
-    }
+                    list.setEntries(prefs().keys.get(p.getKey()).asList().getEntries());
+                    list.setEntryValues(prefs().keys.get(p.getKey()).asList().getValues());
                     list.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
                 }
             }
@@ -344,23 +296,23 @@ protected boolean isSettingsActivity() {
             with("showAdditionalKbd", p -> p.setLayoutResource(R.layout.preference));
             with("version", p -> p.setSummary(BuildConfig.VERSION_NAME));
 
-            setSummary("displayStretch", R.string.pref_summary_requiresExactOrCustom);
-            setSummary("adjustResolution", R.string.pref_summary_requiresExactOrCustom);
-            setSummary("pauseKeyInterceptingWithEsc", R.string.pref_summary_requiresIntercepting);
-            setSummary("scaleTouchpad", R.string.pref_summary_requiresTrackpadAndNative);
+            setSummary("displayStretch", R.string.lorie_pref_summary_requiresExactOrCustom);
+            setSummary("adjustResolution", R.string.lorie_pref_summary_requiresExactOrCustom);
+            setSummary("pauseKeyInterceptingWithEsc", R.string.lorie_pref_summary_requiresIntercepting);
+            setSummary("scaleTouchpad", R.string.lorie_pref_summary_requiresTrackpadAndNative);
 
             if (!SamsungDexUtils.available())
                 setVisible("dexMetaKeyCapture", false);
 
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P)
                 setVisible("hideCutout", false);
-                
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
                 setVisible("pointerCapture", false);
                 setVisible("transformCapturedPointer", false);
                 setVisible("capturedPointerSpeedFactor", false);
+                setVisible("pip", false); 
             }
-            
 
             boolean stylusAvailable = Arrays.stream(InputDevice.getDeviceIds())
                     .mapToObj(InputDevice::getDevice)
@@ -403,36 +355,83 @@ protected boolean isSettingsActivity() {
             if (getContext() == null)
                 return;
 
-            for (String key : prefs.keys.keySet()) {
+            for (String key : prefs().keys.keySet()) {
                 Preference p = findPreference(key);
                 if (p != null)
                     onSetInitialValue(p);
             }
 
-            String displayResMode = prefs.displayResolutionMode.get();
+            String displayResMode = prefs().displayResolutionMode.get();
             setVisible("displayScale", displayResMode.contentEquals("scaled"));
             setVisible("displayResolutionExact", displayResMode.contentEquals("exact"));
             setVisible("displayResolutionCustom", displayResMode.contentEquals("custom"));
 
-            setEnabled("dexMetaKeyCapture", !prefs.enableAccessibilityServiceAutomatically.get());
-            setEnabled("enableAccessibilityServiceAutomatically", !prefs.dexMetaKeyCapture.get());
-            setEnabled("pauseKeyInterceptingWithEsc", prefs.dexMetaKeyCapture.get() ||
-                    prefs.enableAccessibilityServiceAutomatically.get() ||
+            setEnabled("dexMetaKeyCapture", !prefs().enableAccessibilityServiceAutomatically.get());
+            setEnabled("enableAccessibilityServiceAutomatically", !prefs().dexMetaKeyCapture.get());
+            setEnabled("pauseKeyInterceptingWithEsc", prefs().dexMetaKeyCapture.get() ||
+                    prefs().enableAccessibilityServiceAutomatically.get() ||
                     KeyInterceptor.isLaunched());
-            setEnabled("enableAccessibilityServiceAutomatically", prefs.enableAccessibilityServiceAutomatically.get() || KeyInterceptor.isLaunched());
-            setEnabled("filterOutWinkey", prefs.enableAccessibilityServiceAutomatically.get() || KeyInterceptor.isLaunched());
+            setEnabled("enableAccessibilityServiceAutomatically", prefs().enableAccessibilityServiceAutomatically.get() || KeyInterceptor.isLaunched());
+            setEnabled("filterOutWinkey", prefs().enableAccessibilityServiceAutomatically.get() || KeyInterceptor.isLaunched());
 
-            boolean displayStretchEnabled = "exact".contentEquals(prefs.displayResolutionMode.get()) || "custom".contentEquals(prefs.displayResolutionMode.get());
+            boolean displayStretchEnabled = "exact".contentEquals(prefs().displayResolutionMode.get()) || "custom".contentEquals(prefs().displayResolutionMode.get());
             setEnabled("displayStretch", displayStretchEnabled);
             setEnabled("adjustResolution", displayStretchEnabled);
 
-            setEnabled("scaleTouchpad", "1".equals(prefs.touchMode.get()) && !"native".equals(prefs.displayResolutionMode.get()));
-            setEnabled("showMouseHelper", "1".equals(prefs.touchMode.get()));
+            setEnabled("scaleTouchpad", "1".equals(prefs().touchMode.get()) && !"native".equals(prefs().displayResolutionMode.get()));
+            setEnabled("showMouseHelper", "1".equals(prefs().touchMode.get()));
 
             boolean requestNotificationPermissionVisible =
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                     && ContextCompat.checkSelfPermission(requireContext(), POST_NOTIFICATIONS) == PERMISSION_DENIED;
             setVisible("requestNotificationPermission", requestNotificationPermissionVisible);
+
+            updateScreenIdleTimeoutSummary();
+        }
+
+        private static String formatTimeout(long timeoutMs) {
+            return timeoutMs < 60_000 ? (timeoutMs / 1_000) + " sec" : (timeoutMs / 60_000) + " min";
+        }
+
+        /** Replaces the "System" entry text with the actual system screen-off timeout it defers to. */
+        private void setSystemOptionText(Preference preference, CharSequence text) {
+            if (preference == null)
+                return;
+            ListPreference p = (ListPreference) preference;
+            CharSequence[] options = p.getEntries();
+            for (int i=0; i<options.length; i++) {
+                if ("System".contentEquals(options[i]))
+                    options[i] = getString(R.string.lorie_pref_screenIdleTimeoutSystem, text);
+            }
+        }
+
+        /** Warns when the system's own screen-off timeout outlasts the chosen idle timeout, since it takes over once our own keep-awake window ends. */
+        private void updateScreenIdleTimeoutSummary() {
+            ListPreference p = findPreference("screenIdleTimeout");
+            if (p == null || getContext() == null)
+                return;
+
+            p.setSummaryProvider(null); // overrides the generic SimpleSummaryProvider set above
+
+            long systemTimeoutMs = Settings.System.getInt(getContext().getContentResolver(), Settings.System.SCREEN_OFF_TIMEOUT, 0);
+            setSystemOptionText(p, formatTimeout(systemTimeoutMs));
+
+            String mode = prefs().screenIdleTimeout.get();
+            if ("never".equals(mode) || "system".equals(mode)) {
+                p.setSummary(p.getEntry());
+                return;
+            }
+
+            if (systemTimeoutMs <= Long.parseLong(mode) * 60_000L) {
+                p.setSummary(p.getEntry());
+                return;
+            }
+
+            String warningText = getString(R.string.lorie_pref_summary_screenIdleTimeoutConflict, formatTimeout(systemTimeoutMs));
+            SpannableString warning = new SpannableString(warningText);
+            warning.setSpan(new ForegroundColorSpan(0xFFFFA000), 0, warningText.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            warning.setSpan(new StyleSpan(Typeface.BOLD), 0, warningText.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            p.setSummary(TextUtils.concat(p.getEntry(), "\n", warning));
         }
 
         /** @noinspection SameParameterValue*/
@@ -509,7 +508,7 @@ protected boolean isSettingsActivity() {
             }
 
             if ("showAdditionalKbd".contentEquals(key) && (Boolean) newValue)
-                prefs.additionalKbdVisible.put(true);
+                prefs().additionalKbdVisible.put(true);
 
             if ("enableAccessibilityServiceAutomatically".contentEquals(key)) {
                 if (!((Boolean) newValue))
@@ -543,7 +542,7 @@ protected boolean isSettingsActivity() {
                 View view = getLayoutInflater().inflate(R.layout.extra_keys_config, null, false);
                 EditText config = view.findViewById(R.id.extra_keys_config);
                 config.setTypeface(Typeface.MONOSPACE);
-                config.setText(prefs.extra_keys_config.get());
+                config.setText(prefs().extra_keys_config.get());
                 TextView desc = view.findViewById(R.id.extra_keys_config_description);
                 desc.setLinksClickable(true);
                 desc.setText(R.string.extra_keys_config_desc);
@@ -554,11 +553,11 @@ protected boolean isSettingsActivity() {
                         .setPositiveButton("OK",
                                 (dialog, whichButton) -> {
                                     String text = config.getText().toString();
-                                    prefs.extra_keys_config.put(!text.isEmpty() ? text : TermuxX11ExtraKeys.DEFAULT_IVALUE_EXTRA_KEYS);
+                                    prefs().extra_keys_config.put(!text.isEmpty() ? text : TermuxX11ExtraKeys.DEFAULT_IVALUE_EXTRA_KEYS);
                                 }
                         )
                         .setNeutralButton("Reset",
-                                (dialog, whichButton) -> prefs.extra_keys_config.put(TermuxX11ExtraKeys.DEFAULT_IVALUE_EXTRA_KEYS))
+                                (dialog, whichButton) -> prefs().extra_keys_config.put(TermuxX11ExtraKeys.DEFAULT_IVALUE_EXTRA_KEYS))
                         .setNegativeButton("Cancel", (dialog, whichButton) -> dialog.dismiss())
                         .create()
                         .show();
@@ -586,7 +585,8 @@ protected boolean isSettingsActivity() {
 
             try {
                 if (intent != null && intent.getExtras() != null) {
-                    Prefs p = (MainActivity.getInstance() != null) ? new Prefs(MainActivity.getInstance()) : (prefs != null ? prefs : new Prefs(context));
+                    MainActivity activity = MainActivity.getFocusedOrAnyInstance();
+                    Prefs p = ((LorieApp) context.getApplicationContext()).getPrefs(activity != null ? activity : context);
                     if (intent.getStringExtra("list") != null) {
                         String result = "";
                         for (PrefsProto.Preference pref : p.keys.values()) {
@@ -651,6 +651,12 @@ protected boolean isSettingsActivity() {
                             }
                             case "extra_keys_config": {
                                 edit.putString(key, newValue);
+                                break;
+                            }
+                            case "storeSecondaryDisplayPreferencesSeparately": {
+                                // Always canonical, regardless of which display targetCtx resolved to.
+                                ((LorieApp) context.getApplicationContext()).builtInPrefs.preferences.edit()
+                                        .putBoolean(key, "true".contentEquals(newValue)).commit();
                                 break;
                             }
                             default: {
@@ -827,18 +833,16 @@ protected boolean isSettingsActivity() {
             }
 
             public boolean get() {
-                if ("storeSecondaryDisplayPreferencesSeparately".contentEquals(key))
-                    return builtInDisplayPreferences.getBoolean(key, (boolean) defValue);
-
+                checkAttached();
+                if (isSharedAcrossDisplays(key))
+                    return ((LorieApp) ctx.getApplicationContext()).builtInPrefs.preferences.getBoolean(key, (boolean) defValue);
                 return preferences.getBoolean(key, (boolean) defValue);
             }
 
             public void put(boolean v) {
-                if ("storeSecondaryDisplayPreferencesSeparately".contentEquals(key)) {
-                    builtInDisplayPreferences.edit().putBoolean(key, v).commit();
-                    recheckStoringSecondaryDisplayPreferences();
-                }
-
+                checkAttached();
+                if (isSharedAcrossDisplays(key))
+                    ((LorieApp) ctx.getApplicationContext()).builtInPrefs.preferences.edit().putBoolean(key, v).commit();
                 preferences.edit().putBoolean(key, v).commit();
             }
         }
@@ -849,10 +853,12 @@ protected boolean isSettingsActivity() {
             }
 
             public int get() {
+                checkAttached();
                 return preferences.getInt(key, (int) defValue);
             }
 
             public int defValue() {
+                checkAttached();
                 return preferences.getInt(key, (int) defValue);
             }
         }
@@ -863,10 +869,12 @@ protected boolean isSettingsActivity() {
             }
 
             public String get() {
+                checkAttached();
                 return preferences.getString(key, (String) defValue);
             }
 
             public void put(String v) {
+                checkAttached();
                 preferences.edit().putString(key, v).commit();
             }
         }
@@ -881,18 +889,22 @@ protected boolean isSettingsActivity() {
             }
 
             public String get() {
+                checkAttached();
                 return preferences.getString(key, (String) defValue);
             }
 
             public void put(String v) {
+                checkAttached();
                 preferences.edit().putString(key, v).commit();
             }
 
             public String[] getEntries() {
+                checkAttached();
                 return getArrayItems(entries, ctx.getResources());
             }
 
             public String[] getValues() {
+                checkAttached();
                 return getArrayItems(values, ctx.getResources());
             }
 
@@ -916,197 +928,54 @@ protected boolean isSettingsActivity() {
 
         }
 
-        static boolean storeSecondaryDisplayPreferencesSeparately = false;
         protected Context ctx;
         protected SharedPreferences preferences;
-        protected SharedPreferences builtInDisplayPreferences;
-        protected SharedPreferences secondaryDisplayPreferences;
 
-        private PrefsProto() {} // No instantiation allowed
-        protected PrefsProto(Context ctx) {
-            this.ctx = ctx;
-            builtInDisplayPreferences = PreferenceManager.getDefaultSharedPreferences(ctx);
-            secondaryDisplayPreferences = ctx.getSharedPreferences("secondary", Context.MODE_PRIVATE);
-            recheckStoringSecondaryDisplayPreferences();
+        protected PrefsProto() {}
+
+        private void checkAttached() {
+            if (preferences == null)
+                throw new NullPointerException("Prefs used before attach() was called");
         }
 
-        protected void recheckStoringSecondaryDisplayPreferences() {
-            storeSecondaryDisplayPreferencesSeparately = builtInDisplayPreferences.getBoolean("storeSecondaryDisplayPreferencesSeparately", false);
-            boolean isExternalDisplay = ((WindowManager) ctx.getSystemService(WINDOW_SERVICE)).getDefaultDisplay().getDisplayId() != Display.DEFAULT_DISPLAY;
-            preferences = (storeSecondaryDisplayPreferencesSeparately && isExternalDisplay) ? secondaryDisplayPreferences : builtInDisplayPreferences;
+        /** Settings that must have a single value app-wide, regardless of which store is otherwise current. */
+        private static boolean isSharedAcrossDisplays(String key) {
+            return "storeSecondaryDisplayPreferencesSeparately".contentEquals(key)
+                    || "enableAccessibilityServiceAutomatically".contentEquals(key);
+        }
+
+        protected void attach(Context ctx, SharedPreferences preferences) {
+            this.ctx = ctx;
+            this.preferences = preferences;
         }
 
         @Override public void putBoolean(String k, boolean v) {
-            if ("storeSecondaryDisplayPreferencesSeparately".contentEquals(k)) {
-                builtInDisplayPreferences.edit().putBoolean(k, v).commit();
-                recheckStoringSecondaryDisplayPreferences();
-            } else
+            checkAttached();
+            if (isSharedAcrossDisplays(k))
+                ((LorieApp) ctx.getApplicationContext()).builtInPrefs.preferences.edit().putBoolean(k, v).commit();
+            else
                 preferences.edit().putBoolean(k, v).commit();
         }
         @Override public boolean getBoolean(String k, boolean d) {
-            if ("storeSecondaryDisplayPreferencesSeparately".contentEquals(k))
-                return builtInDisplayPreferences.getBoolean(k, d);
+            checkAttached();
+            if (isSharedAcrossDisplays(k))
+                return ((LorieApp) ctx.getApplicationContext()).builtInPrefs.preferences.getBoolean(k, d);
             return preferences.getBoolean(k, d);
         }
-        @Override public void putString(String k, @Nullable String v) { prefs.get().edit().putString(k, v).commit(); }
-        @Override public void putStringSet(String k, @Nullable Set<String> v) { prefs.get().edit().putStringSet(k, v).commit(); }
-        @Override public void putInt(String k, int v) { prefs.get().edit().putInt(k, v).commit(); }
-        @Override public void putLong(String k, long v) { prefs.get().edit().putLong(k, v).commit(); }
-        @Override public void putFloat(String k, float v) { prefs.get().edit().putFloat(k, v).commit(); }
-        @Nullable @Override public String getString(String k, @Nullable String d) { return prefs.get().getString(k, d); }
-        @Nullable @Override public Set<String> getStringSet(String k, @Nullable Set<String> ds) { return prefs.get().getStringSet(k, ds); }
-        @Override public int getInt(String k, int d) { return prefs.get().getInt(k, d); }
-        @Override public long getLong(String k, long d) { return prefs.get().getLong(k, d); }
-        @Override public float getFloat(String k, float d) { return prefs.get().getFloat(k, d); }
+        @Override public void putString(String k, @Nullable String v) { get().edit().putString(k, v).commit(); }
+        @Override public void putStringSet(String k, @Nullable Set<String> v) { get().edit().putStringSet(k, v).commit(); }
+        @Override public void putInt(String k, int v) { get().edit().putInt(k, v).commit(); }
+        @Override public void putLong(String k, long v) { get().edit().putLong(k, v).commit(); }
+        @Override public void putFloat(String k, float v) { get().edit().putFloat(k, v).commit(); }
+        @Nullable @Override public String getString(String k, @Nullable String d) { return get().getString(k, d); }
+        @Nullable @Override public Set<String> getStringSet(String k, @Nullable Set<String> ds) { return get().getStringSet(k, ds); }
+        @Override public int getInt(String k, int d) { return get().getInt(k, d); }
+        @Override public long getLong(String k, long d) { return get().getLong(k, d); }
+        @Override public float getFloat(String k, float d) { return get().getFloat(k, d); }
 
         public SharedPreferences get() {
+            checkAttached();
             return preferences;
         }
-
-        public boolean isSecondaryDisplayPreferences() {
-            return preferences == secondaryDisplayPreferences;
-        }
     }
-    
-    // Delegation to listener
-public void installX11ServerBridge() {
-    if (termuxActivityListener != null)
-        termuxActivityListener.reInstallX11StartScript(this);
-}
-
-public void stopDesktop() {
-    if (termuxActivityListener != null)
-        termuxActivityListener.stopDesktop();
-}
-
-public void openPreference(boolean open) {
-    if (termuxActivityListener != null)
-        termuxActivityListener.onX11PreferenceSwitchChange(open);
-}
-
-public void releaseSlider(boolean release) {
-    if (termuxActivityListener != null)
-        termuxActivityListener.releaseSlider(release);
-}
-
-// Input‑control helpers
-
-    public void showInputControlsDialog() {
-    
-        final ContentDialog dialog = new ContentDialog(MainActivity.getInstance(), R.layout.input_controls_dialog);
-        dialog.setTitle(R.string.input_controls);
-        dialog.setIcon(R.drawable.icon_input_controls);
-
-        final Spinner sProfile = dialog.findViewById(R.id.SProfile);
-        Runnable loadProfileSpinner = () -> {
-            ArrayList<ControlsProfile> profiles = inputControlsManager.getProfiles();
-            ArrayList<String> profileItems = new ArrayList<>();
-            int selectedPosition = 0;
-            profileItems.add("-- " + getString(R.string.disabled) + " --");
-            for (int i = 0; i < profiles.size(); i++) {
-                ControlsProfile profile = profiles.get(i);
-                if (profile == inputControlsView.getProfile()) selectedPosition = i + 1;
-                profileItems.add(profile.getName());
-            }
-
-            sProfile.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, profileItems));
-            sProfile.setSelection(selectedPosition);
-        };
-        loadProfileSpinner.run();
-
-        final CheckBox cbLockCursor = dialog.findViewById(R.id.CBLockCursor);
-        cbLockCursor.setChecked(xServer.cursorLocker.isEnabled());
-
-        final CheckBox cbEnableTouchScreen = dialog.findViewById(R.id.CBTouchScreen);
-
-        final CheckBox cbShowTouchscreenControls = dialog.findViewById(R.id.CBShowTouchscreenControls);
-        cbShowTouchscreenControls.setChecked(inputControlsView.isShowTouchscreenControls());
-
-        dialog.findViewById(R.id.BTSettings).setOnClickListener((v) -> {
-            int position = sProfile.getSelectedItemPosition();
-            Intent intent = new Intent(this, InputControllerActivity.class);
-            intent.putExtra("edit_input_controls", true);
-            intent.putExtra("selected_profile_id", position > 0 ? inputControlsManager.getProfiles().get(position - 1).id : 0);
-            editInputControlsCallback = () -> {
-                hideInputControls();
-                inputControlsManager.loadProfiles(true);
-                loadProfileSpinner.run();
-            };
-            startActivityForResult(intent, InputControllerActivity.EDIT_INPUT_CONTROLS_REQUEST_CODE);
-        });
-
-        dialog.setOnConfirmCallback(() -> {
-            if (termuxActivityListener == null) {
-            Log.e("controls", "Failed to show control activity null");
-                return;
-            }
-            xServer.cursorLocker.setEnabled(cbLockCursor.isChecked() ? true : false);
-            inputControlsView.setShowTouchscreenControls(cbShowTouchscreenControls.isChecked());
-            int position = sProfile.getSelectedItemPosition();
-            if (position > 0) {
-                if (cbEnableTouchScreen.isChecked()) {
-                    touchpadView.setTouchMode(TouchpadView.TouchMode.TOUCH_SCREEN);
-                } else {
-                    touchpadView.setTouchMode(TouchpadView.TouchMode.TRACK_PAD);
-                }
-                showInputControls(inputControlsManager.getProfiles().get(position - 1));
-            } else {
-                hideInputControls();
-            }
-        });
-
-        if (isActivityValid()) {        
-  
-    dialog.show();
-}
-    }
-
-protected void showInputControls(ControlsProfile p) {
-    inputControlsView.setVisibility(View.VISIBLE);
-    inputControlsView.requestFocus();
-    inputControlsView.setProfile(p);
-    if (profile != null)
-        touchpadView.setSensitivity(profile.getCursorSpeed() * globalCursorSpeed);
-    touchpadView.setVisibility(View.VISIBLE);
-    inputControlsView.invalidate();
-    if (termuxActivityListener != null)
-        termuxActivityListener.onX11PreferenceSwitchChange(false);
-}
-
-public void hideInputControls() {
-    inputControlsView.setShowTouchscreenControls(true);
-    inputControlsView.setVisibility(View.GONE);
-    inputControlsView.setProfile(null);
-    touchpadView.setVisibility(View.GONE);
-    inputControlsView.invalidate();
-}
-
-// Bridge methods used by other classes
-public List<ProcessInfo> getTermuxProcessorInfo(String tag) {
-    if (termuxActivityListener != null)
-        return termuxActivityListener.collectProcessorInfo(tag);
-    return new ArrayList<>();
-}
-
-public DownloadProgressDialog getPreloaderDialog() {
-    return preloaderDialog;
-}
-
-public void setOpenFileCallback(Callback<Uri> callback) {
-    this.openFileCallback = callback;
-}
-
-public boolean isActivityValid() {
-    return !isFinishing() && !isDestroyed();
-}
-
-public WinHandler getWinHandler() {
-    return winHandler;
-}
-
-public InputControlsView getInputControlsView() {
-    return inputControlsView;
-}
-    
-    
 }

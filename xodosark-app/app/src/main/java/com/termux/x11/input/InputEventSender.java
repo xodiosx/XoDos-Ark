@@ -11,12 +11,16 @@ import static com.termux.x11.input.InputStub.*;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import android.graphics.PointF;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 
 import com.termux.x11.MainActivity;
 
 import java.util.List;
+import java.util.Set;
 import java.util.TreeSet;
 
 /**
@@ -28,10 +32,18 @@ public final class InputEventSender {
     private static final int XI_TouchUpdate = 19;
     private static final int XI_TouchEnd = 20;
 
+    private static final Set<Integer> TOUCH_NAV_KEYCODES = Set.of(
+        KEYCODE_BACK,
+        KEYCODE_HOME,
+        KEYCODE_APP_SWITCH
+    );
+
+    private final MainActivity mActivity;
     private final InputStub mInjector;
     private final float[] mappedPoint = new float[2];
 
     public boolean tapToMove = false;
+    public boolean invertScrolling = false;
     public boolean preferScancodes = false;
     public boolean pointerCapture = false;
     public boolean scaleTouchpad = false;
@@ -45,9 +57,13 @@ public final class InputEventSender {
     private final TreeSet<Integer> mPressedTextKeys;
     private final TreeSet<Integer> mPressedKeys;
 
-    public InputEventSender(InputStub injector) {
+    /** Last Caps/Num/Scroll Lock state sent to the host, or -1 if none has been sent yet. */
+    private int mLockKeysState = -1;
+
+    public InputEventSender(MainActivity activity, InputStub injector) {
         if (injector == null)
             throw new NullPointerException();
+        mActivity = activity;
         mInjector = injector;
         mPressedTextKeys = new TreeSet<>();
         mPressedKeys = new TreeSet<>();
@@ -81,38 +97,74 @@ public final class InputEventSender {
         }
     }
 
+    /**
+     * Mirrors Android's current Caps/Num/Scroll Lock state onto the host, e.g. after regaining
+     * focus with the state possibly having changed while backgrounded. Every KeyEvent and
+     * MotionEvent carries the current state in its metaState regardless of which key or pointer
+     * action it represents, so callers can just forward it on every real (non-synthetic) event;
+     * this only actually notifies the host when the state actually changed.
+     */
+    public void syncLockKeysState(int eventMetaState) {
+        int state = (((eventMetaState & META_CAPS_LOCK_ON) != 0) ? 1 : 0)
+                | (((eventMetaState & META_NUM_LOCK_ON) != 0) ? 2 : 0)
+                | (((eventMetaState & META_SCROLL_LOCK_ON) != 0) ? 4 : 0);
+        if (state != mLockKeysState) {
+            mLockKeysState = state;
+            mInjector.sendLockKeysState(state);
+        }
+    }
+
+    private static final long CLICK_RELEASE_DELAY_MS = 30;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private Runnable pendingRelease;
+
     private static final List<Integer> buttons = List.of(BUTTON_UNDEFINED, BUTTON_LEFT, BUTTON_MIDDLE, BUTTON_RIGHT);
     public void sendMouseEvent(PointF pos, int button, boolean down, boolean relative) {
         if (!buttons.contains(button))
             return;
+        flushPendingRelease();
         mInjector.sendMouseEvent(pos != null ? (int) pos.x : 0, pos != null ? (int) pos.y : 0, button, down, relative);
     }
 
     public void sendStylusEvent(float x, float y, int pressure, int tiltX, int tiltY, int orientation, int buttons, boolean eraser, boolean mouse) {
         mInjector.sendStylusEvent(x, y, pressure, tiltX, tiltY, orientation, buttons, eraser, mouse);
-        android.util.Log.d("STYLUS_EVENT", "transformed x " + x + " y " + y + " pressure " + pressure + " tiltX " + tiltX + " tiltY " + tiltY + " orientation " + orientation + " buttons " + buttons + " eraser " + eraser + " mouseMode " + mouse);
     }
 
     public void sendMouseDown(int button, boolean relative) {
         if (!buttons.contains(button)) 
             return;
+        flushPendingRelease();
         mInjector.sendMouseEvent(0, 0, button, true, relative);
     }
 
     public void sendMouseUp(int button, boolean relative) {
         if (!buttons.contains(button))
             return;
+        flushPendingRelease();
         mInjector.sendMouseEvent(0, 0, button, false, relative);
     }
 
     public void sendMouseClick(int button, boolean relative) {
         if (!buttons.contains(button))
             return;
+        flushPendingRelease();
         mInjector.sendMouseEvent(0, 0, button, true, relative);
-        mInjector.sendMouseEvent(0, 0, button, false, relative);
+        pendingRelease = () -> {
+            pendingRelease = null;
+            mInjector.sendMouseEvent(0, 0, button, false, relative);
+        };
+        handler.postDelayed(pendingRelease, CLICK_RELEASE_DELAY_MS);
+    }
+
+    private void flushPendingRelease() {
+        if (pendingRelease == null)
+            return;
+        handler.removeCallbacks(pendingRelease);
+        pendingRelease.run();
     }
 
     public void sendCursorMove(float x, float y, boolean relative) {
+        flushPendingRelease();
         mInjector.sendMouseEvent(x, y, BUTTON_UNDEFINED, false, relative);
     }
 
@@ -120,7 +172,17 @@ public final class InputEventSender {
         mInjector.sendMouseWheelEvent(distanceX, distanceY);
     }
 
-    final boolean[] pointers = new boolean[10];
+    private final boolean[] pointers = new boolean[32];
+
+    private void releaseMissingPointers(MotionEvent event) {
+        for (int id = 0; id < pointers.length; id++) {
+            if (pointers[id] && (event == null || event.findPointerIndex(id) == -1)) {
+                pointers[id] = false;
+                mInjector.sendTouchEvent(XI_TouchEnd, id, 0, 0);
+            }
+        }
+    }
+
     /**
      * Extracts the touch point data from a MotionEvent, converts each point into a marshallable
      * object and passes the set of points to the JNI layer to be transmitted to the remote host.
@@ -131,28 +193,24 @@ public final class InputEventSender {
      */
     public void sendTouchEvent(MotionEvent event, RenderData renderData) {
         int action = event.getActionMasked();
+        releaseMissingPointers(action == MotionEvent.ACTION_DOWN || action == ACTION_CANCEL ? null : event);
+        if (action == ACTION_CANCEL)
+            return;
 
         if (action == ACTION_MOVE || action == ACTION_HOVER_MOVE || action == ACTION_HOVER_ENTER || action == ACTION_HOVER_EXIT) {
-            // In order to process all of the events associated with an ACTION_MOVE event, we need
-            // to walk the list of historical events in order and add each event to our list, then
-            // retrieve the current move event data.
             int pointerCount = event.getPointerCount();
 
-            for (int p = 0; p < pointerCount; p++)
-                pointers[event.getPointerId(p)] = false;
-
-            for (int p = 0; p < pointerCount; p++) {
-                renderData.mapScreenPoint(event.getX(p), event.getY(p), mappedPoint);
-                int x = clamp((int) mappedPoint[0], 0, renderData.screenWidth);
-                int y = clamp((int) mappedPoint[1], 0, renderData.screenHeight);
-                pointers[event.getPointerId(p)] = true;
-                mInjector.sendTouchEvent(XI_TouchUpdate, event.getPointerId(p), x, y);
-            }
-
-            // Sometimes Android does not send ACTION_POINTER_UP/ACTION_UP so some pointers are "stuck" in pressed state.
-            for (int p = 0; p < 10; p++) {
-                if (!pointers[p])
-                    mInjector.sendTouchEvent(XI_TouchEnd, p, 0, 0);
+            int historySize = event.getHistorySize();
+            for (int h = 0; h <= historySize; h++) {
+                for (int p = 0; p < pointerCount; p++) {
+                    float eventX = h < historySize ? event.getHistoricalX(p, h) : event.getX(p);
+                    float eventY = h < historySize ? event.getHistoricalY(p, h) : event.getY(p);
+                    renderData.mapScreenPoint(eventX, eventY, mappedPoint);
+                    int x = clamp((int) mappedPoint[0], 0, renderData.screenWidth);
+                    int y = clamp((int) mappedPoint[1], 0, renderData.screenHeight);
+                    pointers[event.getPointerId(p)] = true;
+                    mInjector.sendTouchEvent(XI_TouchUpdate, event.getPointerId(p), x, y);
+                }
             }
         } else {
             // For all other events, we only want to grab the current/active pointer.  The event
@@ -166,6 +224,7 @@ public final class InputEventSender {
             int a = (action == MotionEvent.ACTION_DOWN || action == ACTION_POINTER_DOWN) ? XI_TouchBegin : XI_TouchEnd;
             if (a == XI_TouchEnd)
                 mInjector.sendTouchEvent(XI_TouchUpdate, id, x, y);
+            pointers[id] = a == XI_TouchBegin;
             mInjector.sendTouchEvent(a, id, x, y);
         }
     }
@@ -179,10 +238,16 @@ public final class InputEventSender {
         int keyCode = e.getKeyCode();
         boolean pressed = e.getAction() == KeyEvent.ACTION_DOWN;
 
+        if (e.getDeviceId() >= 0)
+            syncLockKeysState(e.getMetaState());
+
         if ((e.getFlags() & KeyEvent.FLAG_CANCELED) == KeyEvent.FLAG_CANCELED) {
             android.util.Log.d("KeyEvent", "We've got key event with FLAG_CANCELED, it will not be consumed. Details: " + e);
             return true;
         }
+
+        if (shouldBlockKeyEvent(e))
+            return true;
 
         // Events received from software keyboards generate TextEvent in two
         // cases:
@@ -260,9 +325,27 @@ public final class InputEventSender {
             mPressedKeys.remove(keyCode);
 
         if (keyCode == KEYCODE_ESCAPE && !pressed && e.hasNoModifiers())
-            MainActivity.setCapturingEnabled(false);
+            mActivity.setCapturingEnabled(false);
 
         // We try to send all other key codes to the host directly.
         return mInjector.sendKeyEvent(scancode, keyCode, pressed);
+    }
+
+    // Some touchpanel/touchpad hardware occasionally reports spurious key
+    // events (e.g. unexpected function keys) alongside its normal touch
+    // input, likely due to a firmware or driver quirk in the underlying
+    // input device. Filter these out to avoid having them misinterpreted
+    // as real keyboard input.
+    private boolean shouldBlockKeyEvent(KeyEvent event) {
+        InputDevice device = event.getDevice();
+        // Keyboard cases with a touchpad are a single device with both sources.
+        if (device == null || device.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC)
+            return false;
+
+        int sources = device.getSources();
+        return (sources & InputDevice.SOURCE_KEYBOARD) != 0
+                && (sources & (InputDevice.SOURCE_TOUCHSCREEN | InputDevice.SOURCE_TOUCHPAD)) != 0
+                && (sources & InputDevice.SOURCE_STYLUS) == 0
+                && !TOUCH_NAV_KEYCODES.contains(event.getKeyCode());
     }
 }

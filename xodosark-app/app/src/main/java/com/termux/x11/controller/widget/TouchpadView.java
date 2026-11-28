@@ -1,12 +1,11 @@
 package com.termux.x11.controller.widget;
 
+
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
+import android.util.Log;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 
@@ -28,7 +27,6 @@ public class TouchpadView extends View {
     public static final short MAX_TAP_MILLISECONDS = 200;
     public static final float CURSOR_ACCELERATION = 1.25f;
     public static final byte CURSOR_ACCELERATION_THRESHOLD = 6;
-
     private final Finger[] fingers = new Finger[MAX_FINGERS];
     private byte numFingers = 0;
     private float sensitivity = 1.0f;
@@ -42,22 +40,6 @@ public class TouchpadView extends View {
     private Runnable fourFingersTapCallback;
     private final float[] xform = XForm.getInstance();
     private TouchMode touchMode = TouchMode.TOUCH_SCREEN;
-
-    // Long‑press detection
-    private static final long LONG_PRESS_TIMEOUT = ViewConfiguration.getLongPressTimeout();
-    private final Handler mHandler = new Handler(Looper.getMainLooper());
-    private final Runnable mLongPressRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (numFingers == 1 && touchMode == TouchMode.TRACK_PAD) {
-                Finger finger = fingers[0]; // only one finger in trackpad long-press
-                if (finger != null && !finger.wasLongPressTriggered()) {
-                    finger.setLongPressTriggered(true);
-                    pressPointerButtonLeft(finger);
-                }
-            }
-        }
-    };
 
     public void setTouchMode(TouchMode touchMode) {
         this.touchMode = touchMode;
@@ -98,7 +80,6 @@ public class TouchpadView extends View {
         private int lastX;
         private int lastY;
         private final long touchTime;
-        private boolean longPressTriggered = false;
 
         public Finger(float x, float y) {
             this.x = this.startX = this.lastX = (int) x;
@@ -134,14 +115,6 @@ public class TouchpadView extends View {
 
         private float travelDistance() {
             return (float) Math.hypot(x - startX, y - startY);
-        }
-
-        public boolean wasLongPressTriggered() {
-            return longPressTriggered;
-        }
-
-        public void setLongPressTriggered(boolean v) {
-            longPressTriggered = v;
         }
     }
 
@@ -183,6 +156,7 @@ public class TouchpadView extends View {
                             } else {
                                 handleFingerMove(fingers[i]);
                             }
+
                         } else {
                             handleFingerUp(fingers[i]);
                             fingers[i] = null;
@@ -202,7 +176,6 @@ public class TouchpadView extends View {
                 }
                 break;
             case MotionEvent.ACTION_CANCEL:
-                mHandler.removeCallbacks(mLongPressRunnable);
                 for (byte i = 0; i < MAX_FINGERS; i++) fingers[i] = null;
                 numFingers = 0;
                 break;
@@ -213,26 +186,10 @@ public class TouchpadView extends View {
     private void handlerFingerDown(Finger finger1) {
         if (touchMode == TouchMode.TOUCH_SCREEN && numFingers == 1) {
             xServer.pointer.moveTo(finger1.x, finger1.y);
-        } else if (touchMode == TouchMode.TRACK_PAD && numFingers == 1) {
-            // Start long‑press timer for trackpad mode
-            mHandler.removeCallbacks(mLongPressRunnable);
-            mHandler.postDelayed(mLongPressRunnable, LONG_PRESS_TIMEOUT);
         }
     }
 
     private void handleFingerUp(Finger finger1) {
-        // Cancel any pending long‑press
-        mHandler.removeCallbacks(mLongPressRunnable);
-
-        // If long‑press had already triggered, release the button now
-        if (finger1.wasLongPressTriggered()) {
-            releasePointerButtonLeft(finger1);
-            // Reset flag so it doesn't interfere with future taps
-            finger1.setLongPressTriggered(false);
-            return; // Do not process tap
-        }
-
-        // Regular tap handling (unchanged)
         switch (numFingers) {
             case 1:
                 if (finger1.isTap()) {
@@ -261,11 +218,6 @@ public class TouchpadView extends View {
     private void handleFingerMove(Finger finger1) {
         boolean skipPointerMove = false;
 
-        // Cancel long‑press if the finger moves significantly
-        if (finger1.travelDistance() > MAX_TAP_TRAVEL_DISTANCE) {
-            mHandler.removeCallbacks(mLongPressRunnable);
-        }
-
         Finger finger2 = numFingers == 2 ? findSecondFinger(finger1) : null;
         if (finger2 != null) {
             final float resolutionScale = 1000.0f / Math.min(xServer.screenInfo.screenWidth, xServer.screenInfo.screenHeight);
@@ -285,7 +237,7 @@ public class TouchpadView extends View {
                 }
                 scrolling = true;
             } else if (currDistance >= MAX_TWO_FINGERS_SCROLL_DISTANCE && !xServer.pointer.isButtonPressed(Pointer.Button.BUTTON_LEFT) &&
-                    finger2.travelDistance() < MAX_TAP_TRAVEL_DISTANCE) {
+                finger2.travelDistance() < MAX_TAP_TRAVEL_DISTANCE) {
                 pressPointerButtonLeft(finger1);
                 skipPointerMove = true;
             }
@@ -295,8 +247,11 @@ public class TouchpadView extends View {
             int dx = finger1.deltaX();
             int dy = finger1.deltaY();
 
+//            if (xServer.isRelativeMouseMovement()) {
             if (touchMode == TouchMode.TOUCH_SCREEN) {
-                // Absolute movement (unchanged)
+//                xServer.injectPointerMove(dx, dy);
+//                WinHandler winHandler = xServer.getWinHandler();
+//                winHandler.mouseEvent(MouseEventFlags.MOVE, dx, dy, 0);
             } else {
                 xServer.injectPointerMoveDelta(dx, dy);
             }
@@ -423,4 +378,5 @@ public class TouchpadView extends View {
         result[1] = y - lastY;
         return result;
     }
+
 }

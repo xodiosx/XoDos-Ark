@@ -26,8 +26,9 @@ import app.xodos2.R;
 import com.termux.x11.controller.ControlsEditorActivity;
 import com.termux.x11.controller.core.AppUtils;
 import com.termux.x11.controller.core.FileUtils;
-
+import com.termux.x11.controller.core.ImageUtils;
 import com.termux.x11.controller.core.UnitUtils;
+import com.termux.x11.controller.core.WineThemeManager;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -135,14 +136,14 @@ public class ImagePickerView extends View implements View.OnClickListener {
             Intent intent = new Intent(Intent.ACTION_PICK);
             intent.setType("image/*");
             activity.setOpenFileCallback((data) -> {
-                Bitmap bitmap = null;
+                Bitmap bitmap = ImageUtils.getBitmapFromUri(context, data, 1280);
                 if (bitmap == null) return null;
-                String md5 = null;
+                String md5 = ImageUtils.getFileMD5(getContext(), data);
                 File iconFile = new File(buttonIconDirectoryPath, md5 + ".png");
                 setImageId(md5);
                 if (!iconFile.exists()) {
                     File saveFile = saveButtonIcon(md5);
-                    
+                    ImageUtils.save(bitmap, saveFile, Bitmap.CompressFormat.PNG, 100);
                 }
                 imageView.setImageBitmap(BitmapFactory.decodeFile(iconFile.getPath()));
                 popupWindow[0].dismiss();
@@ -169,7 +170,7 @@ public class ImagePickerView extends View implements View.OnClickListener {
 
     private void setWineWallPaper(View anchor) {
         final Context context = getContext();
-        final File userWallpaperFile = null;
+        final File userWallpaperFile = WineThemeManager.getUserWallpaperFile(context);
 
         View view = LayoutInflater.from(context).inflate(R.layout.image_picker_view, null);
         ImageView imageView = view.findViewById(R.id.ImageView);
@@ -185,10 +186,10 @@ public class ImagePickerView extends View implements View.OnClickListener {
             Intent intent = new Intent(Intent.ACTION_PICK);
             intent.setType("image/*");
             activity.setOpenFileCallback((data) -> {
-                Bitmap bitmap = null;
+                Bitmap bitmap = ImageUtils.getBitmapFromUri(context, data, 1280);
                 if (bitmap == null) return;
 
-                
+                ImageUtils.save(bitmap, userWallpaperFile, Bitmap.CompressFormat.PNG, 100);
                 popupWindow[0].dismiss();
             });
             activity.startActivityForResult(intent, activityType);

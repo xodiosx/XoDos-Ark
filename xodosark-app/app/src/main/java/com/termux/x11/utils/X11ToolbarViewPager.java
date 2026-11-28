@@ -1,16 +1,16 @@
 package com.termux.x11.utils;
 
-import androidx.annotation.RequiresApi;
-import android.os.Build;
+import static android.os.Build.VERSION.SDK_INT;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import android.annotation.SuppressLint;
 import android.graphics.Color;
+import android.os.Build.VERSION_CODES;
 import android.graphics.drawable.ColorDrawable;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.KeyEvent;
-import android.view.KeyCharacterMap;
 
 import android.widget.Button;
 import android.widget.EditText;
@@ -51,33 +51,31 @@ public class X11ToolbarViewPager {
             LayoutInflater inflater = LayoutInflater.from(mActivity);
             View layout;
             if (position == 0) {
-                layout = inflater.inflate(R.layout.view_terminal_toolbar_extra_keys, collection, false);
+                layout = inflater.inflate(R.layout.lorie_view_terminal_toolbar_extra_keys, collection, false);
                 ExtraKeysView extraKeysView = (ExtraKeysView) layout;
                 mActivity.mExtraKeys = new TermuxX11ExtraKeys(mEventListener, mActivity, extraKeysView);
                 extraKeysView.reload();
-                extraKeysView.setExtraKeysViewClient(mActivity.mExtraKeys);
                 extraKeysView.setOnHoverListener((v, e) -> true);
                 extraKeysView.setOnGenericMotionListener((v, e) -> true);
             } else {
-                layout = inflater.inflate(R.layout.view_terminal_toolbar_text_input, collection, false);
+                layout = inflater.inflate(R.layout.lorie_view_terminal_toolbar_text_input, collection, false);
                 final EditText editText = layout.findViewById(R.id.terminal_toolbar_text_input);
                 final Button back = layout.findViewById(R.id.terminal_toolbar_back_button);
 
                 editText.setOnEditorActionListener((v, actionId, event) -> {
                     String textToSend = editText.getText().toString();
-                    if (textToSend.isEmpty()) textToSend = "\r";
-                    KeyEvent e = new KeyEvent(0, textToSend, KeyCharacterMap.VIRTUAL_KEYBOARD, 0);
-                    mEventListener.onKey(mActivity.getLorieView(), 0, e);
+                    if (textToSend.isEmpty()) textToSend = "\n";
+                    mActivity.getLorieView().sendTextEvent(textToSend.getBytes(UTF_8));
 
                     editText.setText("");
                     return true;
                 });
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                editText.setOnCapturedPointerListener((v2, e2) -> {
-                    MainActivity.setCapturingEnabled(false);
-                    return false;
-                });
+                if (SDK_INT >= VERSION_CODES.O)
+                    editText.setOnCapturedPointerListener((v2, e2) -> {
+                        mActivity.setCapturingEnabled(false);
+                        return false;
+                    });
 
                 back.setOnClickListener(v -> mActivity.getTerminalToolbarViewPager().setCurrentItem(0, true));
                 back.setTextColor(0xFFFFFFFF);
@@ -116,11 +114,9 @@ public class X11ToolbarViewPager {
 
     public static class OnPageChangeListener extends ViewPager.SimpleOnPageChangeListener {
         final MainActivity act;
-        final ViewPager mTerminalToolbarViewPager;
 
-        public OnPageChangeListener(MainActivity activity, ViewPager viewPager) {
+        public OnPageChangeListener(MainActivity activity) {
             this.act = activity;
-            this.mTerminalToolbarViewPager = viewPager;
         }
 
         @Override
@@ -128,7 +124,7 @@ public class X11ToolbarViewPager {
             if (position == 0) {
                 act.getLorieView().requestFocus();
             } else {
-                final EditText editText = mTerminalToolbarViewPager.findViewById(R.id.terminal_toolbar_text_input);
+                final EditText editText = act.getTerminalToolbarViewPager().findViewById(R.id.terminal_toolbar_text_input);
                 if (editText != null) editText.requestFocus();
             }
         }

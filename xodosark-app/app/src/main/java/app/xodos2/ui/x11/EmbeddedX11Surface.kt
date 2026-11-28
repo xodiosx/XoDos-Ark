@@ -57,7 +57,7 @@ fun EmbeddedX11Surface(
         factory = { ctx ->
             android.widget.FrameLayout(ctx).apply {
                 setBackgroundColor(0xFF000000.toInt())
-                val lv = LorieView(ctx)
+                val lv = LorieView(ctx, null)
                 addView(
                     lv,
                     android.widget.FrameLayout.LayoutParams(

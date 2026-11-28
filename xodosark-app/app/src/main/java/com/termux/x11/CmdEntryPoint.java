@@ -17,25 +17,28 @@ import android.view.Surface;
 import androidx.annotation.Keep;
 
 import app.xodos2.BuildConfig;
+import dalvik.annotation.optimization.CriticalNative;
 
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.net.URL;
 
-@Keep @SuppressLint({"StaticFieldLeak", "UnsafeDynamicallyLoadedCode"})
+@Keep
+@SuppressLint({"StaticFieldLeak", "UnsafeDynamicallyLoadedCode"})
 public class CmdEntryPoint extends ICmdEntryInterface.Stub {
     public static final String ACTION_START = "com.termux.x11.CmdEntryPoint.ACTION_START";
-    static final Handler handler;
+    public static final String EXTRA_DOCUMENT_TAG = "document_tag";
+    static Handler handler;
     public static Context ctx;
     private final Intent intent = createIntent();
+    private boolean broadcastPending;
 
     /**
-     * Command-line entry point.
-     *
-     * @param args The command-line arguments
+     * Entry point invoked by X11ServerService (in :x11) or standalone app_process.
      */
     public static void main(String[] args) {
-        android.util.Log.i("CmdEntryPoint", "commit " + BuildConfig.COMMIT);
+        initEntryPoint();
+        Log.i("CmdEntryPoint", "commit " + BuildConfig.COMMIT);
         handler.post(() -> new CmdEntryPoint(args));
         Looper.loop();
     }
@@ -43,25 +46,32 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
     CmdEntryPoint(String[] args) {
         if (!start(args)) {
             Log.e("CmdEntryPoint", "native start() failed (args=" + java.util.Arrays.toString(args) + ")");
-            // Termux in `app_process` expects process death; in xodos2 the same process runs the
-            // Activity — System.exit(1) kills the app and the OS restarts it → apparent hang / log spam.
+            // In standalone app_process, exit on failure; inside XoDos (:x11), avoid killing the service loop
             if (!"app.xodos2".equals(BuildConfig.APPLICATION_ID)) {
                 System.exit(1);
             }
             return;
         }
 
-        spawnListeningThread();
+        // Kick off initial broadcast loop so MainActivity receives the IBinder immediately
         sendBroadcastDelayed();
+    }
+
+    // Called from native once OsVendorInit() resolves the "-tag" argument, if any.
+    @Keep
+    void setDocumentTag(String tag) {
+        if (tag != null) {
+            intent.putExtra(EXTRA_DOCUMENT_TAG, tag);
+        }
     }
 
     @SuppressLint({"WrongConstant", "PrivateApi"})
     private Intent createIntent() {
         String targetPackage = getenv("TERMUX_X11_OVERRIDE_PACKAGE");
-        if (targetPackage == null)
-            targetPackage = "app.xodos2";
-        // We should not care about multiple instances, it should be called only by `Termux:X11` app
-        // which is single instance...
+        if (targetPackage == null || targetPackage.isEmpty()) {
+            targetPackage = BuildConfig.APPLICATION_ID; // "app.xodos2"
+        }
+
         Bundle bundle = new Bundle();
         bundle.putBinder(null, this);
 
@@ -69,14 +79,37 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
         intent.putExtra(null, bundle);
         intent.setPackage(targetPackage);
 
-        if (getuid() == 0 || getuid() == 2000)
+        if (getuid() == 0 || getuid() == 2000) {
             intent.setFlags(0x00400000 /* FLAG_RECEIVER_FROM_SHELL */);
+        }
 
         return intent;
     }
 
+    // Called from native (the X server thread) on every knock on the port;
+    // coalesces bursts into a single broadcast fired 250ms later.
+    @Keep
     private void sendBroadcast() {
-        sendBroadcast(intent);
+        synchronized (this) {
+            if (broadcastPending)
+                return;
+            broadcastPending = true;
+        }
+        handler.postDelayed(() -> {
+            synchronized (this) {
+                broadcastPending = false;
+            }
+            sendBroadcast(intent);
+        }, 250);
+    }
+
+    // Called from native start() and periodically until MainActivity connects.
+    @Keep
+    private void sendBroadcastDelayed() {
+        if (!connected()) {
+            sendBroadcast(intent);
+        }
+        handler.postDelayed(this::sendBroadcastDelayed, 1000);
     }
 
     static void sendBroadcast(Intent intent) {
@@ -91,20 +124,7 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
         }
     }
 
-    // In some cases Android Activity part can not connect opened port.
-    // In this case opened port works like a lock file.
-    private void sendBroadcastDelayed() {
-        if (!connected())
-            sendBroadcast(intent);
-
-        handler.postDelayed(this::sendBroadcastDelayed, 1000);
-    }
-
-    void spawnListeningThread() {
-        new Thread(this::listenForConnections).start();
-    }
-
-    /** @noinspection DataFlowIssue*/
+    /** Fallback only when launched via CLI app_process without X11ServerService */
     @SuppressLint("DiscouragedPrivateApi")
     public static Context createContext() {
         Context context;
@@ -113,8 +133,6 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
             java.lang.reflect.Field f = Class.forName("sun.misc.Unsafe").getDeclaredField("theUnsafe");
             f.setAccessible(true);
             Object unsafe = f.get(null);
-            // Hiding harmless framework errors, like this:
-            // java.io.FileNotFoundException: /data/system/theme_config/theme_compatibility.xml: open failed: ENOENT (No such file or directory)
             System.setErr(new PrintStream(new OutputStream() { public void write(int arg0) {} }));
             Class<?> activityThreadClass = Class.forName("android.app.ActivityThread");
             Object activityThread;
@@ -135,51 +153,49 @@ public class CmdEntryPoint extends ICmdEntryInterface.Stub {
         return context;
     }
 
-    public static native boolean start(String[] args);
+    public native boolean start(String[] args);
+    public native void windowChanged(Surface surface);
+    public native void cursorWindowChanged(Surface surface);
     public native ParcelFileDescriptor getXConnection();
     public native ParcelFileDescriptor getLogcatOutput();
+    @Keep
+    public native void reportFatalError(String message);
+    @CriticalNative
     private static native boolean connected();
-    private native void listenForConnections();
 
-    static {
+    private static void initEntryPoint() {
         try {
-            if (Looper.getMainLooper() == null)
+            if (Looper.myLooper() == null && Looper.getMainLooper() == null) {
                 Looper.prepareMainLooper();
-        } catch (Exception e) {
-            Log.e("CmdEntryPoint", "Something went wrong when preparing MainLooper", e);
-        }
-        // In-process: class may be first loaded on a worker after Looper.prepare(); in Termux: same.
-        // `new Handler()` with no arg requires a Looper on the current thread — fall back to main.
-        {
-            Looper l = Looper.myLooper();
-            if (l != null) {
-                handler = new Handler(l);
-            } else {
-                handler = new Handler(Looper.getMainLooper());
             }
+        } catch (Exception e) {
+            Log.e("CmdEntryPoint", "Something went wrong when preparing Looper", e);
         }
-        ctx = createContext();
 
-        // Standard Android (jniLibs in APK): always use loadLibrary — same as [app.xodos2.X11Runtime].
-        // The Termux getResource+System.load("...base.apk!/lib/...") path often fails on modern Android
-        // (dlopen from zip path), so it must be fallback only, not first.
+        Looper l = Looper.myLooper();
+        handler = new Handler(l != null ? l : Looper.getMainLooper());
+
+        // Preserve the Application Context passed by X11ServerService; only use Unsafe fallback for CLI
+        if (ctx == null) {
+            ctx = createContext();
+        }
+
         try {
             System.loadLibrary("Xlorie");
         } catch (UnsatisfiedLinkError first) {
-            String subPath = "lib/" + Build.SUPPORTED_ABIS[0] + "/libXlorie.so";
+            String abi = (android.os.Process.is64Bit() ? Build.SUPPORTED_64_BIT_ABIS[0] : Build.SUPPORTED_32_BIT_ABIS[0]);
+            String subPath = "lib/" + abi + "/libXlorie.so";
             ClassLoader loader = CmdEntryPoint.class.getClassLoader();
             URL res = loader != null ? loader.getResource(subPath) : null;
             String libPath = res != null ? res.getFile().replace("file:", "") : null;
             if (libPath == null) {
                 Log.e("CmdEntryPoint", "Failed to load libXlorie (no ClassLoader path)", first);
-                System.err.println("Failed to acquire native library (libXlorie).");
                 System.exit(134);
             } else {
                 try {
                     System.load(libPath);
                 } catch (UnsatisfiedLinkError | Exception e) {
                     Log.e("CmdEntryPoint", "Failed to dlopen " + libPath, e);
-                    System.err.println("Failed to load native library. Did you install the right apk? Try the universal one.");
                     System.exit(134);
                 }
             }

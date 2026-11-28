@@ -1,10 +1,10 @@
 package app.xodos2
 
-import android.app.Application
+import com.termux.x11.LorieApp
 
-class xodos2Application : Application() {
+class xodos2Application : LorieApp() {
     override fun onCreate() {
-        super.onCreate()
+        super.onCreate()                     // ← LorieApp.onCreate: attaches Prefs, notification channel, broadcast listener
         X11Runtime.initInMainProcess(this)
     }
 }

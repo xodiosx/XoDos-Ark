@@ -1,4 +1,4 @@
-#!/root/xodos/xodosark-audio/out/pulse-android-prefix/bin/pulseaudio -nF
+#!/data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/xodos/xodosark-audio/out/pulse-android-prefix/bin/pulseaudio -nF
 #
 # This file is part of PulseAudio.
 #
@@ -54,4 +54,4 @@ load-module module-position-event-sounds
 ### for additional configuration snippets.
 ### Note that those snippet files must have a .pa file extension, not .conf
 .nofail
-.include /root/xodos/xodosark-audio/out/pulse-android-prefix/etc/pulse/system.pa.d
+.include /data/data/com.termux/files/usr/var/lib/proot-distro/containers/debian/rootfs/root/xodos/xodosark-audio/out/pulse-android-prefix/etc/pulse/system.pa.d

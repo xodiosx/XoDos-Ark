@@ -1,4 +1,5 @@
 //! proot.rs — Proot argv/env with full proot-distro-style options.
+//!
 //! Options live in `<filesDir>/proot_options/container_<id>.json`.
 //! Users are switched **directly** via `--change-id` (fake_id0), never via
 //! a layered `su` shell. The hostname is read dynamically from

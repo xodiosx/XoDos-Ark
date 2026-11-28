@@ -33,6 +33,7 @@ public final class X11ServerService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        Log.i(TAG, "onCreate — service created, pid=" + android.os.Process.myPid());
         startAsForeground();
         startCmdEntryInBackgroundIfNeeded();
     }
@@ -75,7 +76,7 @@ public final class X11ServerService extends Service {
         return START_STICKY;
     }
 
-    private void startCmdEntryInBackgroundIfNeeded() {
+        private void startCmdEntryInBackgroundIfNeeded() {
         final Application a = getApplication();
         synchronized (lock) {
             if (cmdThreadRunning) return;
@@ -83,9 +84,15 @@ public final class X11ServerService extends Service {
         }
         new Thread(() -> {
             try {
-                // TMPDIR, XKB unpack, etc. — may take seconds; not on the main / UI process.
-                X11Runtime.applyLorieProcessEnvForX11ServerProcess(a);
+                // 1. Prepare Looper FIRST before touching CmdEntryPoint
                 Looper.prepare();
+
+                // 2. Set up TMPDIR, XKB, and env vars
+                X11Runtime.applyLorieProcessEnvForX11ServerProcess(a);
+
+                // 3. Give CmdEntryPoint the real Service Context so broadcasts work
+                CmdEntryPoint.ctx = a.getApplicationContext();
+
                 android.util.Log.i(TAG, "CmdEntryPoint.main(:0) starting in :x11");
                 CmdEntryPoint.main(new String[] {":0", "-ac"});
             } catch (Throwable t) {
@@ -96,6 +103,8 @@ public final class X11ServerService extends Service {
             }
         }, "xodos2-CmdEntryPoint-:x11").start();
     }
+
+
 
     @Nullable
     @Override

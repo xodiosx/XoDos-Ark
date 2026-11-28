@@ -43,7 +43,9 @@ public final class X11ActivityBridge {
     /** @noinspection SameParameterValue */
     public static synchronized Prefs getOrCreatePrefs(Context anyContext) {
         if (prefs == null && anyContext != null) {
-            prefs = new Prefs(anyContext.getApplicationContext());
+ prefs = new Prefs();
+prefs.attach(anyContext.getApplicationContext(),
+        android.preference.PreferenceManager.getDefaultSharedPreferences(anyContext));
             Log.i(TAG, "Prefs initialized for X11 embedding");
         }
         return prefs;
@@ -72,7 +74,43 @@ public final class X11ActivityBridge {
             lv.triggerCallback();
         }
     }
+    private static volatile ICmdEntryInterface service;
 
+    public static void setService(@Nullable ICmdEntryInterface s) {
+        service = s;
+        LorieView lv = lorieView;
+        if (lv != null && s != null) {
+            lv.sendSurface();
+        }
+    }
+
+    @Nullable
+    public static ICmdEntryInterface getService() {
+        return service;
+    }
+
+    public static void windowChanged(@Nullable android.view.Surface s) {
+        ICmdEntryInterface srv = service;
+        if (srv != null) {
+            try {
+                srv.windowChanged(s);
+            } catch (android.os.RemoteException e) {
+                Log.e(TAG, "windowChanged failed", e);
+            }
+        }
+    }
+
+    public static void cursorWindowChanged(@Nullable android.view.Surface s) {
+        ICmdEntryInterface srv = service;
+        if (srv != null) {
+            try {
+                srv.cursorWindowChanged(s);
+            } catch (android.os.RemoteException e) {
+                Log.e(TAG, "cursorWindowChanged failed", e);
+            }
+        }
+    }
+    
     /** Keyboard path used by {@link LorieView}; host is Compose — no Termux key routing. */
     public static boolean handleKey(KeyEvent event) {
         return false;
@@ -98,7 +136,8 @@ public final class X11ActivityBridge {
         MainActivity m = MainActivity.getInstance();
         if (m == null) return;
         MainActivity.handler.post(() -> {
-            if (LorieView.connected()) {
+            MainActivity _m = MainActivity.getFocusedOrAnyInstance();
+if (_m != null && _m.getLorieView() != null && _m.getLorieView().connected()) {
                 m.clientConnectedStateChanged();
             }
             m.tryConnect();

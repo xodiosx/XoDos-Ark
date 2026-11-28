@@ -20,18 +20,18 @@
             android:icon="@android:drawable/ic_menu_set_as"
             android:summary="@string/notification_toggle_soft_keyboard" />
             
-        <SwitchPreferenceCompat
+     <!--      <SwitchPreferenceCompat
             android:key="gamepadSdlEnabled"
             android:title="@string/gamepad_sdlEnabled_title"
             android:summary="@string/gamepad_sdlEnabled_summary_on"
             android:defaultValue="true"/>
 
-      <!--   <SwitchPreferenceCompat
+      <SwitchPreferenceCompat
             android:key="gamepadForwardX11"
             android:title="@string/gamepad_forwardX11_title"
             android:summary="@string/gamepad_forwardX11_summary"
             android:defaultValue="true"
-            android:dependency="gamepadSdlEnabled"/> -->
+            android:dependency="gamepadSdlEnabled"/>
 
         <EditTextPreference
             android:key="gamepadHost"
@@ -45,7 +45,7 @@
             android:title="@string/gamepad_port_title"
             android:summary="@string/gamepad_port_summary"
             android:defaultValue="4600"
-            android:dependency="gamepadSdlEnabled"/>
+            android:dependency="gamepadSdlEnabled"/>  -->
 
         <Preference
             android:key="select_controller"

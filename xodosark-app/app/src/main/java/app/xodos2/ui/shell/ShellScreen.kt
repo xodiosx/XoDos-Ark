@@ -6,6 +6,7 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -79,6 +80,36 @@ private data class ExtraKeyItem(
     val meta: String = ""
 )
 
+private const val TAG = "ShellScreen"
+
+/**
+ * X11 background surface needs [android.view.View.OnCapturedPointerListener]
+ * (API 24+) and the full Termux X11 stack. On API 24–25 we do not touch any
+ * X11 internals at all.
+ */
+private val X11_SUPPORTED: Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+
+private fun View.isSafelyAttached(): Boolean =
+    isAttachedToWindow && windowToken != null
+
+private class GuardedRootLayout(ctx: Context) : FrameLayout(ctx) {
+    var onBeforeDetach: (() -> Unit)? = null
+    var onAfterDetach: (() -> Unit)? = null
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        (tag as? ViewCache)?.let { it.isDetached = false }
+    }
+
+    override fun onDetachedFromWindow() {
+        (tag as? ViewCache)?.let { it.isDetached = true }
+        try { onBeforeDetach?.invoke() } catch (_: Throwable) {}
+        super.onDetachedFromWindow()
+        try { onAfterDetach?.invoke() } catch (_: Throwable) {}
+    }
+}
+
 private class ViewCache(
     val controller: ShellSessionController,
     val keysContainer: LinearLayout,
@@ -87,33 +118,20 @@ private class ViewCache(
     val bgImageView: AnimatedBackgroundView,
     val x11Container: FrameLayout,
     val solidBgView: FrameLayout,
-    val terminalFrame: FrameLayout
+    val terminalFrame: FrameLayout,
+    val rootLayout: GuardedRootLayout,
 ) {
     var appliedExtraKeysJson: String? = null
-
     var cachedProps: TermuxProperties? = null
     var cachedPropsEpoch: Int = -1
     var cachedPropsContainerId: Int = -1
-
     var x11Controller: EmbeddedX11Controller? = null
     var x11Lorie: BackgroundLorieView? = null
     var x11Attached: Boolean = false
+
+    @Volatile var isDetached: Boolean = false
 }
 
-private const val TAG = "ShellScreen"
-
-/**
- * Bridge between AppScreen's enter-*-desktop functions and ShellScreen's
- * background X11 LorieView.
- *
- * termux-x11 allows only one attached LorieView per X server process. When
- * the user opens the X11 desktop, MainActivity.onCreate calls
- * LorieView.connect(fd). If our background LorieView is still attached at
- * that moment, the primary gets a stale fd and the server can hang.
- *
- * So before starting MainActivity we call releaseBeforePrimaryAttaches(),
- * which detaches the background LorieView and frees the slot.
- */
 object TerminalBackgroundX11 {
     @Volatile private var detach: (() -> Unit)? = null
     fun register(fn: (() -> Unit)?) { detach = fn }
@@ -122,7 +140,7 @@ object TerminalBackgroundX11 {
     }
 }
 
-private class BackgroundLorieView(ctx: Context) : LorieView(ctx) {
+private class BackgroundLorieView(ctx: Context) : LorieView(ctx, null) {
     override fun onWindowFocusChanged(hasWindowFocus: Boolean) { /* no-op */ }
     override fun dispatchKeyEventPreIme(event: KeyEvent): Boolean = false
     override fun onKeyPreIme(keyCode: Int, event: KeyEvent): Boolean = false
@@ -131,6 +149,15 @@ private class BackgroundLorieView(ctx: Context) : LorieView(ctx) {
     override fun onKeyUp(keyCode: Int, event: KeyEvent): Boolean = false
     override fun onTouchEvent(event: MotionEvent): Boolean = false
     override fun onGenericMotionEvent(event: MotionEvent): Boolean = false
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        if (!isAttachedToWindow) return
+        try {
+            super.onLayout(changed, left, top, right, bottom)
+        } catch (t: Throwable) {
+            Log.e(TAG, "LorieView.onLayout failed", t)
+        }
+    }
 }
 
 @Composable
@@ -162,6 +189,12 @@ fun ShellScreen(
     val propsAppliedSessions = remember { mutableSetOf<Int>() }
     val x11CacheRef = remember { mutableStateOf<ViewCache?>(null) }
     var wasInBackground by remember { mutableStateOf(false) }
+
+    val alive = remember { mutableStateOf(true) }
+    DisposableEffect(Unit) {
+        alive.value = true
+        onDispose { alive.value = false }
+    }
 
     val activeContainerId = remember(activeSessionId) {
         when (TerminalSessionIds.namespaceOf(activeSessionId)) {
@@ -255,72 +288,93 @@ fun ShellScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE, Lifecycle.Event.ON_STOP -> {
-                    // Do NOT detach X11 here. Merely backgrounding the app
-                    // is not a reason to release the slot — the primary
-                    // desktop is not grabbing it in that case. The listener
-                    // handles the only legitimate detach trigger.
                     wasInBackground = true
                     saveZoomImmediately()
                 }
-                Lifecycle.Event.ON_RESUME -> {
+                                Lifecycle.Event.ON_RESUME -> {
                     saveZoomImmediately()
                     if (!wasInBackground) return@LifecycleEventObserver
                     wasInBackground = false
 
+                    if (!X11_SUPPORTED) return@LifecycleEventObserver
                     val cache = x11CacheRef.value ?: return@LifecycleEventObserver
+                    if (cache.isDetached) return@LifecycleEventObserver
                     ioScope.launch {
+                        kotlinx.coroutines.delay(150L)
                         val props = withContext(Dispatchers.IO) {
                             TermuxPropertiesLoader.load(context, activeContainerId)
                         }
                         if (props.backgroundDisplay != "x11") return@launch
                         withContext(Dispatchers.Main) {
-                            if (com.termux.x11.MainActivity.isPrimaryLorieAttached()) {
-                                // Primary owns the slot — stay detached.
-                                if (cache.x11Attached) detachOurBackgroundX11(cache)
-                            } else if (cache.x11Attached && !LorieView.isConnected()) {
-                                // Our fd went stale while away — fresh attach.
-                                forceReattachX11(cache, context, activity, ioScope)
-                            } else if (!cache.x11Attached) {
-                                // We weren't attached — attach.
-                                ensureX11Background(cache, true, context, activity, ioScope)
+                            if (!alive.value || cache.isDetached) return@withContext
+                            try {
+                                if (com.termux.x11.MainActivity.isPrimaryLorieAttached()) {
+                                    if (cache.x11Attached) detachOurBackgroundX11(cache)
+                                } else {
+                                    forceReattachX11(cache, context, activity, ioScope)
+                                }
+                            } catch (t: Throwable) {
+                                Log.w(TAG, "X11 resume handling failed", t)
                             }
-                            // else: our fd is still healthy — do nothing.
                         }
                     }
                 }
+
                 else -> { /* ignore */ }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
 
-        // ── React to primary LorieView attach/detach ──
-        com.termux.x11.MainActivity.setX11ConnectionListener { connected ->
-            activity.runOnUiThread {
-                val cache = x11CacheRef.value ?: return@runOnUiThread
-                ioScope.launch {
-                    val props = withContext(Dispatchers.IO) {
-                        TermuxPropertiesLoader.load(context, activeContainerId)
-                    }
-                    if (props.backgroundDisplay != "x11") return@launch
-                    withContext(Dispatchers.Main) {
-                        if (connected) {
-                            detachOurBackgroundX11(cache)
-                        } else {
-                            ensureX11Background(cache, true, context, activity, ioScope)
+        // ── X11 connection listener is API-24+ only ──
+        // MainActivity.setX11ConnectionListener references
+        // android.view.View.OnCapturedPointerListener internally. On API
+        // 24–25 the class does not exist → NoClassDefFoundError at the
+        // call site. Skip the whole listener on older devices; the terminal
+        // works fine without it (only the X11 background integration is lost).
+        if (X11_SUPPORTED) {
+            try {
+                com.termux.x11.MainActivity.setX11ConnectionListener { connected ->
+                    activity.runOnUiThread {
+                        if (!alive.value) return@runOnUiThread
+                        val cache = x11CacheRef.value ?: return@runOnUiThread
+                        if (cache.isDetached) return@runOnUiThread
+                        ioScope.launch {
+                            val props = withContext(Dispatchers.IO) {
+                                TermuxPropertiesLoader.load(context, activeContainerId)
+                            }
+                            if (props.backgroundDisplay != "x11") return@launch
+                            withContext(Dispatchers.Main) {
+                                if (!alive.value || cache.isDetached) return@withContext
+                                try {
+                                    if (connected) detachOurBackgroundX11(cache)
+                                    else ensureX11Background(cache, true, context, activity, ioScope)
+                                } catch (t: Throwable) {
+                                    Log.w(TAG, "X11 connection handler failed", t)
+                                }
+                            }
                         }
                     }
                 }
+            } catch (t: Throwable) {
+                Log.w(TAG, "X11 connection listener unavailable on API ${Build.VERSION.SDK_INT}", t)
             }
+        } else {
+            Log.i(TAG, "X11 integration disabled on API ${Build.VERSION.SDK_INT} (< 24)")
         }
 
-        // ── Pre-release hook that AppScreen calls before starting MainActivity ──
         TerminalBackgroundX11.register {
-            x11CacheRef.value?.let { detachOurBackgroundX11(it) }
+            try { x11CacheRef.value?.let { detachOurBackgroundX11(it) } } catch (_: Throwable) {}
         }
 
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            com.termux.x11.MainActivity.setX11ConnectionListener(null)
+            if (X11_SUPPORTED) {
+                try {
+                    com.termux.x11.MainActivity.setX11ConnectionListener(null)
+                } catch (t: Throwable) {
+                    Log.w(TAG, "X11 connection listener cleanup failed", t)
+                }
+            }
             TerminalBackgroundX11.register(null)
             saveZoomImmediately()
             PtyOutputRelay.unbind()
@@ -337,17 +391,16 @@ fun ShellScreen(
 
     AndroidView(
         modifier = modifier.fillMaxSize().statusBarsPadding().imePadding(),
+        onRelease = { root ->
+            val cache = root.tag as? ViewCache
+            if (cache != null) {
+                try { detachOurBackgroundX11(cache) } catch (_: Throwable) {}
+            }
+            PtyOutputRelay.unbind()
+            InputRouteState.shellTerminalView = null
+        },
         factory = { ctx ->
-            // Root layering (bottom → top):
-            //   [0] bgImageView     — static / animated image (if set)
-            //   [1] x11Container    — LorieView (only when X11 bg is active)
-            //   [2] solidBgView     — colour overlay (bgColor, alpha respected)
-            //   [3] contentColumn   — terminal text + extra-keys bar
-            //
-            // The colour is ON TOP of X11 so it acts as a readability tint
-            // AND keeps the terminal legible during the brief window when
-            // X11 is re-fetching its framebuffer.
-            val root = FrameLayout(ctx).apply {
+            val root = GuardedRootLayout(ctx).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -355,7 +408,6 @@ fun ShellScreen(
                 descendantFocusability = ViewGroup.FOCUS_AFTER_DESCENDANTS
             }
 
-            // [0] Image / GIF
             val bgImageView = AnimatedBackgroundView(ctx).apply {
                 visibility = View.GONE
                 layoutParams = FrameLayout.LayoutParams(
@@ -365,7 +417,6 @@ fun ShellScreen(
             }
             root.addView(bgImageView)
 
-            // [1] X11 surface container
             val x11Container = FrameLayout(ctx).apply {
                 setBackgroundColor(Color.TRANSPARENT)
                 isClickable = false
@@ -379,7 +430,6 @@ fun ShellScreen(
             }
             root.addView(x11Container)
 
-            // [2] Colour overlay (default = fully opaque black until update() sets it)
             val solidBgView = FrameLayout(ctx).apply {
                 setBackgroundColor(Color.BLACK)
                 layoutParams = FrameLayout.LayoutParams(
@@ -389,7 +439,6 @@ fun ShellScreen(
             }
             root.addView(solidBgView)
 
-            // [3] Content column
             val contentColumn = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = FrameLayout.LayoutParams(
@@ -409,7 +458,7 @@ fun ShellScreen(
                     scheduleZoomSave()
                     return newScale
                 }
-                override fun shouldEnforceCharBasedInput(): Boolean = false
+                override fun shouldEnforceCharBasedInput(): Boolean = true
                 override fun isTerminalViewSelected(): Boolean = true
 
                 override fun onEmulatorSet() {
@@ -424,8 +473,6 @@ fun ShellScreen(
                         else -> 1
                     }
                     val rawProps = TermuxPropertiesLoader.load(ctx, cid)
-                    // Terminal cells stay transparent — colour tinting comes
-                    // from solidBgView at z=2, not from cell bg.
                     val props = rawProps.copy(backgroundColor = 0x00000000)
                     TermuxPropertiesLoader.apply(tv, props)
                 }
@@ -438,8 +485,21 @@ fun ShellScreen(
 
             tv.setTypeface(ShellFonts.typefaceForPref(ctx, terminalFontKey))
             InputRouteState.shellTerminalView = tv
-            tv.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> tv.post { tv.updateSize() } }
-            tv.post { tv.updateSize() }
+
+            tv.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                if (!v.isSafelyAttached()) return@addOnLayoutChangeListener
+                tv.post {
+                    if (tv.isSafelyAttached()) {
+                        runCatching { tv.updateSize() }
+                    }
+                }
+            }
+            tv.post {
+                if (tv.isSafelyAttached()) {
+                    runCatching { tv.updateSize() }
+                }
+            }
+
             tv.isFocusable = true
             tv.isFocusableInTouchMode = true
             tv.keepScreenOn = true
@@ -528,11 +588,20 @@ fun ShellScreen(
                 bgImageView = bgImageView,
                 x11Container = x11Container,
                 solidBgView = solidBgView,
-                terminalFrame = terminalFrame
+                terminalFrame = terminalFrame,
+                rootLayout = root,
             )
             root.tag = cache
             root.setTag(R.id.xodos2_shell_controller, controller)
             x11CacheRef.value = cache
+
+            root.onBeforeDetach = {
+                PtyOutputRelay.unbind()
+                InputRouteState.shellTerminalView = null
+            }
+            root.onAfterDetach = {
+                try { detachOurBackgroundX11(cache) } catch (_: Throwable) {}
+            }
 
             root
         },
@@ -540,7 +609,11 @@ fun ShellScreen(
             @Suppress("UNUSED_VARIABLE")
             val epoch = propertiesEpoch
 
-            val cache = root.tag as ViewCache
+            val cache = root.tag as? ViewCache ?: return@AndroidView
+            if (cache.isDetached || !alive.value || !root.isSafelyAttached()) {
+                return@AndroidView
+            }
+
             val controller = cache.controller
 
             val prevEpoch = root.getTag(R.id.xodos2_renderer_session_epoch) as? Int ?: 0
@@ -558,13 +631,15 @@ fun ShellScreen(
             val tv = cache.terminalFrame.getChildAt(0) as TerminalView
 
             tv.post {
+                if (cache.isDetached || !alive.value) return@post
+                if (!tv.isSafelyAttached() || !root.isSafelyAttached()) return@post
+
                 val props = if (
                     cache.cachedProps == null ||
                     cache.cachedPropsEpoch != propertiesEpoch ||
                     cache.cachedPropsContainerId != activeContainerId
                 ) {
                     val raw = TermuxPropertiesLoader.load(root.context, activeContainerId).also {
-                        // Force transparent cell bg — tinting lives in solidBgView.
                         TermuxPropertiesLoader.apply(tv, it.copy(backgroundColor = 0x00000000))
                         cache.cachedProps = it
                         cache.cachedPropsEpoch = propertiesEpoch
@@ -576,22 +651,12 @@ fun ShellScreen(
                 val desiredMode = props.backgroundDisplay.takeIf { it == "x11" }
                 val imgPath = props.backgroundImagePath
 
-                // ── [2] Colour overlay ──
-                // User-set colour wins. Otherwise a soft 23 % black tint when
-                // X11 or image is active (keeps terminal text legible), and
-                // solid black otherwise.
                 val bgColor: Int = props.backgroundColor
                     ?: if (!imgPath.isNullOrBlank() || desiredMode != null) 0x3B000000
                        else Color.BLACK
                 cache.solidBgView.setBackgroundColor(bgColor)
-
-                // TerminalFrame is always transparent; the tint lives above it.
                 cache.terminalFrame.setBackgroundColor(Color.TRANSPARENT)
 
-                // ── [0] Image layer ──
-                // Show whenever an image is set. X11 sits on top; where X11
-                // doesn't paint (fetch blank, or transparent regions), the
-                // image shows through.
                 if (!imgPath.isNullOrBlank()) {
                     cache.bgImageView.setSource(imgPath)
                     cache.bgImageView.visibility = View.VISIBLE
@@ -600,7 +665,6 @@ fun ShellScreen(
                     cache.bgImageView.visibility = View.GONE
                 }
 
-                // ── [1] X11 layer ──
                 ensureX11Background(
                     cache = cache,
                     enabled = desiredMode == "x11",
@@ -609,7 +673,6 @@ fun ShellScreen(
                     scope = ioScope
                 )
 
-                // ── Extra-keys bar alpha follows bgColor ──
                 val bgAlpha = (bgColor ushr 24) and 0xFF
                 val barTop    = (bgAlpha shl 24) or 0x080512
                 val barBottom = (bgAlpha shl 24) or 0x030207
@@ -622,10 +685,12 @@ fun ShellScreen(
                 props.extraKeys?.let { fileJson ->
                     if (cache.appliedExtraKeysJson != fileJson) {
                         cache.appliedExtraKeysJson = fileJson
-                        rebuildExtraKeys(
-                            tv.context, tv, cache.viewClient,
-                            cache.keysContainer, cache.fixedContainer, fileJson
-                        ) { showPropertiesEditor = true }
+                        if (tv.isSafelyAttached()) {
+                            rebuildExtraKeys(
+                                tv.context, tv, cache.viewClient,
+                                cache.keysContainer, cache.fixedContainer, fileJson
+                            ) { showPropertiesEditor = true }
+                        }
                     }
                 }
             }
@@ -638,16 +703,33 @@ fun ShellScreen(
 
             if (cache.appliedExtraKeysJson != extraKeysJson) {
                 cache.appliedExtraKeysJson = extraKeysJson
-                rebuildExtraKeys(
-                    tv.context, tv, cache.viewClient,
-                    cache.keysContainer, cache.fixedContainer, extraKeysJson
-                ) { showPropertiesEditor = true }
+                tv.post {
+                    if (cache.isDetached || !alive.value) return@post
+                    if (!tv.isSafelyAttached() || !root.isSafelyAttached()) return@post
+                    rebuildExtraKeys(
+                        tv.context, tv, cache.viewClient,
+                        cache.keysContainer, cache.fixedContainer, extraKeysJson
+                    ) { showPropertiesEditor = true }
+                }
             }
 
             if (showKeyboardTrigger > 0) {
-                tv.post {
-                    tv.requestFocus()
-                    imm.showSoftInput(tv, InputMethodManager.SHOW_IMPLICIT)
+                val canRequestKeyboard =
+                    isTerminalFront &&
+                    !showCloseSessionDialog &&
+                    !showPropertiesEditor &&
+                    !cache.isDetached &&
+                    tv.isSafelyAttached()
+
+                if (canRequestKeyboard) {
+                    tv.post {
+                        if (cache.isDetached || !alive.value) return@post
+                        if (!tv.isSafelyAttached()) return@post
+                        runCatching {
+                            tv.requestFocus()
+                            imm.showSoftInput(tv, InputMethodManager.SHOW_IMPLICIT)
+                        }
+                    }
                 }
                 onKeyboardTriggerConsumed()
             }
@@ -665,7 +747,7 @@ fun ShellScreen(
 }
 
 // ─────────────────────────────────────────────────────────────
-// X11 background surface management
+// X11 background helpers — all guarded by X11_SUPPORTED
 // ─────────────────────────────────────────────────────────────
 
 private fun ensureX11Background(
@@ -675,25 +757,39 @@ private fun ensureX11Background(
     activity: Activity,
     scope: CoroutineScope
 ) {
+    // X11 background surface needs OnCapturedPointerListener (API 24+) and
+    // the full Termux X11 stack. On API 24–25 it silently stays off.
+    if (!X11_SUPPORTED) {
+        cache.x11Container.visibility = View.GONE
+        return
+    }
+
+    if (cache.isDetached) return
+
     if (!enabled) {
         cache.x11Container.visibility = View.GONE
         return
     }
 
-    // THE GATE: only one LorieView may own the X11 slot at a time.
-    // isPrimaryLorieAttached() asks MainActivity specifically — it does
-    // NOT reflect our own background LorieView.
-    if (com.termux.x11.MainActivity.isPrimaryLorieAttached()) {
-        if (cache.x11Attached) detachOurBackgroundX11(cache)
-        cache.x11Container.visibility = View.GONE
-        return
+    try {
+        if (com.termux.x11.MainActivity.isPrimaryLorieAttached()) {
+            if (cache.x11Attached) detachOurBackgroundX11(cache)
+            cache.x11Container.visibility = View.GONE
+            return
+        }
+    } catch (t: Throwable) {
+        Log.w(TAG, "isPrimaryLorieAttached failed", t)
     }
 
     cache.x11Container.visibility = View.VISIBLE
     if (cache.x11Attached) return
 
     scope.launch(Dispatchers.IO) {
-        X11Runtime.ensureX11ServerProcessStarted(context)
+        try {
+            X11Runtime.ensureX11ServerProcessStarted(context)
+        } catch (t: Throwable) {
+            Log.w(TAG, "X11 server start failed", t)
+        }
     }
 
     val lv = BackgroundLorieView(context).apply {
@@ -755,7 +851,7 @@ private fun forceReattachX11(
 }
 
 // ─────────────────────────────────────────────────────────────
-// Existing helpers (unchanged)
+// Extra keys + helpers (unchanged)
 // ─────────────────────────────────────────────────────────────
 
 private fun isKeyboardVisible(view: View): Boolean {
@@ -791,6 +887,13 @@ private fun setRepeatClickListener(view: TextView, onClick: () -> Unit) {
             else -> false
         }
     }
+    view.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) {}
+        override fun onViewDetachedFromWindow(v: View) {
+            isHolding = false
+            handler.removeCallbacks(runnable)
+        }
+    })
 }
 
 private fun rebuildExtraKeys(
@@ -802,6 +905,8 @@ private fun rebuildExtraKeys(
     jsonString: String,
     onEditClicked: () -> Unit
 ) {
+    if (!terminalView.isSafelyAttached()) return
+
     scrollParent.removeAllViews()
     fixedParent.removeAllViews()
 
@@ -855,7 +960,11 @@ private fun rebuildExtraKeys(
         }
     }
 
-    viewClient.onModifierReset = { terminalView.post { updateButtonColors() } }
+    viewClient.onModifierReset = {
+        terminalView.post {
+            if (terminalView.isSafelyAttached()) updateButtonColors()
+        }
+    }
 
     fun makeButton(label: String, isTransparent: Boolean = false, isFixed: Boolean = false): TextView {
         val baseTextSize = 12f
@@ -898,27 +1007,35 @@ private fun rebuildExtraKeys(
         } else {
             terminalView.requestFocus()
             terminalView.postDelayed({
-                imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+                if (terminalView.isSafelyAttached()) {
+                    imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+                }
             }, 60)
         }
     }
 
-    fun getActionFor(key: String): String = when (key.uppercase()) {
-        "CTRL" -> "CTRL_MOD"
-        "ALT" -> "ALT_MOD"
-        "ESC" -> "\u001B"
-        "TAB" -> "\u0009"
-        "HOME" -> "\u001B[H"
-        "END" -> "\u001B[F"
-        "UP" -> "\u001B[A"
-        "DOWN" -> "\u001B[B"
-        "LEFT" -> "\u001B[D"
-        "RIGHT" -> "\u001B[C"
-        "PGUP" -> "\u001B[5~"
-        "PGDN" -> "\u001B[6~"
-        "COPY" -> "SPECIAL_COPY"
-        "PASTE" -> "SPECIAL_PASTE"
-        else -> key
+      fun isAppCursorMode(): Boolean =
+        terminalView.currentSession?.emulator?.isCursorKeysApplicationMode() == true
+
+    fun getActionFor(key: String): String {
+        val appCursor = isAppCursorMode()
+        return when (key.uppercase()) {
+            "CTRL" -> "CTRL_MOD"
+            "ALT" -> "ALT_MOD"
+            "ESC" -> "\u001B"
+            "TAB" -> "\u0009"
+            "HOME" -> if (appCursor) "\u001BOH" else "\u001B[H"
+            "END" -> if (appCursor) "\u001BOF" else "\u001B[F"
+            "UP" -> if (appCursor) "\u001BOA" else "\u001B[A"
+            "DOWN" -> if (appCursor) "\u001BOB" else "\u001B[B"
+            "LEFT" -> if (appCursor) "\u001BOD" else "\u001B[D"
+            "RIGHT" -> if (appCursor) "\u001BOC" else "\u001B[C"
+            "PGUP" -> "\u001B[5~"
+            "PGDN" -> "\u001B[6~"
+            "COPY" -> "SPECIAL_COPY"
+            "PASTE" -> "SPECIAL_PASTE"
+            else -> key
+        }
     }
 
     fun getDisplayLabel(key: String): String = when (key.uppercase()) {
@@ -942,9 +1059,8 @@ private fun rebuildExtraKeys(
             if (item.macro.isNotEmpty()) {
                 btn.setOnClickListener { terminalView.currentSession?.write(item.macro) }
             } else {
-                val action = getActionFor(item.key)
-                when (action) {
-                    "CTRL_MOD" -> {
+                when (item.key.uppercase()) {
+                    "CTRL" -> {
                         ctrlButton = btn
                         btn.setOnClickListener {
                             viewClient.ctrlActive = !viewClient.ctrlActive
@@ -952,7 +1068,7 @@ private fun rebuildExtraKeys(
                             updateButtonColors()
                         }
                     }
-                    "ALT_MOD" -> {
+                    "ALT" -> {
                         altButton = btn
                         btn.setOnClickListener {
                             viewClient.altActive = !viewClient.altActive
@@ -960,8 +1076,8 @@ private fun rebuildExtraKeys(
                             updateButtonColors()
                         }
                     }
-                    "SPECIAL_COPY" -> btn.setOnClickListener { terminalView.showContextMenu() }
-                    "SPECIAL_PASTE" -> btn.setOnClickListener {
+                    "COPY" -> btn.setOnClickListener { terminalView.showContextMenu() }
+                    "PASTE" -> btn.setOnClickListener {
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cm.primaryClip?.let { clip ->
                             if (clip.itemCount > 0) {
@@ -974,8 +1090,9 @@ private fun rebuildExtraKeys(
                         val metaCtrl = "CTRL" in metaUpper || "C-" in metaUpper
                         val metaAlt  = "ALT" in metaUpper  || "M-" in metaUpper
                         val fireAction = {
+                            val dynamicAction = getActionFor(item.key)
                             sendModifiedSequence(
-                                terminalView, action,
+                                terminalView, dynamicAction,
                                 viewClient.ctrlActive || metaCtrl,
                                 viewClient.altActive  || metaAlt,
                                 onConsumed = {
@@ -997,6 +1114,7 @@ private fun rebuildExtraKeys(
         }
         return row
     }
+
 
     try {
         val jsonArray = JSONArray(jsonString)
@@ -1120,46 +1238,40 @@ private class ShellSessionController(
 
     fun attachSessionIfNeeded(id: Int) {
         if (id == attachedId) return
-        val attachLogic = {
-            attachedId = id
-            val s = sessionFor(id)
-            runCatching { PtyOutputRelay.unbind() }
-            terminalView.attachSession(s)
-            PtyOutputRelay.bind(s, terminalView)
-            terminalView.updateSize()
+        if (!terminalView.isSafelyAttached()) return
+        attachedId = id
+        val s = runCatching { sessionFor(id) }.getOrElse {
+            Log.w(TAG, "sessionFor($id) failed", it)
+            attachedId = -1
+            return
         }
-        if (terminalView.width > 0 && terminalView.height > 0) {
-            attachLogic()
-        } else {
-            terminalView.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
-                override fun onLayoutChange(
-                    v: View, left: Int, top: Int, right: Int, bottom: Int,
-                    oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int
-                ) {
-                    v.removeOnLayoutChangeListener(this)
-                    attachLogic()
-                }
-            })
+        runCatching { PtyOutputRelay.unbind() }
+        runCatching { terminalView.attachSession(s) }
+        runCatching { PtyOutputRelay.bind(s, terminalView) }
+        terminalView.post {
+            if (terminalView.isSafelyAttached()) {
+                runCatching { terminalView.updateSize() }
+            }
         }
     }
 
     fun pruneSessionsExcept(keep: Set<Int>) {
         val removed = sessions.keys.filter { it !in keep }
         for (id in removed) {
-            NativeBridge.closeSession(id)
+            runCatching { NativeBridge.closeSession(id) }
             sessions.remove(id)
             clients.remove(id)
-            PtyOutputRelay.discardSessionQueue(id)
+            runCatching { PtyOutputRelay.discardSessionQueue(id) }
         }
         if (attachedId !in keep) attachedId = -1
     }
 
     fun invalidateAllSessions() {
         for (id in sessions.keys.toList()) {
-            NativeBridge.closeSession(id)
+            runCatching { NativeBridge.closeSession(id) }
             sessions.remove(id)
             clients.remove(id)
-            PtyOutputRelay.discardSessionQueue(id)
+            runCatching { PtyOutputRelay.discardSessionQueue(id) }
         }
         attachedId = -1
     }

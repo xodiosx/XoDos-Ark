@@ -1450,7 +1450,17 @@ private fun symlinksNeedRefresh(context: Context): Boolean {
             "liblzma.so" to context.getString(R.string.appscreen_liblzma_so_5),
             "libproot_loader.so" to "libproot_loader.so",
              "libtalloc.so" to context.getString(R.string.appscreen_libtalloc_so_2),
-             "libandroid-shmem.so" to "libandroid-shmem.so"
+             "libandroid-shmem.so" to "libandroid-shmem.so",
+               "libpcre2-8.so" to "libpcre2-8.so",
+                 "libandroid-support.so" to "libandroid-support.so",
+                   "libiconv.so" to "libiconv.so",
+                     "libandroid-selinux.so" to "libandroid-selinux.so",
+                       "libandroid-glob.so" to "libandroid-glob.so",
+                       "libacl.so" to "libacl.so"
+                     //    "libpcre2-8.so" to "libpcre2-8.so",
+                       //    "libandroid-glob.so.so" to "libandroid-glob.so.so",
+                          //   "libpcre2-8.so" to "libpcre2-8.so"
+                 
         )
         for ((src, dst) in libFiles) {
             val srcFile = File(nativeLibDir, src)

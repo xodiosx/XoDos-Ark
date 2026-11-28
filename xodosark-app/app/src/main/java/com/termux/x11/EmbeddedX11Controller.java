@@ -11,7 +11,6 @@ import android.os.ParcelFileDescriptor;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.PointerIcon;
-import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 
@@ -25,12 +24,6 @@ import com.termux.x11.input.RenderData;
 
 /**
  * Minimal embedded controller for hosting {@link LorieView} inside xodos2's Compose activity.
- *
- * <p>Why this lives in {@code com.termux.x11}: we must be able to call package-private APIs
- * (e.g. {@link LorieView#sendWindowChange}) and keep behavior close to upstream.</p>
- *
- * <p>This controller does not create any Activity. It only wires a pre-created {@link LorieView}
- * to the {@code :x11} server process and provides basic input mapping.</p>
  */
 public final class EmbeddedX11Controller {
     public enum MouseMode {
@@ -38,12 +31,17 @@ public final class EmbeddedX11Controller {
         TOUCH,
     }
 
+    private LorieView lorieView;
+
+    private static MainActivity host() {
+        return MainActivity.getFocusedOrAnyInstance();
+    }
+
     private final RenderData renderData = new RenderData();
     private final InputEventSender injector;
 
     private @Nullable Activity hostActivity;
     private @Nullable Context appContext;
-    private @Nullable LorieView lorieView;
     private @Nullable ICmdEntryInterface service;
 
     private @Nullable BroadcastReceiver receiver;
@@ -55,7 +53,12 @@ public final class EmbeddedX11Controller {
     private boolean moved;
 
     public EmbeddedX11Controller() {
-        injector = new InputEventSender(new InputStub() {
+        injector = new InputEventSender(host(), new InputStub() {
+            @Override
+            public void sendLockKeysState(int state) {
+                // xodos doesn't track lock-key state — no-op.
+            }
+
             @Override
             public void sendMouseEvent(float x, float y, int whichButton, boolean buttonDown, boolean relative) {
                 LorieView lv = lorieView;
@@ -121,17 +124,23 @@ public final class EmbeddedX11Controller {
             } catch (Throwable t) {
                 name = "0";
             }
-            // Package-private: only callable inside com.termux.x11.
-            LorieView.sendWindowChange(view.p.x, view.p.y, framerate, name);
+
+            if (lorieView != null) {
+                lorieView.sendWindowChangeExternal(
+                        lorieView.getScreenWidth(),
+                        lorieView.getScreenHeight(),
+                        framerate,
+                        name);
+            }
 
             int vw = view.getWidth() > 0 ? view.getWidth() : surfaceWidth;
             int vh = view.getHeight() > 0 ? view.getHeight() : surfaceHeight;
-            renderData.imageWidth = vw;
-            renderData.imageHeight = vh;
-            renderData.screenWidth = view.p.x;
-            renderData.screenHeight = view.p.y;
-            float sx = vw > 0 ? (float) view.p.x / (float) vw : 1f;
-            float sy = vh > 0 ? (float) view.p.y / (float) vh : 1f;
+
+            renderData.screenWidth = view.getScreenWidth();
+            renderData.screenHeight = view.getScreenHeight();
+            float sx = vw > 0 ? (float) view.getScreenWidth() / (float) vw : 1f;
+            float sy = vh > 0 ? (float) view.getScreenHeight() / (float) vh : 1f;
+
             renderData.scale.set(sx, sy);
         });
 
@@ -231,103 +240,112 @@ public final class EmbeddedX11Controller {
         });
 
         registerReceiverIfNeeded();
-        // Nudge CmdEntryPoint to broadcast connection details again.
-        try { LorieView.requestConnection(); } catch (Throwable ignored) {}
-    }
 
-    public void detach() {
-        if (registered && receiver != null && appContext != null) {
-            try { appContext.unregisterReceiver(receiver); } catch (Throwable ignored) {}
-        }
-        registered = false;
-        receiver = null;
-        service = null;
-        lorieView = null;
-        appContext = null;
-        if (X11ActivityBridge.getHostActivity() == hostActivity) {
-            X11ActivityBridge.setHostActivity(null);
-        }
-        X11ActivityBridge.setLorieView(null);
-        hostActivity = null;
-        primaryDown = false;
-        moved = false;
-    }
+               // Reuse existing service binder if :x11 is already running in this process
+        ICmdEntryInterface existing = X11ActivityBridge.getService();
+        if (existing != null && existing.asBinder() != null && existing.asBinder().isBinderAlive()) {
 
-    private void registerReceiverIfNeeded() {
-        if (registered) return;
-        final Context ctx = appContext;
-        if (ctx == null) return;
-        receiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if (intent == null) return;
-                if (!CmdEntryPoint.ACTION_START.equals(intent.getAction())) return;
-                BundleCompat bundleCompat = BundleCompat.fromIntent(intent);
-                IBinder b = bundleCompat != null ? bundleCompat.binder : null;
-                if (b == null) return;
-                onReceiveConnection(b);
-            }
-        };
-        IntentFilter filter = new IntentFilter(CmdEntryPoint.ACTION_START);
-        ContextCompat.registerReceiver(ctx, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
-        registered = true;
-    }
+            onReceiveConnection(existing.asBinder());
+        } else {
+       
 
-    private void onReceiveConnection(IBinder binder) {
-        service = ICmdEntryInterface.Stub.asInterface(binder);
-        try {
-            service.asBinder().linkToDeath(() -> {
-                service = null;
-                try { LorieView.requestConnection(); } catch (Throwable ignored) {}
-            }, 0);
-        } catch (Throwable ignored) {}
-
-        try {
-            ParcelFileDescriptor logcat = service.getLogcatOutput();
-            if (logcat != null) LorieView.startLogcat(logcat.detachFd());
-        } catch (Throwable ignored) {}
-
-        tryConnect();
-    }
-
-    private void tryConnect() {
-        if (LorieView.connected()) return;
-        if (service == null) {
-            try { LorieView.requestConnection(); } catch (Throwable ignored) {}
-            return;
-        }
-        try {
-            ParcelFileDescriptor fd = service.getXConnection();
-            if (fd != null) {
-                LorieView.connect(fd.detachFd());
-                Prefs p = X11ActivityBridge.getOrCreatePrefs(appContext);
-                if (lorieView != null) {
-                    lorieView.reloadPreferences(p);
-                    lorieView.triggerCallback();
-                }
-            }
-        } catch (Throwable t) {
-            service = null;
-        }
-    }
-
-    /**
-     * Extracts a binder from the weird "null key" bundle used by CmdEntryPoint.
-     * Kept here to avoid Kotlin reflection gymnastics.
-     */
-    private static final class BundleCompat {
-        final IBinder binder;
-        private BundleCompat(IBinder binder) { this.binder = binder; }
-
-        static @Nullable BundleCompat fromIntent(@NonNull Intent intent) {
-            try {
-                android.os.Bundle b = intent.getBundleExtra(null);
-                if (b == null) return null;
-                IBinder binder = b.getBinder(null);
-                return binder != null ? new BundleCompat(binder) : null;
-            } catch (Throwable t) {
-                return null;
-            }
-        }
-    }
+try { if (lorieView != null) lorieView.requestConnection(); } catch (Throwable ignored) {}
+}
+}
+public void detach() {
+if (registered && receiver != null && appContext != null) {
+try { appContext.unregisterReceiver(receiver); } catch (Throwable ignored) {}
+}
+registered = false;
+receiver = null;
+service = null;
+lorieView = null;
+appContext = null;
+if (X11ActivityBridge.getHostActivity() == hostActivity) {
+X11ActivityBridge.setHostActivity(null);
+}
+//X11ActivityBridge.setService(null);
+X11ActivityBridge.setLorieView(null);
+hostActivity = null;
+primaryDown = false;
+moved = false;
+}
+private void registerReceiverIfNeeded() {
+if (registered) return;
+final Context ctx = appContext;
+if (ctx == null) return;
+receiver = new BroadcastReceiver() {
+@Override
+public void onReceive(Context context, Intent intent) {
+if (intent == null) return;
+if (!CmdEntryPoint.ACTION_START.equals(intent.getAction())) return;
+BundleCompat bundleCompat = BundleCompat.fromIntent(intent);
+IBinder b = bundleCompat != null ? bundleCompat.binder : null;
+if (b == null) return;
+onReceiveConnection(b);
+}
+};
+IntentFilter filter = new IntentFilter(CmdEntryPoint.ACTION_START);
+ContextCompat.registerReceiver(ctx, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED);
+registered = true;
+}
+private void onReceiveConnection(IBinder binder) {
+service = ICmdEntryInterface.Stub.asInterface(binder);
+X11ActivityBridge.setService(service);
+try {
+service.asBinder().linkToDeath(() -> {
+service = null;
+X11ActivityBridge.setService(null);
+try { if (lorieView != null) lorieView.requestConnection(); } catch (Throwable ignored) {}
+}, 0);
+} catch (Throwable ignored) {}
+try {
+ParcelFileDescriptor logcat = service.getLogcatOutput();
+if (logcat != null && lorieView != null) lorieView.startLogcat(logcat.detachFd());
+} catch (Throwable ignored) {}
+tryConnect();
+}
+private void tryConnect() {
+if (lorieView != null && lorieView.connected()) {
+if (lorieView != null) lorieView.sendSurface();
+return;
+}
+if (service == null) {
+try { if (lorieView != null) lorieView.requestConnection(); } catch (Throwable ignored) {}
+return;
+}
+try {
+ParcelFileDescriptor fd = service.getXConnection();
+if (fd != null) {
+if (lorieView != null) lorieView.connect(fd.detachFd());
+Prefs p = X11ActivityBridge.getOrCreatePrefs(appContext);
+if (lorieView != null) {
+lorieView.reloadPreferences(p);
+lorieView.sendSurface();
+lorieView.triggerCallback();
+}
+}
+} catch (Throwable t) {
+service = null;
+X11ActivityBridge.setService(null);
+}
+}
+/**
+* Extracts a binder from the weird "null key" bundle used by CmdEntryPoint.
+* Kept here to avoid Kotlin reflection gymnastics.
+*/
+private static final class BundleCompat {
+final IBinder binder;
+private BundleCompat(IBinder binder) { this.binder = binder; }
+static @Nullable BundleCompat fromIntent(@NonNull Intent intent) {
+try {
+android.os.Bundle b = intent.getBundleExtra(null);
+if (b == null) return null;
+IBinder binder = b.getBinder(null);
+return binder != null ? new BundleCompat(binder) : null;
+} catch (Throwable t) {
+return null;
+}
+}
+}
 }

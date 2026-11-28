@@ -307,7 +307,7 @@ public final class TerminalView extends View {
 
                 Editable content = getEditable();
                 sendTextToTerminal(content);
-                content.clear();
+             //   content.clear();
                 return true;
             }
 
