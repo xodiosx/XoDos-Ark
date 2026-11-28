@@ -169,9 +169,10 @@ val generatePrefs by tasks.registering {
             appendLine("    put(\"extra_keys_config\", extra_keys_config);")
             appendLine("  }};")
             appendLine()
-            appendLine("  public Prefs(Context ctx) {")
-            appendLine("    super(ctx);")
-            appendLine("  }")
+            appendLine("  @Override")
+appendLine("  public void attach(Context ctx, android.content.SharedPreferences preferences) {")
+appendLine("    super.attach(ctx, preferences);")
+appendLine("  }")
             appendLine("}")
         })
     }

@@ -29,7 +29,7 @@ kotlinOptions {
     }
         defaultConfig {
         applicationId = "app.xodos2"
-        minSdk = 26
+        minSdk = 24
         targetSdk = 28
       
         ndkVersion = "27.1.12297006"   
